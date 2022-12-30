@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/p4u/emprius-app-backend/api"
-	"github.com/p4u/emprius-app-backend/db"
+	"github.com/emprius/emprius-app-backend/api"
+	"github.com/emprius/emprius-app-backend/db"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

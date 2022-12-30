@@ -1,4 +1,4 @@
-module github.com/p4u/emprius-app-backend
+module github.com/emprius/emprius-app-backend
 
 go 1.19
 
