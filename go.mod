@@ -1,6 +1,6 @@
 module github.com/emprius/emprius-app-backend
 
-go 1.19
+go 1.18
 
 require (
 	github.com/frankban/quicktest v1.14.4
