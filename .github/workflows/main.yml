@@ -28,6 +28,8 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
           cache: true
+      - name: Tidy go cache
+        run: go mod tidy
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Run gofmt
