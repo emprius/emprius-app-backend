@@ -37,11 +37,17 @@ func main() {
 	if err := database.CreateTables(); err != nil {
 		log.Fatal().Err(err).Msg("failed to create tables")
 	}
-	defer database.Close()
+	defer func() {
+		if err := database.Close(); err != nil {
+			log.Warn().Err(err).Msg("failed to close database")
+		}
+	}()
 
 	if *secret == "" {
 		sb := make([]byte, 32)
-		rand.Read(sb)
+		if _, err := rand.Read(sb); err != nil {
+			log.Fatal().Err(err).Msg("failed to generate random secret")
+		}
 		*secret = fmt.Sprintf("%x", sb)
 		log.Warn().Msgf("no secret provided, using random secret %s", *secret)
 	}
@@ -56,5 +62,4 @@ func main() {
 	<-c
 	log.Warn().Msgf("received SIGTERM, exiting at %s", time.Now().Format(time.RFC850))
 	os.Exit(0)
-
 }

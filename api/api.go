@@ -36,23 +36,21 @@ func (a *API) Start(host string, port int) {
 			log.Fatal().Err(err).Msg("failed to start api router")
 		}
 	}()
-
 }
 
 func (a *API) authenticator(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, _, err := jwtauth.FromContext(r.Context())
-
+		token, claims, err := jwtauth.FromContext(r.Context())
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
-
-		if token == nil || jwt.Validate(token) != nil {
+		if token == nil || jwt.Validate(token, jwt.WithRequiredClaim("userId")) != nil {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-
+		// Retrieve the `userId` from the claims and add it to the HTTP header
+		w.Header().Add("X-User-Id", claims["userId"].(string))
 		// Token is authenticated, pass it through
 		next.ServeHTTP(w, r)
 	})
@@ -90,18 +88,22 @@ func (a *API) router() http.Handler {
 		// the provided authenticator middleware, but you can write your
 		// own very easily, look at the Authenticator method in jwtauth.go
 		// and tweak it, its not scary.
-		r.Use(jwtauth.Authenticator)
+		r.Use(a.authenticator)
 
 		r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
 			_, claims, _ := jwtauth.FromContext(r.Context())
-			w.Write([]byte(fmt.Sprintf("protected area. hi %v", claims["user_id"])))
+			if _, err := w.Write([]byte(fmt.Sprintf("protected area. hi %v", claims["user_id"]))); err != nil {
+				log.Error().Err(err).Msg("failed to write response")
+			}
 		})
 	})
 
 	// Public routes
 	r.Group(func(r chi.Router) {
 		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("welcome anonymous"))
+			if _, err := w.Write([]byte("welcome anonymous")); err != nil {
+				log.Error().Err(err).Msg("failed to write response")
+			}
 		})
 	})
 
