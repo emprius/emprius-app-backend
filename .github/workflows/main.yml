@@ -23,6 +23,8 @@ jobs:
         platform: [ubuntu-latest]
     runs-on: ${{ matrix.platform }}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
       - name: Install Go
         uses: actions/setup-go@v3
         with:
@@ -30,11 +32,6 @@ jobs:
           cache: true
       - name: Tidy go cache
         run: go mod tidy
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Run gofmt
-        # Run gofmt first, as it's quick and issues are common.
-        run: diff -u <(echo -n) <(gofmt -s -d $(git ls-files '*.go'))
       - name: Run go vet
         run: go vet ./...
       - name: go test
