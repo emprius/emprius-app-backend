@@ -59,6 +59,8 @@ func (a *API) router() http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Throttle(100))
+	r.Use(middleware.ThrottleBacklog(5000, 40000, 30*time.Second))
+	r.Use(middleware.Timeout(30 * time.Second))
 
 	// Protected routes
 	r.Group(func(r chi.Router) {
@@ -69,7 +71,7 @@ func (a *API) router() http.Handler {
 		r.Use(a.authenticator)
 
 		// Endpoints
-		r.Get("/profile", a.userProfileHandler)
+		r.Get("/profile", a.routerHandler(a.userProfile))
 	})
 
 	// Public routes
@@ -79,8 +81,8 @@ func (a *API) router() http.Handler {
 				log.Error().Err(err).Msg("failed to write response")
 			}
 		})
-		r.Post("/login", a.loginHandler)
-		r.Post("/register", a.registerHandler)
+		r.Post("/login", a.routerHandler(a.login))
+		r.Post("/register", a.routerHandler(a.register))
 	})
 
 	return r

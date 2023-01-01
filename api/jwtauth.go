@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
 	"net/http"
 	"time"
 
@@ -49,4 +50,8 @@ func (a *API) makeToken(id string) (*LoginResponse, error) {
 	}
 	_, lr.Token, _ = a.auth.Encode(jmap)
 	return &lr, nil
+}
+
+func hashPassword(password string) []byte {
+	return sha256.New().Sum([]byte(passwordSalt + password))
 }
