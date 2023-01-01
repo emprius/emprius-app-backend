@@ -16,10 +16,16 @@ type LoginResponse struct {
 }
 
 type Register struct {
-	UserEmail         string      `json:"email"`
-	Password          string      `json:"password"`
-	Name              string      `json:"name"`
-	Avatar            string      `json:"avatar"`
-	Location          db.Location `json:"location"`
-	RegisterAuthToken string      `json:"registerAuthToken"`
+	UserEmail         string `json:"email"`
+	RegisterAuthToken string `json:"invitationToken"`
+	UserProfile
+}
+
+type UserProfile struct {
+	Name      string       `json:"name"`
+	Community string       `json:"community"`
+	Location  *db.Location `json:"location"`
+	Active    *bool        `json:"active"`
+	Avatar    []byte       `json:"avatar"`
+	Password  string       `json:"password"`
 }

@@ -4,15 +4,16 @@ import "github.com/rs/zerolog/log"
 
 // User is a type that represents a user of the app.
 type User struct {
-	Email    string   `json:"email"`
-	Name     string   `json:"name"`
-	Password []byte   `json:"password"`
-	Tokens   uint64   `json:"tokens"`
-	Active   bool     `json:"active"`
-	Rating   int32    `json:"rating"`
-	Avatar   string   `json:"avatar"`
-	Location Location `json:"location"`
-	Verified bool     `json:"-"`
+	Email      string   `json:"email"`
+	Name       string   `json:"name"`
+	Community  string   `json:"community"`
+	Password   []byte   `json:"password"`
+	Tokens     uint64   `json:"tokens"`
+	Active     bool     `json:"active"`
+	Rating     int32    `json:"rating"`
+	AvatarHash HexBytes `json:"avatarHash" genji:"avatarHash"` // hash of the image
+	Location   Location `json:"location"`
+	Verified   bool     `json:"-"`
 }
 
 func createUserTables(db *Database) error {
@@ -21,11 +22,12 @@ func createUserTables(db *Database) error {
 	CREATE TABLE IF NOT EXISTS user (
 		email     TEXT NOT NULL PRIMARY KEY,
 		name      TEXT NOT NULL UNIQUE,
+		community TEXT,
 		password  BLOB NOT NULL,
 		tokens    INTEGER DEFAULT 1000,
 		active    BOOLEAN DEFAULT TRUE,
 		rating    INTEGER DEFAULT 50,
-		avatar    TEXT DEFAULT "",
+		avatarHash BLOB,
 		verified  BOOLEAN DEFAULT FALSE,
 		location  (
 			latitude INTEGER NOT NULL,

@@ -10,13 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	ErrInvalidRegisterAuthToken = fmt.Errorf("invalid register auth token")
-	ErrInvalidRequestBodyData   = fmt.Errorf("invalid request body data")
-	ErrCouldNotInsertToDatabase = fmt.Errorf("could not insert to database")
-	ErrWrongLogin               = fmt.Errorf("wrong password or email")
-)
-
 // registerHandler handles the register request. It creates a new user in the database.
 func (a *API) register(r *Request) (interface{}, error) {
 	userInfo := Register{}
@@ -30,11 +23,19 @@ func (a *API) register(r *Request) (interface{}, error) {
 		Email:    userInfo.UserEmail,
 		Password: hashPassword(userInfo.Password),
 		Name:     userInfo.Name,
-		Avatar:   userInfo.Avatar,
-		Location: userInfo.Location,
 		Active:   true,
 		Rating:   50,
 		Tokens:   1000,
+	}
+	if userInfo.Avatar != nil {
+		image, err := a.addImage(userInfo.Name+"_avatar", userInfo.Avatar)
+		if err != nil {
+			return nil, fmt.Errorf("could not add image: %w", err)
+		}
+		user.AvatarHash = image.Hash
+	}
+	if userInfo.Location != nil {
+		user.Location = *userInfo.Location
 	}
 	log.Debug().Msgf("adding user %+v", user)
 	if err := a.database.Exec("INSERT INTO user VALUES ?", &user); err != nil {
@@ -72,6 +73,17 @@ func (a *API) login(r *Request) (interface{}, error) {
 	return &token, nil
 }
 
+// refresh handles the refresh request. It returns a new JWT token.
+func (a *API) refresh(r *Request) (interface{}, error) {
+	// Generate a new token with the user name as the subject
+	token, err := a.makeToken(r.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	return &token, nil
+}
+
 func (a *API) userProfile(r *Request) (interface{}, error) {
 	stream, err := a.database.QueryDocument("SELECT * FROM user WHERE email = ?", r.UserID)
 	if err != nil {
@@ -81,5 +93,49 @@ func (a *API) userProfile(r *Request) (interface{}, error) {
 	if err := document.StructScan(stream, &user); err != nil {
 		return nil, fmt.Errorf("failed to scan user profile: %w", err)
 	}
-	return user, nil
+	return &user, nil
+}
+
+func (a *API) userProfileUpdate(r *Request) (interface{}, error) {
+	newUserInfo := UserProfile{}
+	if err := json.Unmarshal(r.Data, &newUserInfo); err != nil {
+		return nil, ErrInvalidRequestBodyData
+	}
+	doc, err := a.database.QueryDocument("SELECT * FROM user WHERE email = ?", r.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user profile: %w", err)
+	}
+	user := db.User{}
+	if err := document.StructScan(doc, &user); err != nil {
+		return nil, fmt.Errorf("failed to scan user profile: %w", err)
+	}
+	if newUserInfo.Name != "" {
+		user.Name = newUserInfo.Name
+	}
+	if newUserInfo.Community != "" {
+		user.Community = newUserInfo.Community
+	}
+	var avatar *db.Image
+	if len(newUserInfo.Avatar) > 0 {
+		avatar, err = a.addImage(user.Name+"_avatar", newUserInfo.Avatar)
+		if err != nil {
+			return nil, fmt.Errorf("could not add image: %w", err)
+		}
+		user.AvatarHash = avatar.Hash
+	}
+	if newUserInfo.Location != nil {
+		user.Location = *newUserInfo.Location
+	}
+	if newUserInfo.Active != nil {
+		user.Active = *newUserInfo.Active
+	}
+	if newUserInfo.Password != "" {
+		user.Password = hashPassword(newUserInfo.Password)
+	}
+	if err := a.database.Exec(`UPDATE user SET name = ?, avatarHash = ?, location = ?,
+	active = ?, password = ?, community = ? WHERE email = ?`, user.Name, user.AvatarHash, &user.Location,
+		user.Active, user.Password, user.Community, user.Email); err != nil {
+		return nil, fmt.Errorf(ErrCouldNotInsertToDatabase.Error()+": %w", err)
+	}
+	return &user, nil
 }

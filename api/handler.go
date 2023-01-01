@@ -73,7 +73,14 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 	return func(w http.ResponseWriter, req *http.Request) {
 		hc := &HTTPContext{Request: req, Writer: w}
 		body, err := io.ReadAll(req.Body)
-		log.Debug().Msgf("request: %s", body)
+		if len(body) > 0 {
+			log.Debug().Msgf("request: %s", func() string {
+				if len(body) > 1024 {
+					return fmt.Sprintf("%s...", body[:1024])
+				}
+				return string(body)
+			}())
+		}
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to read request body")
 			http.Error(w, err.Error(), http.StatusBadRequest)

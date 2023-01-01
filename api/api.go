@@ -72,6 +72,9 @@ func (a *API) router() http.Handler {
 
 		// Endpoints
 		r.Get("/profile", a.routerHandler(a.userProfile))
+		r.Get("/refresh", a.routerHandler(a.refresh))
+		r.Post("/profile", a.routerHandler(a.userProfileUpdate))
+		r.Get("/images/{hash}", a.routerHandler(a.image))
 	})
 
 	// Public routes
