@@ -42,6 +42,7 @@ func (h *HTTPContext) Send(msg []byte, httpStatusCode int) error {
 			log.Warn().Msgf("recovered http send panic: %v", r)
 		}
 	}()
+	// nolint: errcheck
 	defer h.Request.Body.Close()
 
 	if httpStatusCode < 100 || httpStatusCode >= 600 {
