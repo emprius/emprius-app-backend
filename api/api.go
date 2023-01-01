@@ -3,29 +3,36 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/jwtauth/v5"
-	"github.com/lestrrat-go/jwx/v2/jwt"
 
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	jwtExpiration = 720 * time.Hour // 30 days
+	passwordSalt  = "emprius"       // salt for password hashing
+)
+
 // API type represents the API HTTP server with JWT authentication capabilities.
 type API struct {
-	Router   *chi.Mux
-	auth     *jwtauth.JWTAuth
-	database *db.Database
+	Router            *chi.Mux
+	auth              *jwtauth.JWTAuth
+	registerAuthToken string
+	database          *db.Database
 }
 
 // New creates a new API HTTP server. It does not start the server. Use Start() for that.
-func New(secret string, database *db.Database) *API {
+func New(secret, registerAuthToken string, database *db.Database) *API {
 	return &API{
-		auth:     jwtauth.New("HS256", []byte(secret), nil),
-		database: database,
+		auth:              jwtauth.New("HS256", []byte(secret), nil),
+		database:          database,
+		registerAuthToken: registerAuthToken,
 	}
 }
 
@@ -38,34 +45,8 @@ func (a *API) Start(host string, port int) {
 	}()
 }
 
-func (a *API) authenticator(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, claims, err := jwtauth.FromContext(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-		if token == nil || jwt.Validate(token, jwt.WithRequiredClaim("userId")) != nil {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
-		// Retrieve the `userId` from the claims and add it to the HTTP header
-		w.Header().Add("X-User-Id", claims["userId"].(string))
-		// Token is authenticated, pass it through
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (a *API) makeToken(name string) string {
-	_, tokenString, _ := a.auth.Encode(map[string]interface{}{"userId": name})
-	return tokenString
-}
-
+// router creates the router with all the routes and middleware.
 func (a *API) router() http.Handler {
-	// For debugging/example purposes, we generate and print
-	// a sample jwt token with claims `userId:123` here:
-	log.Debug().Msgf("a sample jwt is %s", a.makeToken("123"))
-
 	// Create the router with a basic middleware stack
 	r := chi.NewRouter()
 	r.Use(cors.New(cors.Options{
@@ -84,27 +65,22 @@ func (a *API) router() http.Handler {
 		// Seek, verify and validate JWT tokens
 		r.Use(jwtauth.Verifier(a.auth))
 
-		// Handle valid / invalid tokens. In this example, we use
-		// the provided authenticator middleware, but you can write your
-		// own very easily, look at the Authenticator method in jwtauth.go
-		// and tweak it, its not scary.
+		// Handle valid JWT tokens.
 		r.Use(a.authenticator)
 
-		r.Get("/admin", func(w http.ResponseWriter, r *http.Request) {
-			_, claims, _ := jwtauth.FromContext(r.Context())
-			if _, err := w.Write([]byte(fmt.Sprintf("protected area. hi %v", claims["user_id"]))); err != nil {
-				log.Error().Err(err).Msg("failed to write response")
-			}
-		})
+		// Endpoints
+		r.Get("/profile", a.userProfileHandler)
 	})
 
 	// Public routes
 	r.Group(func(r chi.Router) {
-		r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			if _, err := w.Write([]byte("welcome anonymous")); err != nil {
+		r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
+			if _, err := w.Write([]byte(".")); err != nil {
 				log.Error().Err(err).Msg("failed to write response")
 			}
 		})
+		r.Post("/login", a.loginHandler)
+		r.Post("/register", a.registerHandler)
 	})
 
 	return r

@@ -21,6 +21,7 @@ func main() {
 	port := flag.Int("port", 3333, "sets the port to listen on")
 	host := flag.String("host", "0.0.0.0", "sets the host to listen on")
 	secret := flag.String("secret", "", "sets the secret for JWT")
+	registerAuthToken := flag.String("registerAuthToken", "", "sets the registerAuthToken new users need to provide")
 	flag.Parse()
 
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout}).With().Caller().Logger()
@@ -49,9 +50,18 @@ func main() {
 			log.Fatal().Err(err).Msg("failed to generate random secret")
 		}
 		*secret = fmt.Sprintf("%x", sb)
-		log.Warn().Msgf("no secret provided, using random secret %s", *secret)
+		log.Warn().Msgf("no secret provided, using %s", *secret)
 	}
-	a := api.New(*secret, database)
+	if *registerAuthToken == "" {
+		sb := make([]byte, 20)
+		if _, err := rand.Read(sb); err != nil {
+			log.Fatal().Err(err).Msg("failed to generate random registerAuthToken")
+		}
+		*registerAuthToken = fmt.Sprintf("%x", sb)
+		log.Warn().Msgf("no registerAuthToken provided, using %s", *registerAuthToken)
+	}
+
+	a := api.New(*secret, *registerAuthToken, database)
 	a.Start(*host, *port)
 
 	log.Info().Msg("startup complete")
