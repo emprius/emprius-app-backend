@@ -61,7 +61,7 @@ func (a *API) login(r *Request) (interface{}, error) {
 		return nil, fmt.Errorf("failed to scan user: %w", err)
 	}
 	if !bytes.Equal(user.Password, hashPassword(loginInfo.Password)) {
-		return nil, fmt.Errorf("failed to scan user: %w", err)
+		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	// Generate a new token with the user name as the subject

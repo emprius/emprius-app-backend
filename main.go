@@ -9,10 +9,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/emprius/emprius-app-backend/api"
-	"github.com/emprius/emprius-app-backend/db"
+	"github.com/emprius/emprius-app-backend/service"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -23,26 +21,6 @@ func main() {
 	secret := flag.String("secret", "", "sets the secret for JWT")
 	registerAuthToken := flag.String("registerAuthToken", "", "sets the registerAuthToken new users need to provide")
 	flag.Parse()
-
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout}).With().Caller().Logger()
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if *debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	}
-	log.Info().Msg("starting app backend")
-
-	database, err := db.New("emprius.db")
-	if err != nil {
-		panic(err)
-	}
-	if err := database.CreateTables(); err != nil {
-		log.Fatal().Err(err).Msg("failed to create tables")
-	}
-	defer func() {
-		if err := database.Close(); err != nil {
-			log.Warn().Err(err).Msg("failed to close database")
-		}
-	}()
 
 	if *secret == "" {
 		sb := make([]byte, 32)
@@ -61,8 +39,12 @@ func main() {
 		log.Warn().Msgf("no registerAuthToken provided, using %s", *registerAuthToken)
 	}
 
-	a := api.New(*secret, *registerAuthToken, database)
-	a.Start(*host, *port)
+	s, err := service.New("emprius.db", *secret, *registerAuthToken, *debug)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create service")
+	}
+	defer s.Close()
+	s.Start(*host, *port)
 
 	log.Info().Msg("startup complete")
 

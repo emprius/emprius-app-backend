@@ -103,11 +103,6 @@ var (
 func TestInsertAndRetrieveImage(t *testing.T) {
 	db, err := New(":memory:")
 	qt.Assert(t, err, qt.IsNil)
-	defer func() {
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}()
 
 	err = createImageTable(db)
 	qt.Assert(t, err, qt.IsNil)
@@ -130,11 +125,6 @@ func TestInsertAndRetrieveImage(t *testing.T) {
 func TestInsertAndRetrieveTransport(t *testing.T) {
 	db, err := New(":memory:")
 	qt.Assert(t, err, qt.IsNil)
-	defer func() {
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}()
 
 	err = createTransportTables(db)
 	qt.Assert(t, err, qt.IsNil)
@@ -157,11 +147,6 @@ func TestInsertAndRetrieveTransport(t *testing.T) {
 func TestInsertAndRetrieveTool(t *testing.T) {
 	db, err := New(":memory:")
 	qt.Assert(t, err, qt.IsNil)
-	defer func() {
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}()
 
 	err = createToolTables(db)
 	qt.Assert(t, err, qt.IsNil)
@@ -184,11 +169,6 @@ func TestInsertAndRetrieveTool(t *testing.T) {
 func TestInsertAndRetrieveMultipleImages(t *testing.T) {
 	db, err := New(":memory:")
 	qt.Assert(t, err, qt.IsNil)
-	defer func() {
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}()
 
 	err = createImageTable(db)
 	qt.Assert(t, err, qt.IsNil)
@@ -221,11 +201,6 @@ func TestInsertAndRetrieveMultipleImages(t *testing.T) {
 func TestInsertAndRetrieveToolWithMinimalFields(t *testing.T) {
 	db, err := New(":memory:")
 	qt.Assert(t, err, qt.IsNil)
-	defer func() {
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}()
 
 	err = createToolTables(db)
 	qt.Assert(t, err, qt.IsNil)
@@ -252,11 +227,6 @@ func TestInsertAndRetrieveToolWithMinimalFields(t *testing.T) {
 func TestUpdateTool(t *testing.T) {
 	db, err := New(":memory:")
 	qt.Assert(t, err, qt.IsNil)
-	defer func() {
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}()
 
 	err = createToolTables(db)
 	qt.Assert(t, err, qt.IsNil)
@@ -293,11 +263,6 @@ func TestUpdateTool(t *testing.T) {
 func TestToolSearchByLocation(t *testing.T) {
 	db, err := New(":memory:")
 	qt.Assert(t, err, qt.IsNil)
-	defer func() {
-		if err := db.Close(); err != nil {
-			panic(err)
-		}
-	}()
 
 	err = createToolTables(db)
 	qt.Assert(t, err, qt.IsNil)

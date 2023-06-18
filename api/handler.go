@@ -92,26 +92,32 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		response, err := handlerFunc(
+		handlerResp, err := handlerFunc(
 			&Request{
 				Data:    body,
 				Context: hc,
 				Path:    strings.Split(req.URL.Path, "/")[1:],
 				UserID:  req.Header.Get("X-User-ID"),
 			})
+		resp := new(Response)
 		if err != nil {
-			log.Warn().Err(err).Msg("failed to handle request")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		var data []byte
-		if response != nil {
-			data, err = json.Marshal(response)
+			log.Warn().Err(err).Msg("failed request")
+			resp.Header.Message = err.Error()
+			msg, err := json.Marshal(&resp)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to marshal response")
-				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			http.Error(w, string(msg), http.StatusBadRequest)
+			return
+		}
+		resp.Header.Success = true
+		resp.Data = handlerResp
+		data, err := json.Marshal(resp)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to marshal response")
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 		if err := hc.Send(data, http.StatusOK); err != nil {
 			log.Error().Err(err).Msg("failed to send response")

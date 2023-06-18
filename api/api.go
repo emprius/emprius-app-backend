@@ -61,7 +61,6 @@ func (a *API) router() http.Handler {
 	r.Use(middleware.Throttle(100))
 	r.Use(middleware.ThrottleBacklog(5000, 40000, 30*time.Second))
 	r.Use(middleware.Timeout(30 * time.Second))
-
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		// Seek, verify and validate JWT tokens
