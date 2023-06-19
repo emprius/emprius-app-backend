@@ -23,7 +23,8 @@ func TestLogin(t *testing.T) {
 				Name:      "testuser",
 				Community: "testCommunity",
 				Password:  "testpassword",
-			}},
+			},
+		},
 		"register",
 	)
 	qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Response: %s", string(resp)))
@@ -37,13 +38,14 @@ func TestLogin(t *testing.T) {
 				Name:      "testuser",
 				Community: "testCommunity",
 				Password:  "testpassword",
-			}},
+			},
+		},
 		"register",
 	)
 	qt.Assert(t, code, qt.Equals, 400)
 
 	// try wrong login
-	resp, code = c.Request(http.MethodPost, "",
+	_, code = c.Request(http.MethodPost, "",
 		&api.Login{
 			Email:    "foo@test.com",
 			Password: "testpasswordwrong",

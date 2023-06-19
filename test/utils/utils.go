@@ -24,19 +24,18 @@ const (
 
 // TestService is a test service for the API.
 type TestService struct {
-	s     *service.Service
-	t     *testing.T
-	url   string
-	c     *http.Client
-	token string
+	s   *service.Service
+	t   *testing.T
+	url string
+	c   *http.Client
 }
 
 // NewTestService creates a new test service.
 func NewTestService(t *testing.T) *TestService {
 	s, err := service.New(":memory:", jwtSecret, RegisterToken, true)
 	qt.Assert(t, err, qt.IsNil)
-	rand.Seed(time.Now().UnixNano())
-	port := 20000 + rand.Intn(8192)
+	rand.NewSource(time.Now().UnixNano())
+	port := 20000 + rand.New(rand.NewSource(time.Now().UnixNano())).Intn(8192)
 	s.Start("127.0.0.1", port)
 	time.Sleep(time.Second * 1) // Wait for HTTP server to start
 	return &TestService{
