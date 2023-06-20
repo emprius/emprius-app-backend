@@ -67,7 +67,7 @@ var (
 		MayBeFree:        true,
 		AskWithFee:       false,
 		Cost:             10,
-		UserID:           2,
+		UserID:           "user2",
 		Images:           []Image{image1, image2},
 		TransportOptions: []Transport{transport1, transport2},
 		ToolCategory:     1,
@@ -87,7 +87,7 @@ var (
 		MayBeFree:        false,
 		AskWithFee:       true,
 		Cost:             20,
-		UserID:           3,
+		UserID:           "user3",
 		Images:           []Image{image1},
 		TransportOptions: []Transport{transport2},
 		ToolCategory:     2,
@@ -289,7 +289,7 @@ func TestToolSearchByLocation(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if withinCircumference(t.Location, locationOfUser, rangeInMeters) {
+		if WithinCircumference(t.Location, locationOfUser, rangeInMeters) {
 			retrievedTools = append(retrievedTools, t)
 		}
 		return nil
@@ -311,7 +311,7 @@ func TestToolSearchByLocation(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if withinCircumference(t.Location, locationOfUser, rangeInMeters) {
+		if WithinCircumference(t.Location, locationOfUser, rangeInMeters) {
 			retrievedTools = append(retrievedTools, t)
 		}
 		return nil

@@ -35,7 +35,7 @@ func createUserTables(db *Database) error {
 		),
 		CONSTRAINT rating_check CHECK(rating >= 0 AND rating <= 100),
 		CONSTRAINT length_check CHECK(  
-			len(name) > 5 AND 
+			len(name) > 2 AND 
 			len(name) < 30 AND 
 			len(email) > 8 AND 
 			len(email) < 30)

@@ -1,6 +1,8 @@
 package db
 
 import (
+	"regexp"
+
 	"github.com/genjidb/genji"
 )
 
@@ -33,5 +35,15 @@ func (db *Database) CreateTables() error {
 	if err := createToolTables(db); err != nil {
 		return err
 	}
+	if err := createToolCategoryTables(db); err != nil {
+		return err
+	}
 	return nil
+}
+
+// SanitizeString removes all non-alphanumeric characters from a string, except for commas, dots, minus signs, and underscores.
+func SanitizeString(s string) string {
+	reg := regexp.MustCompile("[^a-zA-Z0-9,._-]+")
+	sanitized := reg.ReplaceAllString(s, "")
+	return sanitized
 }
