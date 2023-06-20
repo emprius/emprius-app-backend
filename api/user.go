@@ -99,6 +99,20 @@ func (a *API) refreshHandler(r *Request) (interface{}, error) {
 	return &token, nil
 }
 
+// usersHandler list the existing users.
+func (a *API) usersHandler(r *Request) (interface{}, error) {
+	var users []db.User
+	docs, err := a.database.Query("SELECT * FROM user")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query users: %w", err)
+	}
+	defer closeResult(docs)
+	if err := document.ScanIterator(docs, &users); err != nil {
+		return nil, fmt.Errorf("failed to scan users: %w", err)
+	}
+	return &UsersWrapper{Users: users}, nil
+}
+
 func (a *API) userByEmail(userID string) (*db.User, error) {
 	doc, err := a.database.QueryDocument("SELECT * FROM user WHERE email = ?", userID)
 	if err != nil {

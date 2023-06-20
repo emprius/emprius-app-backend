@@ -7,7 +7,7 @@ type User struct {
 	Email      string   `json:"email"`
 	Name       string   `json:"name"`
 	Community  string   `json:"community"`
-	Password   []byte   `json:"password"`
+	Password   []byte   `json:"-"`
 	Tokens     uint64   `json:"tokens"`
 	Active     bool     `json:"active"`
 	Rating     int32    `json:"rating"`

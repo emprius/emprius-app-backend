@@ -23,12 +23,12 @@ var (
 	}
 
 	transport1 = Transport{
-		ID:   1,
+		ID:   100,
 		Name: "transport1",
 	}
 
 	transport2 = Transport{
-		ID:   2,
+		ID:   200,
 		Name: "transport2",
 	}
 

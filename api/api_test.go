@@ -104,11 +104,11 @@ func TestToolSearch(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil)
 
 	// insert tools
-	err = a.addTool(&testTool1, testUser1.Email)
+	_, err = a.addTool(&testTool1, testUser1.Email)
 	qt.Assert(t, err, qt.IsNil)
-	err = a.addTool(&testTool2, testUser2.Email)
+	_, err = a.addTool(&testTool2, testUser2.Email)
 	qt.Assert(t, err, qt.IsNil)
-	err = a.addTool(&testTool3, testUser2.Email)
+	_, err = a.addTool(&testTool3, testUser2.Email)
 	qt.Assert(t, err, qt.IsNil)
 
 	// get all tools

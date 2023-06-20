@@ -31,37 +31,37 @@ func (a *API) toolCategories() []db.ToolCategory {
 	return categories
 }
 
-func (a *API) addTool(t *Tool, userID string) error {
+func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	// check if images are in database
 	dbImages, err := a.imageListFromSlice(t.Images)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if t.Title == "" || t.Description == "" {
-		return fmt.Errorf("title and description must not be empty")
+		return 0, fmt.Errorf("title and description must not be empty")
 	}
 	if t.EstimatedValue == 0 {
-		return fmt.Errorf("estimated value must be greater than 0")
+		return 0, fmt.Errorf("estimated value must be greater than 0")
 	}
 	if t.MayBeFree == nil {
-		return fmt.Errorf("may be free must not be nil")
+		return 0, fmt.Errorf("may be free must not be nil")
 	}
 	if t.AskWithFee == nil {
-		return fmt.Errorf("ask with fee must not be nil")
+		return 0, fmt.Errorf("ask with fee must not be nil")
 	}
 	if t.Cost == nil {
-		return fmt.Errorf("cost must not be nil")
+		return 0, fmt.Errorf("cost must not be nil")
 	}
 	user, err := a.userByEmail(userID)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+		return 0, fmt.Errorf("user not found: %w", err)
 	}
 	if !db.WithinCircumference(user.Location, t.Location, maxAllowedToolDistance) {
-		return fmt.Errorf("tool location is too far away, more than %d km", maxAllowedToolDistance)
+		return 0, fmt.Errorf("tool location is too far away, more than %d km", maxAllowedToolDistance)
 	}
 
 	if t.Category < 0 || t.Category >= len(a.toolCategories()) {
-		return fmt.Errorf("invalid category %d", t.Category)
+		return 0, fmt.Errorf("invalid category %d", t.Category)
 	}
 	dbTool := db.Tool{
 		ID:             toolID(userID, t.Title),
@@ -83,10 +83,10 @@ func (a *API) addTool(t *Tool, userID string) error {
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
 	if err := a.database.Exec("INSERT INTO tool VALUES ?", &dbTool); err != nil {
-		return fmt.Errorf("could not insert tool to database: %w", err)
+		return 0, fmt.Errorf("could not insert tool to database: %w", err)
 	}
 
-	return nil
+	return dbTool.ID, nil
 }
 
 func toolID(ownerID string, title string) int64 {
@@ -94,7 +94,7 @@ func toolID(ownerID string, title string) int64 {
 	hasher.Write([]byte(fmt.Sprintf("%s-%s", ownerID, title)))
 	hash := hasher.Sum(nil)
 	// Convert the first 4 bytes of the hash to an absolute int64
-	return int64(math.Abs(float64(int64(binary.BigEndian.Uint64(hash[:8])))))
+	return int64(math.Abs(float64(int64(binary.BigEndian.Uint32(hash[:4])))))
 }
 
 func (a *API) tool(id int64) (*db.Tool, error) {
@@ -254,7 +254,7 @@ func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not get tools: %w", err)
 	}
-	return tools, nil
+	return &ToolsWrapper{Tools: tools}, nil
 }
 
 // GET /tools/:id returns a tool by id
@@ -265,7 +265,7 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 	}
 	tool, err := a.tool(id)
 	if err != nil {
-		return nil, fmt.Errorf("tool not found: %w", err)
+		return nil, fmt.Errorf("tool %d not found: %w", id, err)
 	}
 	return tool, nil
 }
@@ -276,14 +276,16 @@ func (a *API) userToolsHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not get tools: %w", err)
 	}
-	return tools, nil
+	return &ToolsWrapper{Tools: tools}, nil
 }
 
 // GET /tools/search filters tools
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	query := ToolSearch{}
-	if err := json.Unmarshal(r.Data, &query); err != nil {
-		return nil, fmt.Errorf("could not parse query: %w", err)
+	if len(r.Data) > 0 {
+		if err := json.Unmarshal(r.Data, &query); err != nil {
+			return nil, fmt.Errorf("could not parse query: %w", err)
+		}
 	}
 	user, err := a.userByEmail(r.UserID)
 	if err != nil {
@@ -293,7 +295,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not search tools: %w", err)
 	}
-	return tools, nil
+	return &ToolsWrapper{Tools: tools}, nil
 }
 
 // POST /tools adds a new tool
@@ -302,10 +304,11 @@ func (a *API) addToolHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &t); err != nil {
 		return nil, fmt.Errorf("could not parse tool: %w", err)
 	}
-	if err := a.addTool(&t, r.UserID); err != nil {
+	id, err := a.addTool(&t, r.UserID)
+	if err != nil {
 		return nil, fmt.Errorf("could not add tool: %w", err)
 	}
-	return nil, nil
+	return &ToolID{ID: id}, nil
 }
 
 // DELETE /tools/:id deletes a tool

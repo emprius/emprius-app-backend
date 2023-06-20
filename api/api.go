@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
+	"github.com/genjidb/genji/document"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -77,6 +78,8 @@ func (a *API) router() http.Handler {
 		r.Get("/refresh", a.routerHandler(a.refreshHandler))
 		log.Info().Msg("register route POST /profile")
 		r.Post("/profile", a.routerHandler(a.userProfileUpdateHandler))
+		log.Info().Msg("register route GET /users")
+		r.Get("/users", a.routerHandler(a.usersHandler))
 
 		// Images
 		// GET /images/{hash}
@@ -117,9 +120,50 @@ func (a *API) router() http.Handler {
 				log.Error().Err(err).Msg("failed to write response")
 			}
 		})
+		log.Info().Msg("register route POST /login")
 		r.Post("/login", a.routerHandler(a.loginHandler))
+		log.Info().Msg("register route POST /register")
 		r.Post("/register", a.routerHandler(a.registerHandler))
+		log.Info().Msg("register route GET /info")
+		r.Get("/info", a.routerHandler(a.infoHandler))
 	})
 
 	return r
+}
+
+// info handler returns the basic info about the API.
+func (a *API) infoHandler(r *Request) (interface{}, error) {
+	// count number of users
+	var userCount int
+	doc, err := a.database.QueryDocument("SELECT COUNT(*) FROM user")
+	if err != nil {
+		return nil, err
+	}
+	if err := document.Scan(doc, &userCount); err != nil {
+		return nil, err
+	}
+	var toolsCount int
+	doc, err = a.database.QueryDocument("SELECT COUNT(*) FROM tool")
+	if err != nil {
+		return nil, err
+	}
+	if err := document.Scan(doc, &toolsCount); err != nil {
+		return nil, err
+	}
+	docs, err := a.database.Query("SELECT * FROM transport")
+	if err != nil {
+		panic(err)
+	}
+	defer closeResult(docs)
+	transports := []db.Transport{}
+	if err := document.ScanIterator(docs, &transports); err != nil {
+		panic(err)
+	}
+	categories := a.toolCategories()
+	return &Info{
+		Users:      userCount,
+		Tools:      toolsCount,
+		Categories: categories,
+		Transports: transports,
+	}, nil
 }

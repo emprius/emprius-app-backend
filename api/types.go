@@ -42,14 +42,19 @@ type Image struct {
 type UserProfile struct {
 	Name      string       `json:"name"`
 	Community string       `json:"community"`
-	Location  *db.Location `json:"location"`
-	Active    *bool        `json:"active"`
-	Avatar    []byte       `json:"avatar"`
-	Password  string       `json:"password"`
+	Location  *db.Location `json:"location,omitempty"`
+	Active    *bool        `json:"active,omitempty"`
+	Avatar    []byte       `json:"avatar,omitempty"`
+	Password  string       `json:"password,omitempty"`
+}
+
+type UsersWrapper struct {
+	Users []db.User `json:"users"`
 }
 
 // Tool is the type of the tool
 type Tool struct {
+	ID               int64       `json:"id"`
 	Title            string      `json:"title"`
 	Description      string      `json:"description"`
 	MayBeFree        *bool       `json:"mayBeFree"`
@@ -64,6 +69,14 @@ type Tool struct {
 	Weight           uint32      `json:"weight"`
 }
 
+type ToolID struct {
+	ID int64 `json:"id"`
+}
+
+type ToolsWrapper struct {
+	Tools []db.Tool `json:"tools"`
+}
+
 // ToolSearch is the type of the tool search
 type ToolSearch struct {
 	Term          string  `json:"term"`
@@ -72,4 +85,11 @@ type ToolSearch struct {
 	MaxCost       *uint64 `json:"maxCost"`
 	MayBeFree     *bool   `json:"mayBeFree"`
 	AvailableFrom int     `json:"availableFrom"`
+}
+
+type Info struct {
+	Users      int               `json:"users"`
+	Tools      int               `json:"tools"`
+	Categories []db.ToolCategory `json:"categories"`
+	Transports []db.Transport    `json:"transports"`
 }
