@@ -16,8 +16,6 @@ var testLatitudeA = db.Location{
 var (
 	// testLatitudeA10km is a location 10km north and 10km east from LatitudeA
 	testLatitudeA10km = db.NewLocation(testLatitudeA, 10, 0)
-	// testLatitudeA50km is a location 50km north and 50km east from LatitudeA
-	testLatitudeA50km = db.NewLocation(testLatitudeA, 50, 0)
 	// testLatitudeA100km is a location 100km north and 100km east from LatitudeA
 	testLatitudeA100km = db.NewLocation(testLatitudeA, 100, 0)
 	// testLatitudeA200km is a location 200km north and 200km east from LatitudeA

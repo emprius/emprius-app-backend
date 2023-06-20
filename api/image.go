@@ -13,8 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var ErrImageNotFound = fmt.Errorf("image not found")
-
 // addImage returns the corresponding db.Image to the data content.
 // If the image is not in the database, it will be added.
 // If the image is already in the database, it will be returned.
@@ -71,6 +69,7 @@ func (a *API) imageListFromSlice(hashes [][]byte) ([]db.Image, error) {
 func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 	image := Image{}
 	if err := json.Unmarshal(r.Data, &image); err != nil {
+		return nil, ErrInvalidJSON
 	}
 	dbImage, err := a.addImage(image.Name, image.Data)
 	if err != nil {

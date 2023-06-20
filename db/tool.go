@@ -133,8 +133,10 @@ func WithinCircumference(point1, point2 Location, distance int) bool {
 	return d <= float64(distance)
 }
 
-// NewLocation creates a new location that is a certain distance (in kilometers) north and east from a starting location.
-// The distance is approximated using a simple flat Earth model, which is reasonably accurate for small distances (up to a few hundred kilometers).
+// NewLocation creates a new location that is a certain distance (in kilometers)
+// north and east from a starting location.
+// The distance is approximated using a simple flat Earth model, which is reasonably
+// accurate for small distances (up to a few hundred kilometers).
 func NewLocation(start Location, distanceNorthKm, distanceEastKm float64) Location {
 	latitudeChange := distanceNorthKm / kilometersInDegree
 	longitudeChange := distanceEastKm / (kilometersInDegree * math.Cos(float64(start.Latitude)*degreesInMicrodegrees))

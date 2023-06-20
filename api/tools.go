@@ -23,7 +23,7 @@ func (a *API) toolCategories() []db.ToolCategory {
 	if err != nil {
 		panic(err)
 	}
-	defer doc.Close()
+	defer closeResult(doc)
 	categories := []db.ToolCategory{}
 	if err := document.ScanIterator(doc, &categories); err != nil {
 		panic(err)
@@ -114,7 +114,7 @@ func (a *API) toolsByUerID(id string) ([]db.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer doc.Close()
+	defer closeResult(doc)
 	tools := []db.Tool{}
 	if err := document.ScanIterator(doc, &tools); err != nil {
 		return nil, err
@@ -127,7 +127,7 @@ func (a *API) tools() ([]db.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer doc.Close()
+	defer closeResult(doc)
 	tools := []db.Tool{}
 	if err := document.ScanIterator(doc, &tools); err != nil {
 		return nil, err
@@ -140,7 +140,7 @@ func (a *API) toolsByDistance(location db.Location, distance int) ([]db.Tool, er
 	if err != nil {
 		return nil, err
 	}
-	defer result.Close()
+	defer closeResult(result)
 	var inRangeTools []db.Tool
 	err = result.Iterate(func(d types.Document) error {
 		var t db.Tool
@@ -154,7 +154,7 @@ func (a *API) toolsByDistance(location db.Location, distance int) ([]db.Tool, er
 		return nil
 	})
 
-	return inRangeTools, nil
+	return inRangeTools, err
 }
 
 func (a *API) editTool(id int64, newTool *Tool) error {
