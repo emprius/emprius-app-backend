@@ -14,6 +14,7 @@ echo "=> register $MAIL"
 curl -s $HOST/register -X POST -d '{"email":"'$MAIL'", "name":"'$NAME'", "password":"'$PASSW'", "invitationToken":"'$REGISTERTOKEN'"}' | jq .
 
 echo "=> login with $PASSW"
+curl -s $HOST/login -X POST -d '{"email":"'$MAIL'", "password":"'$PASSW'"}' | jq .
 jwt=$(curl -s $HOST/login -X POST -d '{"email":"'$MAIL'", "password":"'$PASSW'"}' | jq .data.token | tr -d \")
 jwt="Authorization: BEARER $jwt"
 
@@ -32,8 +33,9 @@ echo "=> update profile with avatar"
 curl -s $HOST/profile -X POST -H "$jwt" -d '{"avatar":"'$avatar'"}' | jq .
 
 echo "=> get image avatar"
+curl -s $HOST/profile -H "$jwt" | jq .
 image=$(curl -s $HOST/profile -H "$jwt" | jq .data.avatarHash | tr -d \")
-curl -s $HOST/images/$image -H "$jwt"
+curl -s $HOST/images/$image -H "$jwt" | jq .
 
 echo "=> list users"
 curl -s $HOST/users -H "$jwt" | jq .
@@ -56,6 +58,7 @@ curl -s $HOST/tools -X POST -H "$jwt" -H 'Content-Type: application/json' -d '{
 }' | jq .
 
 echo "=> get tools owned by the user"
+curl -s $HOST/tools -H "$jwt" | jq .
 tool_id=$(curl -s $HOST/tools -H "$jwt" | jq ".data.tools[].id")
 
 echo "=> modify a tool"

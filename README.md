@@ -2,225 +2,184 @@
 
 emprius.cat APP backend for sharing resources among communities (WORK IN PROGRESS)
 
+## API Endpoints
+
+### 1. Register
+
+**Endpoint:** `/register`
+
+**Method:** `POST`
+
+**Input Parameters:**
+
+- `email`: The email address of the user.
+- `name`: The name of the user.
+- `password`: The password for the user.
+- `invitationToken`: The invitation token for the user.
+
+**Output Model:**
+
+- `header.success`: A boolean indicating whether the operation was successful.
+- `data.token`: The token for the user.
+- `data.expirity`: The expiration date of the token.
+
+### 2. Login
+
+**Endpoint:** `/login`
+
+**Method:** `POST`
+
+**Input Parameters:**
+
+- `email`: The email of the user.
+- `password`: The password of the user.
+
+**Output Model:**
+
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.token`: The token for the user.
+- `data.expirity`: The expiry date of the token.
+
+### 3. Profile
+
+**Endpoint:** `/profile`
+
+**Method:** `GET`
+
+**Input Parameters:**
+
+- `Authorization`: The bearer token of the user.
+
+**Output Model:**
+
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.email`: The email of the user.
+- `data.name`: The name of the user.
+- `data.community`: The community of the user.
+- `data.tokens`: The tokens of the user.
+- `data.active`: A boolean indicating if the user is active.
+- `data.rating`: The rating of the user.
+- `data.avatarHash`: The avatar hash of the user.
+- `data.location.latitude`: The latitude of the user's location.
+- `data.location.longitude`: The longitude of the user's location.
+
+### 4. Info
+
+**Endpoint:** `/info`
+
+**Method:** `GET`
+
+**Output Model:**
+
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.users`: The number of users.
+- `data.tools`: The number of tools.
+- `data.categories`: The list of available tool categories
+- `data.transports`: The list of available transport types.
+
+### 5. Users
+
+**Endpoint:** `/users`
+
+**Method:** `GET`
+
+**Output Model:**
+
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.users`: An array of user objects. List all users on the database.
+
+### 6. Images
+
+**Endpoint:** `/images/:hash`
+
+**Method:** `GET`
+
+**Output Model:**
+
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.images`: An array of image objects.
+
+### 7. Add image
+
+**Endpoint:** `/images`
+
+**Method:** `POST`
+
+**Input Parameters:**
+- `data`: the base64 content of the image.
+- `name`: the name for the image.
+
+**Output Model:**
+
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.hash`: The Hash identifier for the image.
 
 
-# API Documentation
 
-## Endpoints
+### 8. Add a new tool
 
-### Info
+**Endpoint:** `/tools`
 
-#### `GET /info`
+**Method:** `POST`
 
-`curl localhost:3333/info`
+**Input Parameters:**
 
-```
-{
-  "header": {
-    "success": true
-  },
-  "data": {
-    "users": 0,
-    "tools": 0,
-    "categories": [
-      {
-        "id": 1,
-        "name": "other"
-      },
-      {
-        "id": 2,
-        "name": "transport"
-      },
-      {
-        "id": 3,
-        "name": "construction"
-      },
-      {
-        "id": 4,
-        "name": "agriculture"
-      },
-      {
-        "id": 5,
-        "name": "communication"
-      }
-    ],
-    "transports": [
-      {
-        "id": 1,
-        "name": "Car"
-      },
-      {
-        "id": 2,
-        "name": "Van"
-      },
-      {
-        "id": 3,
-        "name": "Truck"
-      }
-    ]
-  }
-}
-```
+- `title`: The title of the tool.
+- `description`: The description of the tool.
+- `mayBeFree`: A boolean indicating if the tool may be free.
+- `askWithFee`: A boolean indicating if the tool can be asked with a fee.
+- `cost`: The cost of the tool.
+- `category`: The category of the tool.
+- `estimatedValue`: The estimated value of the tool.
+- `height`: The height of the tool.
+- `weight`: The weight of the tool.
+- `location`: The location of the tool, including `latitude` and `longitude`.
 
-### User
+**Output Model:**
 
-#### `GET /user/:id`
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.id`: The ID of the newly added tool.
 
-Returns a JSON object of a user with the provided ID.
+### 9. Get tools owned by the user
 
-```bash
-curl http://localhost:3333/user/<id>
-```
+**Endpoint:** `/tools`
 
-#### `POST /user`
+**Method:** `GET`
 
-Creates a new user. The body of the request should include username, email, and password.
+**Output Model:**
 
-```bash
-curl -X POST -H "Content-Type: application/json" -d '{"username": "<username>", "email": "<email>", "password": "<password>"}' http://localhost:3333/user
-```
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.tools`: An array of tool objects owned by the user.
 
-#### PUT /api/user/:id
+### 10. Modify a tool
 
-Updates the details of a user with the provided ID. The body of the request should include any fields to be updated: username, email, password.
+**Endpoint:** `/tools/{tool_id}`
 
-```bash
-curl -X PUT -H "Content-Type: application/json" -d '{"username": "<new_username>", "email": "<new_email>", "password": "<new_password>"}' http://localhost:8000/api/user/<id>
-```
+**Method:** `PUT`
 
-#### `DELETE /user/:id`
+**Input Parameters:**
 
-Deletes a user with the provided ID.
+- `description`: The new description of the tool.
+- `cost`: The new cost of the tool.
+- `category`: The new category of the tool.
 
-```bash
-curl -X DELETE http://localhost:8000/api/user/<id>
-```
+**Output Model:**
 
-### Image
+- `header.success`: A boolean indicating if the operation was successful.
 
-#### `GET /api/image/:hash`
-Returns a JSON object of an image with the provided hash.
+### 11. Search a tool
 
-```bash
-curl -X GET http://localhost:8000/api/image/<hash>
-```
+**Endpoint:** `/tools/search`
 
-#### `POST /api/image`
+**Method:** `GET`
 
-Uploads a new image. The body of the request should include hash, name, content and link.
+**Input Parameters:**
 
-```bash
-curl -X POST -H "Content-Type: application/json" -d '{"hash": "<hash>", "name": "<name>", "content": "<content>", "link": "<link>"}' http://localhost:8000/api/image
-```
+- `categories`: An array of categories to search for.
+- `maxCost`: The maximum cost of the tools to search for.
+- `distance`: The maximum distance to search for tools.
 
-#### `DELETE /api/image/:hash`
+**Output Model:**
 
-Deletes an image with the provided hash.
-
-```bash
-curl -X DELETE http://localhost:8000/api/image/<hash>
-```
-
-### Transport
-
-#### `GET /api/transport/:id`
-
-Returns a JSON object of a transport method with the provided ID.
-
-```bash
-curl -X GET http://localhost:8000/api/transport/<id>
-```
-
-#### POST /api/transport
-
-Creates a new transport method. The body of the request should include id and name.
-
-```bash
-curl -X POST -H "Content-Type: application/json" -d '{"id": "<id>", "name": "<name>"}' http://localhost:8000/api/transport
-```
-
-#### `PUT /api/transport/:id`
-
-Updates the details of a transport method with the provided ID. The body of the request should include id and/or name.
-
-```bash
-curl -X PUT -H "Content-Type: application/json" -d '{"id": "<new_id>", "name": "<new_name>"}' http://localhost:8000/api/transport/<id>
-```
-
-#### `DELETE /api/transport/:id`
-
-Deletes a transport method with the provided ID.
-
-```bash
-curl -X DELETE http://localhost:8000/api/transport/<id>
-```
-
-### Tool
-
-+ GET /tools - Get tools owned by the user
-
-curl https://api.emprius.com/tools'
-
-+ GET /tools/:id - Get a tool by id
-
-curl -X GET 'https://api.emprius.com/tools/{id}
-
-+ GET /tools/user/:id - Get tools owned by a specific user
-
-curl -X GET 'https://api.emprius.com/tools/user/{email}
-
-+ GET /tools/search - Filter tools
-
-curl -X GET 'https://api.emprius.com/tools/search' \
--d '{
-  "Categories": [1, 2],
-  "MayBeFree": true,
-  "MaxCost": 100,
-  "Distance": 20000
-}'
-
-+ POST /tools - Add a new tool
-
-curl -X POST 'https://api.emprius.com/tools' \
--d '{
-  "Title": "Hammer",
-  "Description": "A useful tool",
-  "MayBeFree": true,
-  "AskWithFee": false,
-  "Cost": 10,
-  "Category": 1,
-  "EstimatedValue": 20,
-  "Height": 30,
-  "Weight": 40,
-  "Images": ["image1base64Hash", "image2base64Hash"],
-  "Location": {
-    "Latitude": 50000000,
-    "Longitude": 50000000
-  }
-}'
-
-+ DELETE /tools/:id - Delete a tool
-
-curl -X DELETE 'https://api.emprius.com/tools/{id}'
-
-+ PUT /tools/:id - Edit a tool
-
-curl -X PUT 'https://api.emprius.com/tools/{id}' \
--d '{
-  "Title": "New Title",
-  "Description": "New Description",
-  "MayBeFree": false,
-  "AskWithFee": true,
-  "Cost": 20,
-  "Category": 2,
-  "EstimatedValue": 30,
-  "Height": 40,
-  "Weight": 50,
-  "Images": ["new_image1base64hash"],
-  "Location": {
-    "Latitude": 60000000,
-    "Longitude": 60000000
-  }
-}'
-
-
+- `header.success`: A boolean indicating if the operation was successful.
+- `data.tools`: An array of tool objects that match the search criteria. If no body, all objects are returned.
