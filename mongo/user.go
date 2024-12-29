@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -15,12 +16,26 @@ type User struct {
 	Name       string             `bson:"name"`
 	Community  string             `bson:"community,omitempty"`
 	Password   []byte             `bson:"password"`
-	Tokens     uint64             `bson:"tokens"`
-	Active     bool               `bson:"active"`
-	Rating     int32              `bson:"rating"`
-	AvatarHash primitive.Binary   `bson:"avatarHash,omitempty"`
+	Tokens     uint64             `bson:"tokens" default:"1000"`
+	Active     bool               `bson:"active" default:"true"`
+	Rating     int32              `bson:"rating" default:"50"`
+	AvatarHash []byte             `bson:"avatarHash,omitempty"`
 	Location   Location           `bson:"location"`
-	Verified   bool               `bson:"verified"`
+	Verified   bool               `bson:"verified" default:"false"`
+}
+
+// Validate checks if the user data meets the required constraints
+func (u *User) Validate() error {
+	if len(u.Name) <= 2 || len(u.Name) >= 30 {
+		return fmt.Errorf("name length must be between 2 and 30 characters")
+	}
+	if len(u.Email) <= 8 || len(u.Email) >= 30 {
+		return fmt.Errorf("email length must be between 8 and 30 characters")
+	}
+	if u.Rating < 0 || u.Rating > 100 {
+		return fmt.Errorf("rating must be between 0 and 100")
+	}
+	return nil
 }
 
 // UserService provides methods to interact with the "users" collection.

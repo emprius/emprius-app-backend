@@ -49,7 +49,7 @@ func TestUserService(t *testing.T) {
 			Tokens:     100,
 			Active:     true,
 			Rating:     80,
-			AvatarHash: primitive.Binary{Data: []byte("avatarhash")},
+			AvatarHash: []byte("avatarhash"),
 			Location:   Location{Latitude: 123456, Longitude: 654321},
 			Verified:   true,
 		}

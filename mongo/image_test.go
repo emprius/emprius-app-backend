@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -41,9 +40,9 @@ func TestImageService(t *testing.T) {
 	// Test ImageService methods
 	c.Run("Insert and Retrieve Image", func(c *qt.C) {
 		image := &Image{
-			Hash:    primitive.Binary{Data: []byte("testhash")},
+			Hash:    []byte("testhash"),
 			Name:    "test_image.jpg",
-			Content: primitive.Binary{Data: []byte("testcontent")},
+			Content: []byte("testcontent"),
 			Link:    "https://example.com/test_image.jpg",
 		}
 
@@ -53,11 +52,11 @@ func TestImageService(t *testing.T) {
 		c.Assert(insertResult.InsertedID, qt.Not(qt.IsNil), qt.Commentf("Insert result ID is nil"))
 
 		// Retrieve Image by Hash
-		retrievedImage, err := imageService.GetImage(ctx, image.Hash.Data)
+		retrievedImage, err := imageService.GetImage(ctx, image.Hash)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to retrieve image by hash"))
-		c.Assert(retrievedImage.Hash.Data, qt.DeepEquals, image.Hash.Data, qt.Commentf("Hashes do not match"))
+		c.Assert(retrievedImage.Hash, qt.DeepEquals, image.Hash, qt.Commentf("Hashes do not match"))
 		c.Assert(retrievedImage.Name, qt.Equals, image.Name, qt.Commentf("Names do not match"))
-		c.Assert(retrievedImage.Content.Data, qt.DeepEquals, image.Content.Data, qt.Commentf("Contents do not match"))
+		c.Assert(retrievedImage.Content, qt.DeepEquals, image.Content, qt.Commentf("Contents do not match"))
 		c.Assert(retrievedImage.Link, qt.Equals, image.Link, qt.Commentf("Links do not match"))
 	})
 
@@ -65,15 +64,15 @@ func TestImageService(t *testing.T) {
 		// Insert additional images
 		images := []*Image{
 			{
-				Hash:    primitive.Binary{Data: []byte("hash1")},
+				Hash:    []byte("hash1"),
 				Name:    "image1.jpg",
-				Content: primitive.Binary{Data: []byte("content1")},
+				Content: []byte("content1"),
 				Link:    "https://example.com/image1.jpg",
 			},
 			{
-				Hash:    primitive.Binary{Data: []byte("hash2")},
+				Hash:    []byte("hash2"),
 				Name:    "image2.jpg",
-				Content: primitive.Binary{Data: []byte("content2")},
+				Content: []byte("content2"),
 				Link:    "https://example.com/image2.jpg",
 			},
 		}

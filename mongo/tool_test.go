@@ -50,9 +50,9 @@ func TestToolService(t *testing.T) {
 			UserID:      "testuser123",
 			Images: []Image{
 				{
-					Hash:    primitive.Binary{Data: []byte("testhash")},
+					Hash:    []byte("testhash"),
 					Name:    "tool_image.jpg",
-					Content: primitive.Binary{Data: []byte("testcontent")},
+					Content: []byte("testcontent"),
 					Link:    "https://example.com/tool_image.jpg",
 				},
 			},

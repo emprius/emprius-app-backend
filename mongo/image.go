@@ -4,16 +4,15 @@ import (
 	"context"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // Image represents the schema for the "images" collection.
 type Image struct {
-	Hash    primitive.Binary `bson:"hash"`
-	Name    string           `bson:"name"`
-	Content primitive.Binary `bson:"content"`
-	Link    string           `bson:"link"`
+	Hash    []byte `bson:"hash"`
+	Name    string `bson:"name"`
+	Content []byte `bson:"content"`
+	Link    string `bson:"link"`
 }
 
 // ImageService provides methods to interact with the "images" collection.
@@ -36,7 +35,7 @@ func (s *ImageService) InsertImage(ctx context.Context, image *Image) (*mongo.In
 // GetImage retrieves an Image by its hash.
 func (s *ImageService) GetImage(ctx context.Context, hash []byte) (*Image, error) {
 	var image Image
-	filter := bson.M{"hash": primitive.Binary{Data: hash}}
+	filter := bson.M{"hash": hash}
 	err := s.Collection.FindOne(ctx, filter).Decode(&image)
 	if err != nil {
 		return nil, err
