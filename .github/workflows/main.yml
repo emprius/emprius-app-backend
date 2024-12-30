@@ -49,8 +49,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{secrets.GITHUB_TOKEN}}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Get short commit sha
         id: vars
         run: echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
@@ -61,12 +61,14 @@ jobs:
         run: |
           echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/} | tr '/' '-' )"
       - name: Push to ghcr.io
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
-            emprius/${{ github.event.repository.name }}:latest, emprius/${{ github.event.repository.name }}:${{ steps.var.outputs.branch }},
-            ghcr.io/emprius/${{ github.event.repository.name }}:latest,ghcr.io/emprius/${{ github.event.repository.name }}:${{ steps.var.outputs.branch }}
+            ghcr.io/emprius/${{ github.event.repository.name }}:latest,
+            ghcr.io/emprius/${{ github.event.repository.name }}:${{ steps.var.outputs.branch }},
+            ghcr.io/emprius/${{ github.event.repository.name }}:${{ steps.vars.outputs.sha_short }}
+            
