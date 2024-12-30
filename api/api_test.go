@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -88,10 +89,23 @@ var testTool3 = Tool{
 }
 
 func testAPI(t *testing.T) *API {
-	database, err := db.New(":memory:")
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := db.StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create database
+	database, err := db.New(mongoURI)
 	qt.Assert(t, err, qt.IsNil)
 	err = database.CreateTables()
 	qt.Assert(t, err, qt.IsNil)
+
 	return New("secret", "authtoken", database)
 }
 

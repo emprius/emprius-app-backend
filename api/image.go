@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -8,9 +9,8 @@ import (
 	"fmt"
 
 	"github.com/emprius/emprius-app-backend/db"
-	"github.com/genjidb/genji"
-	"github.com/genjidb/genji/document"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // addImage returns the corresponding db.Image to the data content.
@@ -18,45 +18,42 @@ import (
 // If the image is already in the database, it will be returned.
 func (a *API) addImage(name string, data []byte) (*db.Image, error) {
 	hash := sha256.Sum256(data)
-	doc, err := a.database.QueryDocument("SELECT * FROM image WHERE hash = ?", hash[:])
-	if genji.IsNotFoundError(err) {
-		image := db.Image{
+	image, err := a.database.ImageService.GetImage(context.Background(), hash[:])
+	if err == mongo.ErrNoDocuments {
+		image := &db.Image{
 			Hash:    hash[:],
 			Content: data,
 			Name:    name,
 		}
-		if err := a.database.Exec("INSERT INTO image VALUES ?", &image); err != nil {
+		_, err := a.database.ImageService.InsertImage(context.Background(), image)
+		if err != nil {
 			return nil, fmt.Errorf("could not insert image to database: %w", err)
 		}
 		log.Debug().Msgf("added image %s", base64.StdEncoding.EncodeToString(image.Hash))
-		return &image, nil
+		return image, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	image := db.Image{}
-	if err := document.StructScan(doc, &image); err != nil {
-		return nil, fmt.Errorf("failed to scan image: %w", err)
-	}
-	return &image, nil
+	return image, nil
 }
 
 func (a *API) image(hash []byte) (*db.Image, error) {
-	doc, err := a.database.QueryDocument("SELECT * FROM image WHERE hash = ?", hash)
+	image, err := a.database.ImageService.GetImage(context.Background(), hash)
 	if err != nil {
-		return nil, ErrImageNotFound
-	}
-	image := db.Image{}
-	if err := document.StructScan(doc, &image); err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrImageNotFound
+		}
 		return nil, err
 	}
-	return &image, nil
+	return image, nil
 }
 
 func (a *API) imageListFromSlice(hashes [][]byte) ([]db.Image, error) {
 	var images []db.Image
+	ctx := context.Background()
 	for _, hash := range hashes {
-		image, err := a.image(hash)
+		image, err := a.database.ImageService.GetImage(ctx, hash)
 		if err != nil {
 			return nil, fmt.Errorf("could not get image: %x", hash)
 		}

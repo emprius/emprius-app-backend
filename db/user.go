@@ -1,48 +1,103 @@
 package db
 
-import "github.com/rs/zerolog/log"
+import (
+	"context"
+	"fmt"
 
-// User is a type that represents a user of the app.
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+)
+
+// User represents the schema for the "users" collection.
 type User struct {
-	Email      string   `json:"email"`
-	Name       string   `json:"name"`
-	Community  string   `json:"community"`
-	Password   []byte   `json:"-"`
-	Tokens     uint64   `json:"tokens"`
-	Active     bool     `json:"active"`
-	Rating     int32    `json:"rating"`
-	AvatarHash HexBytes `json:"avatarHash" genji:"avatarHash"` // hash of the image
-	Location   Location `json:"location"`
-	Verified   bool     `json:"-"`
+	ID         primitive.ObjectID `bson:"_id,omitempty"`
+	Email      string             `bson:"email"`
+	Name       string             `bson:"name"`
+	Community  string             `bson:"community,omitempty"`
+	Password   []byte             `bson:"password"`
+	Tokens     uint64             `bson:"tokens" default:"1000"`
+	Active     bool               `bson:"active" default:"true"`
+	Rating     int32              `bson:"rating" default:"50"`
+	AvatarHash []byte             `bson:"avatarHash,omitempty"`
+	Location   Location           `bson:"location"`
+	Verified   bool               `bson:"verified" default:"false"`
 }
 
-func createUserTables(db *Database) error {
-	log.Info().Msg("creating user tables")
-	if err := db.Exec(`
-	CREATE TABLE IF NOT EXISTS user (
-		email     TEXT NOT NULL PRIMARY KEY,
-		name      TEXT NOT NULL UNIQUE,
-		community TEXT,
-		password  BLOB NOT NULL,
-		tokens    INTEGER DEFAULT 1000,
-		active    BOOLEAN DEFAULT TRUE,
-		rating    INTEGER DEFAULT 50,
-		avatarHash BLOB,
-		verified  BOOLEAN DEFAULT FALSE,
-		location  (
-			latitude INTEGER NOT NULL,
-			longitude INTEGER NOT NULL
-		),
-		CONSTRAINT rating_check CHECK(rating >= 0 AND rating <= 100),
-		CONSTRAINT length_check CHECK(  
-			len(name) > 2 AND 
-			len(name) < 30 AND 
-			len(email) > 8 AND 
-			len(email) < 30)
-		)`); err != nil {
-		return err
+// Validate checks if the user data meets the required constraints
+func (u *User) Validate() error {
+	if len(u.Name) <= 2 || len(u.Name) >= 30 {
+		return fmt.Errorf("name length must be between 2 and 30 characters")
 	}
-	return db.Exec(`
-		CREATE INDEX IF NOT EXISTS user_name ON user (name);
-	`)
+	if len(u.Email) <= 8 || len(u.Email) >= 30 {
+		return fmt.Errorf("email length must be between 8 and 30 characters")
+	}
+	if u.Rating < 0 || u.Rating > 100 {
+		return fmt.Errorf("rating must be between 0 and 100")
+	}
+	return nil
+}
+
+// UserService provides methods to interact with the "users" collection.
+type UserService struct {
+	Collection *mongo.Collection
+}
+
+// NewUserService creates a new UserService.
+func NewUserService(db *Database) *UserService {
+	return &UserService{
+		Collection: db.Database.Collection("users"),
+	}
+}
+
+// InsertUser inserts a new User document.
+func (s *UserService) InsertUser(ctx context.Context, user *User) (*mongo.InsertOneResult, error) {
+	return s.Collection.InsertOne(ctx, user)
+}
+
+// GetUserByEmail retrieves a User by their email address.
+func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*User, error) {
+	var user User
+	filter := bson.M{"email": email}
+	err := s.Collection.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpdateUser updates a User document by their ID.
+func (s *UserService) UpdateUser(ctx context.Context, id primitive.ObjectID, update bson.M) (*mongo.UpdateResult, error) {
+	filter := bson.M{"_id": id}
+	return s.Collection.UpdateOne(ctx, filter, bson.M{"$set": update})
+}
+
+// GetAllUsers retrieves all User documents.
+func (s *UserService) GetAllUsers(ctx context.Context) ([]*User, error) {
+	cursor, err := s.Collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var users []*User
+	for cursor.Next(ctx) {
+		var user User
+		if err := cursor.Decode(&user); err != nil {
+			return nil, err
+		}
+		users = append(users, &user)
+	}
+	return users, nil
+}
+
+// DeleteUser deletes a User document by their ID.
+func (s *UserService) DeleteUser(ctx context.Context, id primitive.ObjectID) (*mongo.DeleteResult, error) {
+	filter := bson.M{"_id": id}
+	return s.Collection.DeleteOne(ctx, filter)
+}
+
+// CountUsers returns the total number of users.
+func (s *UserService) CountUsers(ctx context.Context) (int64, error) {
+	return s.Collection.CountDocuments(ctx, bson.M{})
 }

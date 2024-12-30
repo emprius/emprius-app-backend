@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/service"
 	qt "github.com/frankban/quicktest"
 )
@@ -32,7 +34,18 @@ type TestService struct {
 
 // NewTestService creates a new test service.
 func NewTestService(t *testing.T) *TestService {
-	s, err := service.New(":memory:", jwtSecret, RegisterToken, true)
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := db.StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	s, err := service.New(mongoURI, jwtSecret, RegisterToken, true)
 	qt.Assert(t, err, qt.IsNil)
 	rand.NewSource(time.Now().UnixNano())
 	port := 20000 + rand.New(rand.NewSource(time.Now().UnixNano())).Intn(8192)

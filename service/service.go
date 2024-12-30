@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -27,7 +28,7 @@ func (s *Service) Start(host string, port int) {
 
 // Close closes the API service database.
 func (s *Service) Close() {
-	if err := s.Database.Close(); err != nil {
+	if err := s.Database.Close(context.Background()); err != nil {
 		log.Warn().Err(err).Msg("failed to close database")
 	}
 }

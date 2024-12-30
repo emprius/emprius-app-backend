@@ -1,17 +1,16 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
-	"github.com/genjidb/genji/document"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/jwtauth/v5"
-
 	"github.com/rs/zerolog/log"
 )
 
@@ -133,37 +132,39 @@ func (a *API) router() http.Handler {
 
 // info handler returns the basic info about the API.
 func (a *API) infoHandler(r *Request) (interface{}, error) {
-	// count number of users
-	var userCount int
-	doc, err := a.database.QueryDocument("SELECT COUNT(*) FROM user")
+	ctx := context.Background()
+
+	// Get user count
+	userCount, err := a.database.UserService.CountUsers(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to count users: %w", err)
 	}
-	if err := document.Scan(doc, &userCount); err != nil {
-		return nil, err
-	}
-	var toolsCount int
-	doc, err = a.database.QueryDocument("SELECT COUNT(*) FROM tool")
+
+	// Get tool count
+	toolCount, err := a.database.ToolService.CountTools(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to count tools: %w", err)
 	}
-	if err := document.Scan(doc, &toolsCount); err != nil {
-		return nil, err
-	}
-	docs, err := a.database.Query("SELECT * FROM transport")
+
+	// Get all transports
+	transports, err := a.database.TransportService.GetAllTransports(ctx)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to get transports: %w", err)
 	}
-	defer closeResult(docs)
-	transports := []db.Transport{}
-	if err := document.ScanIterator(docs, &transports); err != nil {
-		panic(err)
+
+	// Convert *Transport slice to Transport slice
+	transportList := make([]db.Transport, len(transports))
+	for i, t := range transports {
+		transportList[i] = *t
 	}
+
+	// Get categories
 	categories := a.toolCategories()
+
 	return &Info{
-		Users:      userCount,
-		Tools:      toolsCount,
+		Users:      int(userCount),
+		Tools:      int(toolCount),
 		Categories: categories,
-		Transports: transports,
+		Transports: transportList,
 	}, nil
 }

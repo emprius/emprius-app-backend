@@ -1,10 +1,12 @@
 package db
 
 import (
-	"encoding/json"
+	"context"
 	"math"
+	"regexp"
 
-	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 const (
@@ -15,96 +17,207 @@ const (
 	kilometersInDegree    = 111.0 // Approximate conversion factor
 )
 
-var initialToolCategories = []string{
-	"other",
-	"transport",
-	"construction",
-	"agriculture",
-	"communication",
+// Location represents a geographical location in microdegrees.
+type Location struct {
+	Latitude  int64 `bson:"latitude"`
+	Longitude int64 `bson:"longitude"`
 }
 
-// ToolCategory contains the categories for the tools.
-// The ID zero is reserved for non existing category.
-type ToolCategory struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+// DateRange represents a range of dates using UNIX time format.
+type DateRange struct {
+	From uint32 `bson:"from"`
+	To   uint32 `bson:"to"`
 }
 
-func createToolCategoryTables(db *Database) error {
-	log.Info().Msg("creating tool category tables")
-	if err := db.Exec(`
-	CREATE TABLE IF NOT EXISTS toolCategory (
-		id    INTEGER PRIMARY KEY,
-		name  TEXT NOT NULL UNIQUE
-	)`); err != nil {
-		return err
+// Tool represents the schema for the "tools" collection.
+type Tool struct {
+	ID               int64       `bson:"_id"`
+	Title            string      `bson:"title"`
+	Description      string      `bson:"description"`
+	IsAvailable      bool        `bson:"isAvailable"`
+	MayBeFree        bool        `bson:"mayBeFree"`
+	AskWithFee       bool        `bson:"askWithFee"`
+	Cost             uint64      `bson:"cost"`
+	UserID           string      `bson:"userId"`
+	Images           []Image     `bson:"images"`
+	TransportOptions []Transport `bson:"transportOptions"`
+	ToolCategory     int         `bson:"toolCategory"`
+	Location         Location    `bson:"location"`
+	Rating           int32       `bson:"rating"`
+	EstimatedValue   uint64      `bson:"estimatedValue"`
+	Height           uint32      `bson:"height"`
+	Weight           uint32      `bson:"weight"`
+	ReservedDates    []DateRange `bson:"reservedDates"`
+}
+
+// SanitizeString removes all non-alphanumeric characters from a string, except for commas, dots, minus signs, and underscores.
+func SanitizeString(s string) string {
+	reg := regexp.MustCompile("[^a-zA-Z0-9,._-]+")
+	sanitized := reg.ReplaceAllString(s, "")
+	return sanitized
+}
+
+// ToolService provides methods to interact with the "tools" collection.
+type ToolService struct {
+	Collection *mongo.Collection
+}
+
+// NewToolService creates a new ToolService.
+func NewToolService(db *Database) *ToolService {
+	return &ToolService{
+		Collection: db.Database.Collection("tools"),
 	}
-	if _, err := db.QueryDocument("SELECT id FROM toolCategory"); err == nil {
-		return err
+}
+
+// InsertTool inserts a new Tool document.
+func (s *ToolService) InsertTool(ctx context.Context, tool *Tool) (*mongo.InsertOneResult, error) {
+	return s.Collection.InsertOne(ctx, tool)
+}
+
+// GetToolByID retrieves a Tool by its ID.
+func (s *ToolService) GetToolByID(ctx context.Context, id int64) (*Tool, error) {
+	var tool Tool
+	filter := bson.M{"_id": id}
+	err := s.Collection.FindOne(ctx, filter).Decode(&tool)
+	if err != nil {
+		return nil, err
 	}
-	for i, category := range initialToolCategories {
-		if err := db.Exec(`INSERT INTO toolCategory (id,name) VALUES (?,?)`, i+1, category); err != nil {
-			return err
+	return &tool, nil
+}
+
+// UpdateTool updates a Tool document by ID.
+func (s *ToolService) UpdateTool(ctx context.Context, id int64, update bson.M) (*mongo.UpdateResult, error) {
+	filter := bson.M{"_id": id}
+	return s.Collection.UpdateOne(ctx, filter, bson.M{"$set": update})
+}
+
+// SearchToolsByLocation retrieves tools within a specified radius (in meters) from a given location.
+func (s *ToolService) SearchToolsByLocation(ctx context.Context, location Location, radiusMeters int) ([]*Tool, error) {
+	cursor, err := s.Collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var tools []*Tool
+	for cursor.Next(ctx) {
+		var tool Tool
+		if err := cursor.Decode(&tool); err != nil {
+			return nil, err
+		}
+		if WithinCircumference(tool.Location, location, radiusMeters) {
+			tools = append(tools, &tool)
 		}
 	}
-	return nil
+	return tools, nil
 }
 
-// Tool is a tool that can be borrowed by a user.
-type Tool struct {
-	ID               int64       `json:"id"`
-	Title            string      `json:"title"`
-	Description      string      `json:"description"`
-	IsAvailable      bool        `json:"isAvailable" genji:"isAvailable"`
-	MayBeFree        bool        `json:"mayBeFree" genji:"mayBeFree"`
-	AskWithFee       bool        `json:"askWithFee" genji:"askWithFee"`
-	Cost             uint64      `json:"cost"`
-	UserID           string      `json:"userId" genji:"userId"`
-	Images           []Image     `json:"images"`
-	TransportOptions []Transport `json:"transportOptions" genji:"transportOptions"`
-	ToolCategory     int         `json:"toolCategory" genji:"toolCategory"`
-	Location         Location    `json:"location"`
-	Rating           int32       `json:"rating"`
-	EstimatedValue   uint64      `json:"estimatedValue" genji:"estimatedValue"`
-	Height           uint32      `json:"height"`
-	Weight           uint32      `json:"weight"`
-	ReservedDates    []DateRange `json:"reservedDates" genji:"reservedDates"`
-}
-
-func (t Tool) String() string {
-	data, err := json.Marshal(&t)
+// GetAllTools retrieves all Tool documents.
+func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
+	cursor, err := s.Collection.Find(ctx, bson.M{})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return string(data)
+	defer cursor.Close(ctx)
+
+	var tools []*Tool
+	for cursor.Next(ctx) {
+		var tool Tool
+		if err := cursor.Decode(&tool); err != nil {
+			return nil, err
+		}
+		tools = append(tools, &tool)
+	}
+	return tools, nil
 }
 
-func createToolTables(db *Database) error {
-	log.Info().Msg("creating tool tables")
-	return db.Exec(`
-	CREATE TABLE IF NOT EXISTS tool (
-		id              INTEGER PRIMARY KEY,
-		title           TEXT NOT NULL,
-		description     TEXT NOT NULL,
-		isAvailable     BOOLEAN NOT NULL,
-		mayBeFree       BOOLEAN NOT NULL,
-		askWithFee      BOOLEAN NOT NULL,
-		cost            INTEGER NOT NULL,
-		userId          TEXT NOT NULL,
-		toolCategory    INTEGER NOT NULL,
-		rating          INTEGER NOT NULL,
-		estimatedValue  INTEGER NOT NULL,
-		height          INTEGER,
-		weight          INTEGER,
-		images ARRAY,
-		transportOptions ARRAY,
-		reservedDates ARRAY,
-		location  (
-			latitude INTEGER NOT NULL,
-			longitude INTEGER NOT NULL
-		),
-		CHECK(rating >= 0 AND rating <= 100)
-	)`)
+// GetToolsByUserID retrieves all tools owned by a specific user.
+func (s *ToolService) GetToolsByUserID(ctx context.Context, userID string) ([]*Tool, error) {
+	cursor, err := s.Collection.Find(ctx, bson.M{"userId": userID})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var tools []*Tool
+	for cursor.Next(ctx) {
+		var tool Tool
+		if err := cursor.Decode(&tool); err != nil {
+			return nil, err
+		}
+		tools = append(tools, &tool)
+	}
+	return tools, nil
+}
+
+// UpdateToolFields updates specific fields of a tool.
+func (s *ToolService) UpdateToolFields(ctx context.Context, id int64, updates map[string]interface{}) error {
+	filter := bson.M{"_id": id}
+	update := bson.M{"$set": updates}
+	_, err := s.Collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+// SearchToolsOptions represents the search criteria for tools.
+type SearchToolsOptions struct {
+	Categories []int
+	MayBeFree  *bool
+	MaxCost    *uint64
+	Distance   int
+	Location   *Location
+}
+
+// SearchTools searches for tools based on various criteria.
+func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) ([]*Tool, error) {
+	// Start with all tools
+	tools, err := s.GetAllTools(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter tools based on criteria
+	var filteredTools []*Tool
+	for _, tool := range tools {
+		// Check categories
+		if len(opts.Categories) > 0 {
+			found := false
+			for _, category := range opts.Categories {
+				if tool.ToolCategory == category {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+
+		// Check mayBeFree
+		if opts.MayBeFree != nil && tool.MayBeFree != *opts.MayBeFree {
+			continue
+		}
+
+		// Check maxCost
+		if opts.MaxCost != nil && tool.Cost > *opts.MaxCost {
+			continue
+		}
+
+		// Check distance
+		if opts.Distance > 0 && opts.Location != nil {
+			if !WithinCircumference(tool.Location, *opts.Location, opts.Distance) {
+				continue
+			}
+		}
+
+		filteredTools = append(filteredTools, tool)
+	}
+
+	return filteredTools, nil
+}
+
+// CountTools returns the total number of tools.
+func (s *ToolService) CountTools(ctx context.Context) (int64, error) {
+	return s.Collection.CountDocuments(ctx, bson.M{})
 }
 
 // WithinCircumference calculates if two Location points are within the same geographic circumference

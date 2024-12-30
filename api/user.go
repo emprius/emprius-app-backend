@@ -2,12 +2,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/emprius/emprius-app-backend/db"
-	"github.com/genjidb/genji/document"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 // registerHandler handles the register request. It creates a new user in the database.
@@ -53,7 +54,8 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 
 func (a *API) addUser(u *db.User) error {
 	log.Debug().Msgf("adding user %q", u.Email)
-	if err := a.database.Exec("INSERT INTO user VALUES ?", &u); err != nil {
+	_, err := a.database.UserService.InsertUser(context.Background(), u)
+	if err != nil {
 		return fmt.Errorf("could not insert user to database: %w", err)
 	}
 	return nil
@@ -66,14 +68,9 @@ func (a *API) loginHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &loginInfo); err != nil {
 		return nil, ErrInvalidRequestBodyData
 	}
-	doc, err := a.database.QueryDocument("SELECT * FROM user WHERE email = ?", loginInfo.Email)
+	user, err := a.database.UserService.GetUserByEmail(context.Background(), loginInfo.Email)
 	if err != nil {
 		return nil, ErrWrongLogin
-	}
-
-	user := db.User{}
-	if err := document.StructScan(doc, &user); err != nil {
-		return nil, fmt.Errorf("failed to scan user: %w", err)
 	}
 	if !bytes.Equal(user.Password, hashPassword(loginInfo.Password)) {
 		return nil, fmt.Errorf("invalid credentials")
@@ -101,28 +98,23 @@ func (a *API) refreshHandler(r *Request) (interface{}, error) {
 
 // usersHandler list the existing users.
 func (a *API) usersHandler(r *Request) (interface{}, error) {
-	var users []db.User
-	docs, err := a.database.Query("SELECT * FROM user")
+	users, err := a.database.UserService.GetAllUsers(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("failed to query users: %w", err)
 	}
-	defer closeResult(docs)
-	if err := document.ScanIterator(docs, &users); err != nil {
-		return nil, fmt.Errorf("failed to scan users: %w", err)
+	userList := make([]db.User, len(users))
+	for i, u := range users {
+		userList[i] = *u
 	}
-	return &UsersWrapper{Users: users}, nil
+	return &UsersWrapper{Users: userList}, nil
 }
 
 func (a *API) userByEmail(userID string) (*db.User, error) {
-	doc, err := a.database.QueryDocument("SELECT * FROM user WHERE email = ?", userID)
+	user, err := a.database.UserService.GetUserByEmail(context.Background(), userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user: %w", err)
 	}
-	user := db.User{}
-	if err := document.StructScan(doc, &user); err != nil {
-		return nil, fmt.Errorf("failed to scan user: %w", err)
-	}
-	return &user, nil
+	return user, nil
 }
 
 func (a *API) userProfileHandler(r *Request) (interface{}, error) {
@@ -134,13 +126,9 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &newUserInfo); err != nil {
 		return nil, ErrInvalidRequestBodyData
 	}
-	doc, err := a.database.QueryDocument("SELECT * FROM user WHERE email = ?", r.UserID)
+	user, err := a.database.UserService.GetUserByEmail(context.Background(), r.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user profile: %w", err)
-	}
-	user := db.User{}
-	if err := document.StructScan(doc, &user); err != nil {
-		return nil, fmt.Errorf("failed to scan user profile: %w", err)
 	}
 	if newUserInfo.Name != "" {
 		user.Name = newUserInfo.Name
@@ -165,9 +153,16 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if newUserInfo.Password != "" {
 		user.Password = hashPassword(newUserInfo.Password)
 	}
-	if err := a.database.Exec(`UPDATE user SET name = ?, avatarHash = ?, location = ?,
-	active = ?, password = ?, community = ? WHERE email = ?`, user.Name, user.AvatarHash, &user.Location,
-		user.Active, user.Password, user.Community, user.Email); err != nil {
+	update := bson.M{
+		"name":       user.Name,
+		"avatarHash": user.AvatarHash,
+		"location":   user.Location,
+		"active":     user.Active,
+		"password":   user.Password,
+		"community":  user.Community,
+	}
+	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
+	if err != nil {
 		return nil, fmt.Errorf(ErrCouldNotInsertToDatabase.Error()+": %w", err)
 	}
 	return &user, nil

@@ -2,14 +2,26 @@ package db
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"fmt"
+	"math"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// toolID generates a unique int64 ID for a tool based on owner ID and title
+func toolID(ownerID string, title string) int64 {
+	hasher := sha256.New()
+	hasher.Write([]byte(fmt.Sprintf("%s-%s", ownerID, title)))
+	hash := hasher.Sum(nil)
+	// Convert the first 4 bytes of the hash to an absolute int64
+	return int64(math.Abs(float64(int64(binary.BigEndian.Uint32(hash[:4])))))
+}
 
 func TestToolService(t *testing.T) {
 	c := qt.New(t)
@@ -76,7 +88,7 @@ func TestToolService(t *testing.T) {
 		c.Assert(insertResult.InsertedID, qt.Not(qt.IsNil), qt.Commentf("Insert result ID is nil"))
 
 		// Retrieve Tool by ID
-		toolID := insertResult.InsertedID.(primitive.ObjectID)
+		toolID := insertResult.InsertedID.(int64)
 		retrievedTool, err := toolService.GetToolByID(ctx, toolID)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to retrieve tool by ID"))
 		c.Assert(retrievedTool.Title, qt.Equals, tool.Title, qt.Commentf("Titles do not match"))
@@ -87,6 +99,7 @@ func TestToolService(t *testing.T) {
 	c.Run("Update Tool", func(c *qt.C) {
 		// Insert initial tool
 		tool := &Tool{
+			ID:          toolID("updateuser123", "Update Tool"),
 			Title:       "Update Tool",
 			Description: "A tool to update",
 			IsAvailable: true,
@@ -99,7 +112,7 @@ func TestToolService(t *testing.T) {
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to insert tool for update test"))
 
 		// Update tool fields
-		toolID := insertResult.InsertedID.(primitive.ObjectID)
+		toolID := insertResult.InsertedID.(int64)
 		update := bson.M{
 			"title":       "Updated Tool",
 			"description": "Updated description",
@@ -124,15 +137,21 @@ func TestToolService(t *testing.T) {
 		// Insert tools at different locations
 		tools := []*Tool{
 			{
+				ID:       toolID("user1", "Nearby Tool 1"),
 				Title:    "Nearby Tool 1",
+				UserID:   "user1",
 				Location: Location{Latitude: 100000, Longitude: 100000},
 			},
 			{
+				ID:       toolID("user2", "Nearby Tool 2"),
 				Title:    "Nearby Tool 2",
+				UserID:   "user2",
 				Location: Location{Latitude: 100100, Longitude: 100100},
 			},
 			{
+				ID:       toolID("user3", "Far Tool"),
 				Title:    "Far Tool",
+				UserID:   "user3",
 				Location: Location{Latitude: 200000, Longitude: 200000},
 			},
 		}
@@ -161,13 +180,17 @@ func TestToolService(t *testing.T) {
 		// Insert additional tools
 		tools := []*Tool{
 			{
+				ID:          toolID("user4", "List Tool 1"),
 				Title:       "List Tool 1",
 				Description: "First tool for listing",
+				UserID:      "user4",
 				IsAvailable: true,
 			},
 			{
+				ID:          toolID("user5", "List Tool 2"),
 				Title:       "List Tool 2",
 				Description: "Second tool for listing",
+				UserID:      "user5",
 				IsAvailable: true,
 			},
 		}
@@ -194,7 +217,7 @@ func TestToolService(t *testing.T) {
 
 	c.Run("Get Non-existent Tool", func(c *qt.C) {
 		// Try to retrieve a tool with a non-existent ID
-		nonExistentID := primitive.NewObjectID()
+		nonExistentID := int64(999999)
 		_, err := toolService.GetToolByID(ctx, nonExistentID)
 		c.Assert(err, qt.Equals, mongo.ErrNoDocuments, qt.Commentf("Expected no documents error"))
 	})

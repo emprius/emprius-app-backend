@@ -127,9 +127,15 @@ func createUniqueIndexes(db *Database, ctx context.Context) error {
 
 	// Tool collection indexes
 	toolColl := db.Database.Collection("tools")
-	_, err = toolColl.Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys:    bson.D{{Key: "_id", Value: 1}},
-		Options: options.Index().SetUnique(true),
+	_, err = toolColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "title", Value: 1}},
+			Options: options.Index(),
+		},
 	})
 	if err != nil {
 		log.Printf("Error creating tool indexes: %v\n", err)

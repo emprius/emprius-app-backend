@@ -1,35 +1,61 @@
 package db
 
-import "github.com/rs/zerolog/log"
+import (
+	"context"
 
-var initialTransports = []string{
-	"Car",
-	"Van",
-	"Truck",
-}
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+)
 
-// Transport is a type that represents a transport.
+// Transport represents the schema for the "transports" collection.
 type Transport struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID   int64  `bson:"id"`
+	Name string `bson:"name"`
 }
 
-func createTransportTables(db *Database) error {
-	log.Info().Msg("creating transport tables")
-	if err := db.Exec(`
-	CREATE TABLE IF NOT EXISTS transport (
-		id    INTEGER PRIMARY KEY,
-		name  TEXT NOT NULL UNIQUE
-	)`); err != nil {
-		return err
+// TransportService provides methods to interact with the "transports" collection.
+type TransportService struct {
+	Collection *mongo.Collection
+}
+
+// NewTransportService creates a new TransportService.
+func NewTransportService(db *Database) *TransportService {
+	return &TransportService{
+		Collection: db.Database.Collection("transports"),
 	}
-	if _, err := db.QueryDocument("SELECT id FROM transport"); err == nil {
-		return nil
+}
+
+// InsertTransport inserts a new Transport document.
+func (s *TransportService) InsertTransport(ctx context.Context, transport *Transport) (*mongo.InsertOneResult, error) {
+	return s.Collection.InsertOne(ctx, transport)
+}
+
+// GetTransportByID retrieves a Transport by its ID.
+func (s *TransportService) GetTransportByID(ctx context.Context, id int64) (*Transport, error) {
+	var transport Transport
+	filter := bson.M{"id": id}
+	err := s.Collection.FindOne(ctx, filter).Decode(&transport)
+	if err != nil {
+		return nil, err
 	}
-	for i, t := range initialTransports {
-		if err := db.Exec(`INSERT INTO transport (id,name) VALUES (?,?)`, i+1, t); err != nil {
-			return err
+	return &transport, nil
+}
+
+// GetAllTransports retrieves all Transport documents.
+func (s *TransportService) GetAllTransports(ctx context.Context) ([]*Transport, error) {
+	cursor, err := s.Collection.Find(ctx, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var transports []*Transport
+	for cursor.Next(ctx) {
+		var transport Transport
+		if err := cursor.Decode(&transport); err != nil {
+			return nil, err
 		}
+		transports = append(transports, &transport)
 	}
-	return nil
+	return transports, nil
 }

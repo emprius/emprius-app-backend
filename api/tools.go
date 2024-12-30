@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
@@ -9,9 +10,8 @@ import (
 	"strconv"
 
 	"github.com/emprius/emprius-app-backend/db"
-	"github.com/genjidb/genji/document"
-	"github.com/genjidb/genji/types"
 	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 const (
@@ -19,16 +19,15 @@ const (
 )
 
 func (a *API) toolCategories() []db.ToolCategory {
-	doc, err := a.database.Query("SELECT * FROM toolCategory")
+	categories, err := a.database.ToolCategoryService.GetAllToolCategories(context.Background())
 	if err != nil {
 		panic(err)
 	}
-	defer closeResult(doc)
-	categories := []db.ToolCategory{}
-	if err := document.ScanIterator(doc, &categories); err != nil {
-		panic(err)
+	result := make([]db.ToolCategory, len(categories))
+	for i, c := range categories {
+		result[i] = *c
 	}
-	return categories
+	return result
 }
 
 func (a *API) addTool(t *Tool, userID string) (int64, error) {
@@ -82,7 +81,8 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
-	if err := a.database.Exec("INSERT INTO tool VALUES ?", &dbTool); err != nil {
+	_, err = a.database.ToolService.InsertTool(context.Background(), &dbTool)
+	if err != nil {
 		return 0, fmt.Errorf("could not insert tool to database: %w", err)
 	}
 
@@ -98,63 +98,43 @@ func toolID(ownerID string, title string) int64 {
 }
 
 func (a *API) tool(id int64) (*db.Tool, error) {
-	doc, err := a.database.QueryDocument("SELECT * FROM tool WHERE id = ?", id)
-	if err != nil {
-		return nil, err
-	}
-	tool := db.Tool{}
-	if err := document.StructScan(doc, &tool); err != nil {
-		return nil, err
-	}
-	return &tool, nil
+	return a.database.ToolService.GetToolByID(context.Background(), id)
 }
 
 func (a *API) toolsByUerID(id string) ([]db.Tool, error) {
-	doc, err := a.database.Query("SELECT * FROM tool WHERE userId = ?", id)
+	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), id)
 	if err != nil {
 		return nil, err
 	}
-	defer closeResult(doc)
-	tools := []db.Tool{}
-	if err := document.ScanIterator(doc, &tools); err != nil {
-		return nil, err
+	result := make([]db.Tool, len(tools))
+	for i, t := range tools {
+		result[i] = *t
 	}
-	return tools, nil
+	return result, nil
 }
 
 func (a *API) tools() ([]db.Tool, error) {
-	doc, err := a.database.Query("SELECT * FROM tool")
+	tools, err := a.database.ToolService.GetAllTools(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	defer closeResult(doc)
-	tools := []db.Tool{}
-	if err := document.ScanIterator(doc, &tools); err != nil {
-		return nil, err
+	result := make([]db.Tool, len(tools))
+	for i, t := range tools {
+		result[i] = *t
 	}
-	return tools, nil
+	return result, nil
 }
 
 func (a *API) toolsByDistance(location db.Location, distance int) ([]db.Tool, error) {
-	result, err := a.database.Query("SELECT * FROM tool")
+	tools, err := a.database.ToolService.SearchToolsByLocation(context.Background(), location, distance)
 	if err != nil {
 		return nil, err
 	}
-	defer closeResult(result)
-	var inRangeTools []db.Tool
-	err = result.Iterate(func(d types.Document) error {
-		var t db.Tool
-		err := document.StructScan(d, &t)
-		if err != nil {
-			return err
-		}
-		if db.WithinCircumference(t.Location, location, distance) {
-			inRangeTools = append(inRangeTools, t)
-		}
-		return nil
-	})
-
-	return inRangeTools, err
+	result := make([]db.Tool, len(tools))
+	for i, t := range tools {
+		result[i] = *t
+	}
+	return result, nil
 }
 
 func (a *API) editTool(id int64, newTool *Tool) error {
@@ -199,53 +179,47 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		}
 		tool.Images = dbImages
 	}
-	return a.database.Exec(`UPDATE tool SET title = ?, 
-	description = ?, isAvailable = ?, mayBeFree = ?, 
-	askWithFee = ?, cost = ?, toolCategory = ?, 
-	estimatedValue = ?, height = ?, weight = ?, 
-	images = ?, location = ? WHERE id = ?`,
-		tool.Title, tool.Description, tool.IsAvailable, tool.MayBeFree,
-		tool.AskWithFee, tool.Cost, tool.ToolCategory,
-		tool.EstimatedValue, tool.Height, tool.Weight, tool.Images, tool.Location, id)
+	updates := map[string]interface{}{
+		"title":          tool.Title,
+		"description":    tool.Description,
+		"isAvailable":    tool.IsAvailable,
+		"mayBeFree":      tool.MayBeFree,
+		"askWithFee":     tool.AskWithFee,
+		"cost":           tool.Cost,
+		"toolCategory":   tool.ToolCategory,
+		"estimatedValue": tool.EstimatedValue,
+		"height":         tool.Height,
+		"weight":         tool.Weight,
+		"images":         tool.Images,
+		"location":       tool.Location,
+	}
+	return a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 }
 
 // TODO: this is very naive, we should use a proper SQL query
 func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Tool, error) {
-	tools, err := a.tools()
+	opts := db.SearchToolsOptions{
+		Categories: query.Categories,
+		MayBeFree:  query.MayBeFree,
+		MaxCost:    query.MaxCost,
+		Distance:   query.Distance,
+		Location:   userLocation,
+	}
+	tools, err := a.database.ToolService.SearchTools(context.Background(), opts)
 	if err != nil {
-		return nil, fmt.Errorf("could not get tools: %w", err)
+		return nil, fmt.Errorf("could not search tools: %w", err)
 	}
-
-	var filteredTools []db.Tool
-	for _, tool := range tools {
-		if len(query.Categories) != 0 {
-			found := false
-			for _, category := range query.Categories {
-				if tool.ToolCategory == category {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-		}
-		if query.MayBeFree != nil && tool.MayBeFree != *query.MayBeFree {
-			continue
-		}
-		if query.MaxCost != nil && tool.Cost > *query.MaxCost {
-			continue
-		}
-		if query.Distance != 0 && !db.WithinCircumference(tool.Location, *userLocation, query.Distance) {
-			continue
-		}
-		filteredTools = append(filteredTools, tool)
+	result := make([]db.Tool, len(tools))
+	for i, t := range tools {
+		result[i] = *t
 	}
-	return filteredTools, nil
+	return result, nil
 }
 
 func (a *API) deleteTool(id int64) error {
-	return a.database.Exec("DELETE FROM tool WHERE id = ?", id)
+	filter := bson.M{"_id": id}
+	_, err := a.database.ToolService.Collection.DeleteOne(context.Background(), filter)
+	return err
 }
 
 // GET /tools returns tools owned by the user
