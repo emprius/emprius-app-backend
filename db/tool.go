@@ -5,6 +5,7 @@ import (
 	"math"
 	"regexp"
 
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -97,7 +98,11 @@ func (s *ToolService) SearchToolsByLocation(ctx context.Context, location Locati
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var tools []*Tool
 	for cursor.Next(ctx) {
@@ -118,7 +123,11 @@ func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var tools []*Tool
 	for cursor.Next(ctx) {
@@ -137,7 +146,11 @@ func (s *ToolService) GetToolsByUserID(ctx context.Context, userID string) ([]*T
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var tools []*Tool
 	for cursor.Next(ctx) {

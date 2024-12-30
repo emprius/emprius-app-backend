@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -47,7 +48,11 @@ func (s *TransportService) GetAllTransports(ctx context.Context) ([]*Transport, 
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var transports []*Transport
 	for cursor.Next(ctx) {

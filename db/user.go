@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -78,7 +79,11 @@ func (s *UserService) GetAllUsers(ctx context.Context) ([]*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var users []*User
 	for cursor.Next(ctx) {

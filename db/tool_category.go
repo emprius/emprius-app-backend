@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -48,7 +49,11 @@ func (s *ToolCategoryService) GetAllToolCategories(ctx context.Context) ([]*Tool
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var categories []*ToolCategory
 	for cursor.Next(ctx) {
