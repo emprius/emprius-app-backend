@@ -1,185 +1,365 @@
-# emprius-app-backend
-
-emprius.cat APP backend for sharing resources among communities (WORK IN PROGRESS)
-
-## API Endpoints
-
-### 1. Register
-
-**Endpoint:** `/register`
-
-**Method:** `POST`
-
-**Input Parameters:**
-
-- `email`: The email address of the user.
-- `name`: The name of the user.
-- `password`: The password for the user.
-- `invitationToken`: The invitation token for the user.
-
-**Output Model:**
-
-- `header.success`: A boolean indicating whether the operation was successful.
-- `data.token`: The token for the user.
-- `data.expirity`: The expiration date of the token.
-
-### 2. Login
-
-**Endpoint:** `/login`
-
-**Method:** `POST`
-
-**Input Parameters:**
-
-- `email`: The email of the user.
-- `password`: The password of the user.
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.token`: The token for the user.
-- `data.expirity`: The expiry date of the token.
-
-### 3. Profile
-
-**Endpoint:** `/profile`
-
-**Method:** `GET`
-
-**Input Parameters:**
-
-- `Authorization`: The bearer token of the user.
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.email`: The email of the user.
-- `data.name`: The name of the user.
-- `data.community`: The community of the user.
-- `data.tokens`: The tokens of the user.
-- `data.active`: A boolean indicating if the user is active.
-- `data.rating`: The rating of the user.
-- `data.avatarHash`: The avatar hash of the user.
-- `data.location.latitude`: The latitude of the user's location.
-- `data.location.longitude`: The longitude of the user's location.
-
-### 4. Info
-
-**Endpoint:** `/info`
-
-**Method:** `GET`
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.users`: The number of users.
-- `data.tools`: The number of tools.
-- `data.categories`: The list of available tool categories
-- `data.transports`: The list of available transport types.
-
-### 5. Users
-
-**Endpoint:** `/users`
-
-**Method:** `GET`
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.users`: An array of user objects. List all users on the database.
-
-### 6. Images
-
-**Endpoint:** `/images/:hash`
-
-**Method:** `GET`
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.images`: An array of image objects.
-
-### 7. Add image
-
-**Endpoint:** `/images`
-
-**Method:** `POST`
-
-**Input Parameters:**
-- `data`: the base64 content of the image.
-- `name`: the name for the image.
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.hash`: The Hash identifier for the image.
-
-
-
-### 8. Add a new tool
-
-**Endpoint:** `/tools`
-
-**Method:** `POST`
-
-**Input Parameters:**
-
-- `title`: The title of the tool.
-- `description`: The description of the tool.
-- `mayBeFree`: A boolean indicating if the tool may be free.
-- `askWithFee`: A boolean indicating if the tool can be asked with a fee.
-- `cost`: The cost of the tool.
-- `category`: The category of the tool.
-- `estimatedValue`: The estimated value of the tool.
-- `height`: The height of the tool.
-- `weight`: The weight of the tool.
-- `location`: The location of the tool, including `latitude` and `longitude`.
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.id`: The ID of the newly added tool.
-
-### 9. Get tools owned by the user
-
-**Endpoint:** `/tools`
-
-**Method:** `GET`
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.tools`: An array of tool objects owned by the user.
-
-### 10. Modify a tool
-
-**Endpoint:** `/tools/{tool_id}`
-
-**Method:** `PUT`
-
-**Input Parameters:**
-
-- `description`: The new description of the tool.
-- `cost`: The new cost of the tool.
-- `category`: The new category of the tool.
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-
-### 11. Search a tool
-
-**Endpoint:** `/tools/search`
-
-**Method:** `GET`
-
-**Input Parameters:**
-
-- `categories`: An array of categories to search for.
-- `maxCost`: The maximum cost of the tools to search for.
-- `distance`: The maximum distance to search for tools.
-
-**Output Model:**
-
-- `header.success`: A boolean indicating if the operation was successful.
-- `data.tools`: An array of tool objects that match the search criteria. If no body, all objects are returned.
+# Emprius App Backend
+
+A RESTful API backend service for the Emprius tool sharing platform. This service provides endpoints for user management, tool sharing, and image handling.
+
+## Features
+
+- User authentication with JWT tokens
+- User profile management with avatar support
+- Tool management (add, edit, delete, search)
+- Image upload and retrieval
+- Location-based tool search
+- Community-based user organization
+
+## Prerequisites
+
+- Go 1.x
+- MongoDB
+- Docker (optional)
+
+## Installation
+
+1. Clone the repository
+2. Install dependencies:
+```bash
+go mod download
+```
+3. Set up environment variables:
+- `REGISTER_TOKEN`: Token required for user registration
+- `JWT_SECRET`: Secret key for JWT token generation
+
+4. Run the server:
+```bash
+go run main.go
+```
+
+Or using Docker (for testing):
+```bash
+docker-compose up -d
+```
+
+# API Documentation
+
+The API uses JWT (JSON Web Token) for authentication. Most endpoints require a valid JWT token in the Authorization header:
+
+```
+Authorization: BEARER <your-jwt-token>
+```
+
+## Public Endpoints
+
+### POST /register
+Register a new user.
+
+Request:
+```json
+{
+  "email": "user@example.com",
+  "name": "Username",
+  "password": "userpassword",
+  "invitationToken": "required-token"
+}
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "token": "jwt-token",
+    "expirity": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+### POST /login
+Authenticate user and get JWT token.
+
+Request:
+```json
+{
+  "email": "user@example.com",
+  "password": "userpassword"
+}
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "token": "jwt-token",
+    "expirity": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+### GET /info
+Get general platform information.
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "users": 100,
+    "tools": 250,
+    "categories": [
+      {"id": 1, "name": "Category1"},
+      {"id": 2, "name": "Category2"}
+    ],
+    "transports": [
+      {"id": 1, "name": "Transport1"},
+      {"id": 2, "name": "Transport2"}
+    ]
+  }
+}
+```
+
+## Protected Endpoints (Require Authentication)
+
+### GET /profile
+Get user profile information.
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "email": "user@example.com",
+    "name": "Username",
+    "community": "Community1",
+    "location": {
+      "latitude": 42202259,
+      "longitude": 1815044
+    },
+    "active": true,
+    "avatarHash": "image-hash"
+  }
+}
+```
+
+### POST /profile
+Update user profile.
+
+Request:
+```json
+{
+  "name": "New Name",
+  "community": "New Community",
+  "location": {
+    "latitude": 42202259,
+    "longitude": 1815044
+  },
+  "avatar": "base64-encoded-image"
+}
+```
+
+### GET /users
+List all users.
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "users": [
+      {
+        "email": "user1@example.com",
+        "name": "User1",
+        "community": "Community1"
+      }
+    ]
+  }
+}
+```
+
+### POST /tools
+Add a new tool.
+
+Request:
+```json
+{
+  "title": "Tool Name",
+  "description": "Tool Description",
+  "mayBeFree": true,
+  "askWithFee": false,
+  "cost": 10,
+  "category": 1,
+  "estimatedValue": 20,
+  "height": 30,
+  "weight": 40,
+  "location": {
+    "latitude": 42202259,
+    "longitude": 1815044
+  }
+}
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "id": 123456
+  }
+}
+```
+
+### GET /tools
+Get tools owned by the authenticated user.
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "tools": [
+      {
+        "id": 123456,
+        "title": "Tool Name",
+        "description": "Tool Description",
+        "mayBeFree": true,
+        "askWithFee": false,
+        "cost": 10,
+        "category": 1
+      }
+    ]
+  }
+}
+```
+
+### GET /tools/{id}
+Get specific tool details.
+
+### PUT /tools/{id}
+Update tool information.
+
+Request:
+```json
+{
+  "description": "New Description",
+  "cost": 20,
+  "category": 2
+}
+```
+
+### DELETE /tools/{id}
+Delete a tool.
+
+### GET /tools/search
+Search for tools with filters.
+
+Request:
+```json
+{
+  "categories": [1, 2],
+  "maxCost": 100,
+  "distance": 20000,
+  "mayBeFree": true
+}
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "tools": [
+      {
+        "id": 123456,
+        "title": "Tool Name",
+        "description": "Tool Description",
+        "cost": 10,
+        "category": 1
+      }
+    ]
+  }
+}
+```
+
+
+### POST /images
+Upload an image.
+
+Request:
+```json
+{
+  "name": "image-name",
+  "data": "base64-encoded-image"
+}
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "hash": "image-hash"
+  }
+}
+```
+
+### GET /images/{hash}
+Get an image by its hash.
+
+## Error Responses
+
+All endpoints return errors in the following format:
+
+```json
+{
+  "header": {
+    "success": false,
+    "message": "Error description",
+    "errorCode": 123
+  }
+}
+```
+
+Common error messages:
+- Invalid register auth token
+- Invalid request body data
+- Could not insert to database
+- Wrong password or email
+- Invalid hash
+- Image not found
+- Invalid JSON body
+
+# Development
+
+### Running Tests
+
+```bash
+go test ./...
+```
+
+### API Testing Script
+
+A test script (`test.sh`) is provided to demonstrate API usage. Run it with:
+
+```bash
+./test.sh
+```
+
+## License
+
+This project is licensed under the terms of the LICENSE file included in the repository.
