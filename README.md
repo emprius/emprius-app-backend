@@ -55,9 +55,15 @@ Request:
 ```json
 {
   "email": "user@example.com",
+  "invitationToken": "required-token",
   "name": "Username",
+  "community": "Community1",
+  "location": {
+    "latitude": 42202259,
+    "longitude": 1815044
+  },
   "password": "userpassword",
-  "invitationToken": "required-token"
+  "active": true
 }
 ```
 
@@ -190,19 +196,22 @@ Add a new tool.
 Request:
 ```json
 {
+  "id": 0,
   "title": "Tool Name",
   "description": "Tool Description",
   "mayBeFree": true,
   "askWithFee": false,
   "cost": 10,
+  "images": [],
+  "transportOptions": [1, 2],
   "category": 1,
-  "estimatedValue": 20,
-  "height": 30,
-  "weight": 40,
   "location": {
     "latitude": 42202259,
     "longitude": 1815044
-  }
+  },
+  "estimatedValue": 20,
+  "height": 30,
+  "weight": 40
 }
 ```
 
@@ -236,7 +245,16 @@ Response:
         "mayBeFree": true,
         "askWithFee": false,
         "cost": 10,
-        "category": 1
+        "images": [],
+        "transportOptions": [1, 2],
+        "category": 1,
+        "location": {
+          "latitude": 42202259,
+          "longitude": 1815044
+        },
+        "estimatedValue": 20,
+        "height": 30,
+        "weight": 40
       }
     ]
   }
@@ -323,7 +341,9 @@ Response:
     "endDate": 1735821135,
     "contact": "test@example.com",
     "comments": "I need this tool for a weekend project",
-    "bookingStatus": "pending"
+    "bookingStatus": "pending",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
   }
 }
 ```
@@ -343,9 +363,14 @@ Response:
         "id": "6773e44f06307bedd602fbd2",
         "toolId": "123456",
         "fromUserId": "user123",
+        "toUserId": "owner456",
         "startDate": 1735734735,
         "endDate": 1735821135,
-        "bookingStatus": "pending"
+        "contact": "test@example.com",
+        "comments": "I need this tool for a weekend project",
+        "bookingStatus": "pending",
+        "createdAt": "2024-01-01T00:00:00Z",
+        "updatedAt": "2024-01-01T00:00:00Z"
       }
     ]
   }
@@ -366,10 +391,15 @@ Response:
       {
         "id": "6773e44f06307bedd602fbd2",
         "toolId": "123456",
+        "fromUserId": "user123",
         "toUserId": "owner456",
         "startDate": 1735734735,
         "endDate": 1735821135,
-        "bookingStatus": "pending"
+        "contact": "test@example.com",
+        "comments": "I need this tool for a weekend project",
+        "bookingStatus": "pending",
+        "createdAt": "2024-01-01T00:00:00Z",
+        "updatedAt": "2024-01-01T00:00:00Z"
       }
     ]
   }
@@ -394,7 +424,9 @@ Response:
     "endDate": 1735821135,
     "contact": "test@example.com",
     "comments": "I need this tool for a weekend project",
-    "bookingStatus": "pending"
+    "bookingStatus": "pending",
+    "createdAt": "2024-01-01T00:00:00Z",
+    "updatedAt": "2024-01-01T00:00:00Z"
   }
 }
 ```
