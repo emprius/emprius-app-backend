@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/rs/zerolog/log"
@@ -239,7 +241,7 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 	}
 	tool, err := a.tool(id)
 	if err != nil {
-		return nil, fmt.Errorf("tool %d not found: %w", id, err)
+		return nil, &HTTPError{Code: http.StatusNotFound, Message: fmt.Sprintf("tool %d not found: %s", id, err)}
 	}
 	return tool, nil
 }
@@ -255,11 +257,59 @@ func (a *API) userToolsHandler(r *Request) (interface{}, error) {
 
 // GET /tools/search filters tools
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
-	query := ToolSearch{}
-	if len(r.Data) > 0 {
-		if err := json.Unmarshal(r.Data, &query); err != nil {
-			return nil, fmt.Errorf("could not parse query: %w", err)
+	searchTerm := r.Context.URLParam("searchTerm")
+	maxCostStr := r.Context.URLParam("maxCost")
+	mayBeFreeStr := r.Context.URLParam("maybeFree")
+	availableFromStr := r.Context.URLParam("availableFrom")
+	categoriesStr := r.Context.URLParam("categories")
+
+	var maxCost *uint64
+	if maxCostStr != "" {
+		cost, err := strconv.ParseUint(maxCostStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid maxCost: %w", err)
 		}
+		maxCost = &cost
+	}
+
+	var mayBeFree *bool
+	if mayBeFreeStr != "" {
+		free, err := strconv.ParseBool(mayBeFreeStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid maybeFree: %w", err)
+		}
+		mayBeFree = &free
+	}
+
+	var availableFrom int
+	if availableFromStr != "" {
+		from, err := strconv.Atoi(availableFromStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid availableFrom: %w", err)
+		}
+		availableFrom = from
+	}
+
+	var categories []int
+	if categoriesStr != "" {
+		// Parse comma-separated list of categories
+		catStrings := strings.Split(categoriesStr, ",")
+		categories = make([]int, len(catStrings))
+		for i, cat := range catStrings {
+			val, err := strconv.Atoi(cat)
+			if err != nil {
+				return nil, fmt.Errorf("invalid category: %w", err)
+			}
+			categories[i] = val
+		}
+	}
+
+	query := ToolSearch{
+		Term:          searchTerm,
+		Categories:    categories,
+		MaxCost:       maxCost,
+		MayBeFree:     mayBeFree,
+		AvailableFrom: availableFrom,
 	}
 	user, err := a.userByEmail(r.UserID)
 	if err != nil {

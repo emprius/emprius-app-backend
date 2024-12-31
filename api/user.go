@@ -9,6 +9,7 @@ import (
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // registerHandler handles the register request. It creates a new user in the database.
@@ -107,6 +108,27 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 		userList[i] = *u
 	}
 	return &UsersWrapper{Users: userList}, nil
+}
+
+// getUserHandler handles GET /users/{id}
+func (a *API) getUserHandler(r *Request) (interface{}, error) {
+	userID, err := primitive.ObjectIDFromHex(r.Context.URLParam("id"))
+	if err != nil {
+		return nil, &HTTPError{
+			Code:    404,
+			Message: "user not found",
+		}
+	}
+
+	user, err := a.database.UserService.GetUserByID(context.Background(), userID)
+	if err != nil {
+		return nil, &HTTPError{
+			Code:    404,
+			Message: "user not found",
+		}
+	}
+
+	return user, nil
 }
 
 func (a *API) userByEmail(userID string) (*db.User, error) {

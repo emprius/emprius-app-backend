@@ -294,6 +294,167 @@ Response:
 }
 ```
 
+### POST /bookings
+Create a new booking request.
+
+Request:
+```json
+{
+  "toolId": "123456",
+  "startDate": 1735734735,
+  "endDate": 1735821135,
+  "contact": "test@example.com",
+  "comments": "I need this tool for a weekend project"
+}
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "id": "6773e44f06307bedd602fbd2",
+    "toolId": "123456",
+    "fromUserId": "user123",
+    "toUserId": "owner456",
+    "startDate": 1735734735,
+    "endDate": 1735821135,
+    "contact": "test@example.com",
+    "comments": "I need this tool for a weekend project",
+    "bookingStatus": "pending"
+  }
+}
+```
+
+### GET /bookings/requests
+Get list of booking requests for tools you own.
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "bookings": [
+      {
+        "id": "6773e44f06307bedd602fbd2",
+        "toolId": "123456",
+        "fromUserId": "user123",
+        "startDate": 1735734735,
+        "endDate": 1735821135,
+        "bookingStatus": "pending"
+      }
+    ]
+  }
+}
+```
+
+### GET /bookings/petitions
+Get list of your booking requests.
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "bookings": [
+      {
+        "id": "6773e44f06307bedd602fbd2",
+        "toolId": "123456",
+        "toUserId": "owner456",
+        "startDate": 1735734735,
+        "endDate": 1735821135,
+        "bookingStatus": "pending"
+      }
+    ]
+  }
+}
+```
+
+### GET /bookings/{bookingId}
+Get specific booking details.
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "id": "6773e44f06307bedd602fbd2",
+    "toolId": "123456",
+    "fromUserId": "user123",
+    "toUserId": "owner456",
+    "startDate": 1735734735,
+    "endDate": 1735821135,
+    "contact": "test@example.com",
+    "comments": "I need this tool for a weekend project",
+    "bookingStatus": "pending"
+  }
+}
+```
+
+### POST /bookings/{bookingId}/return
+Mark a tool as returned (tool owner only).
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  }
+}
+```
+
+### GET /bookings/rates
+Get list of pending ratings.
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  },
+  "data": {
+    "ratings": [
+      {
+        "id": "6773e44f06307bedd602fbd2",
+        "bookingId": "6773e44f06307bedd602fbd2",
+        "fromUserId": "user123",
+        "toUserId": "owner456",
+        "isPending": true,
+        "ratingType": "tool"
+      }
+    ]
+  }
+}
+```
+
+### POST /bookings/rates
+Submit a rating for a booking.
+
+Request:
+```json
+{
+  "bookingId": "6773e44f06307bedd602fbd2",
+  "rating": 5
+}
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  }
+}
+```
+
 
 ### POST /images
 Upload an image.
@@ -336,13 +497,28 @@ All endpoints return errors in the following format:
 ```
 
 Common error messages:
+
+Authentication & General:
 - Invalid register auth token
 - Invalid request body data
 - Could not insert to database
 - Wrong password or email
+- Invalid JSON body
+
+Resources:
 - Invalid hash
 - Image not found
-- Invalid JSON body
+- Tool not found
+
+Bookings:
+- Booking dates conflict with existing booking
+- Unauthorized booking operation
+- Invalid booking dates
+- Booking not found
+- Only tool owner can mark as returned
+- Booking already marked as returned
+- Invalid rating value
+- Booking already rated
 
 # Development
 

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -139,7 +140,16 @@ func (s *TestService) Request(method, jwt string, jsonBody any, urlPath ...strin
 	qt.Assert(s.t, err, qt.IsNil)
 	u, err := url.Parse(s.url)
 	qt.Assert(s.t, err, qt.IsNil)
-	u.Path = path.Join(u.Path, path.Join(urlPath...))
+	// Handle the case where the last path component contains query parameters
+	lastIndex := len(urlPath) - 1
+	if lastIndex >= 0 && strings.Contains(urlPath[lastIndex], "?") {
+		parts := strings.SplitN(urlPath[lastIndex], "?", 2)
+		urlPath[lastIndex] = parts[0]
+		u.Path = path.Join(u.Path, path.Join(urlPath...))
+		u.RawQuery = parts[1]
+	} else {
+		u.Path = path.Join(u.Path, path.Join(urlPath...))
+	}
 	headers := http.Header{}
 	if jwt != "" {
 		headers = http.Header{"Authorization": []string{"Bearer " + jwt}}

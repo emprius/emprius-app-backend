@@ -81,6 +81,8 @@ func (a *API) router() http.Handler {
 		r.Post("/profile", a.routerHandler(a.userProfileUpdateHandler))
 		log.Info().Msg("register route GET /users")
 		r.Get("/users", a.routerHandler(a.usersHandler))
+		log.Info().Msg("register route GET /users/{id}")
+		r.Get("/users/{id}", a.routerHandler(a.getUserHandler))
 
 		// Images
 		// GET /images/{hash}
@@ -94,6 +96,12 @@ func (a *API) router() http.Handler {
 		// GET /tools
 		log.Info().Msg("register route GET /tools")
 		r.Get("/tools", a.routerHandler(a.ownToolsHandler))
+		// GET /tools/search
+		log.Info().Msg("register route GET /tools/search")
+		r.Get("/tools/search", a.routerHandler(a.toolSearchHandler))
+		// GET /tools/user/{id}
+		log.Info().Msg("register route GET /tools/user/{id}")
+		r.Get("/tools/user/{id}", a.routerHandler(a.userToolsHandler))
 		// GET /tools/{id}
 		log.Info().Msg("register route GET /tools/{id}")
 		r.Get("/tools/{id}", a.routerHandler(a.toolHandler))
@@ -106,12 +114,6 @@ func (a *API) router() http.Handler {
 		// DELETE /tools/{id}
 		log.Info().Msg("register route DELETE /tools/{id}")
 		r.Delete("/tools/{id}", a.routerHandler(a.deleteToolHandler))
-		// GET /tools/user/{id}
-		log.Info().Msg("register route GET /tools/user/{id}")
-		r.Get("/tools/user/{id}", a.routerHandler(a.userToolsHandler))
-		// GET /tools/search
-		log.Info().Msg("register route GET /tools/search")
-		r.Get("/tools/search", a.routerHandler(a.toolSearchHandler))
 
 		// Bookings
 		// POST /bookings

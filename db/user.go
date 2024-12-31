@@ -106,3 +106,14 @@ func (s *UserService) DeleteUser(ctx context.Context, id primitive.ObjectID) (*m
 func (s *UserService) CountUsers(ctx context.Context) (int64, error) {
 	return s.Collection.CountDocuments(ctx, bson.M{})
 }
+
+// GetUserByID retrieves a User by their ID.
+func (s *UserService) GetUserByID(ctx context.Context, id primitive.ObjectID) (*User, error) {
+	var user User
+	filter := bson.M{"_id": id}
+	err := s.Collection.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}

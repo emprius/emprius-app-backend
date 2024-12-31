@@ -134,7 +134,6 @@ func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.O
 	cursor, err := s.collection.Find(ctx, bson.M{
 		"toUserId": userID,
 	}, options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}))
-
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +151,6 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 	cursor, err := s.collection.Find(ctx, bson.M{
 		"fromUserId": userID,
 	}, options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}}))
-
 	if err != nil {
 		return nil, err
 	}
