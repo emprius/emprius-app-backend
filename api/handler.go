@@ -42,8 +42,6 @@ func (h *HTTPContext) Send(msg []byte, httpStatusCode int) error {
 			log.Warn().Msgf("recovered http send panic: %v", r)
 		}
 	}()
-	// nolint: errcheck
-	defer h.Request.Body.Close()
 
 	if httpStatusCode < 100 || httpStatusCode >= 600 {
 		return fmt.Errorf("http status code %d not supported", httpStatusCode)
@@ -73,24 +71,46 @@ func (h *HTTPContext) Send(msg []byte, httpStatusCode int) error {
 func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWriter, req *http.Request) {
 	return func(w http.ResponseWriter, req *http.Request) {
 		hc := &HTTPContext{Request: req, Writer: w}
-		body, err := io.ReadAll(req.Body)
-		if len(body) > 0 {
-			log.Debug().Msgf("request: %s", func() string {
-				if len(body) > 1024 {
-					return fmt.Sprintf("%s...", body[:1024])
+		var body []byte
+		if req.Body != nil {
+			var err error
+			body, err = io.ReadAll(req.Body)
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to read request body")
+				resp := &Response{
+					Header: ResponseHeader{
+						Success: false,
+						Message: err.Error(),
+					},
 				}
-				return string(body)
-			}())
-		}
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to read request body")
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := req.Body.Close(); err != nil {
-			log.Warn().Err(err).Msg("failed to close request body")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+				msg, _ := json.Marshal(resp)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write(msg)
+				return
+			}
+			if err := req.Body.Close(); err != nil {
+				log.Warn().Err(err).Msg("failed to close request body")
+				resp := &Response{
+					Header: ResponseHeader{
+						Success: false,
+						Message: err.Error(),
+					},
+				}
+				msg, _ := json.Marshal(resp)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(msg)
+				return
+			}
+			if len(body) > 0 {
+				log.Debug().Msgf("request: %s", func() string {
+					if len(body) > 1024 {
+						return fmt.Sprintf("%s...", body[:1024])
+					}
+					return string(body)
+				}())
+			}
 		}
 		handlerResp, err := handlerFunc(
 			&Request{
@@ -102,13 +122,28 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 		resp := new(Response)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed request")
+			resp.Header.Success = false
 			resp.Header.Message = err.Error()
-			msg, err := json.Marshal(&resp)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to marshal response")
+			msg, marshalErr := json.Marshal(resp)
+			if marshalErr != nil {
+				log.Error().Err(marshalErr).Msg("failed to marshal response")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(`{"header":{"success":false,"message":"internal server error"}}`))
 				return
 			}
-			http.Error(w, string(msg), http.StatusBadRequest)
+			statusCode := http.StatusBadRequest
+			if httpErr, ok := err.(*HTTPError); ok {
+				statusCode = httpErr.Code
+			} else {
+				// Check if the error message indicates a forbidden action
+				if err.Error() == "only tool owner can mark as returned" {
+					statusCode = http.StatusForbidden
+				}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(statusCode)
+			w.Write(msg)
 			return
 		}
 		resp.Header.Success = true
@@ -116,11 +151,20 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 		data, err := json.Marshal(resp)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to marshal response")
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			resp := &Response{
+				Header: ResponseHeader{
+					Success: false,
+					Message: err.Error(),
+				},
+			}
+			msg, _ := json.Marshal(resp)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(msg)
 			return
 		}
-		if err := hc.Send(data, http.StatusOK); err != nil {
-			log.Error().Err(err).Msg("failed to send response")
-		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
 	}
 }

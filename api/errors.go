@@ -4,6 +4,16 @@ import (
 	"fmt"
 )
 
+// HTTPError represents an error with an HTTP status code
+type HTTPError struct {
+	Code    int
+	Message string
+}
+
+func (e *HTTPError) Error() string {
+	return e.Message
+}
+
 var (
 	ErrInvalidRegisterAuthToken = fmt.Errorf("invalid register auth token")
 	ErrInvalidRequestBodyData   = fmt.Errorf("invalid request body data")

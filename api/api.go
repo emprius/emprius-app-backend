@@ -2,8 +2,10 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
@@ -114,7 +116,57 @@ func (a *API) router() http.Handler {
 		// Bookings
 		// POST /bookings
 		log.Info().Msg("register route POST /bookings")
-		r.Post("/bookings", a.routerHandler(a.HandleCreateBooking))
+		r.Post("/bookings", a.routerHandler(func(r *Request) (interface{}, error) {
+			if r.UserID == "" {
+				return nil, fmt.Errorf("unauthorized")
+			}
+
+			var req CreateBookingRequest
+			if err := json.Unmarshal(r.Data, &req); err != nil {
+				return nil, fmt.Errorf("invalid request body")
+			}
+
+			// Get tool to verify it exists and get owner ID
+			toolID, err := strconv.ParseInt(req.ToolID, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid tool ID")
+			}
+
+			tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
+			if err != nil {
+				return nil, err
+			}
+			if tool == nil {
+				return nil, fmt.Errorf("tool not found")
+			}
+
+			// Get user IDs from database
+			fromUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid user ID: %w", err)
+			}
+
+			toUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), tool.UserID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid tool owner ID: %w", err)
+			}
+
+			// Create booking request
+			dbReq := &db.CreateBookingRequest{
+				ToolID:    fromUser.ID,
+				StartDate: time.Unix(req.StartDate, 0),
+				EndDate:   time.Unix(req.EndDate, 0),
+				Contact:   req.Contact,
+				Comments:  req.Comments,
+			}
+
+			booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ID, toUser.ID)
+			if err != nil {
+				return nil, err
+			}
+
+			return convertBookingToResponse(booking), nil
+		}))
 		// GET /bookings/requests
 		log.Info().Msg("register route GET /bookings/requests")
 		r.Get("/bookings/requests", a.routerHandler(a.HandleGetBookingRequests))

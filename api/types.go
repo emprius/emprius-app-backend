@@ -93,3 +93,27 @@ type Info struct {
 	Categories []db.ToolCategory `json:"categories"`
 	Transports []db.Transport    `json:"transports"`
 }
+
+// CreateBookingRequest represents the request to create a new booking
+type CreateBookingRequest struct {
+	ToolID    string `json:"toolId"`
+	StartDate int64  `json:"startDate"`
+	EndDate   int64  `json:"endDate"`
+	Contact   string `json:"contact"`
+	Comments  string `json:"comments"`
+}
+
+// BookingResponse represents the API response for a booking
+type BookingResponse struct {
+	ID            string    `json:"id"`
+	ToolID        string    `json:"toolId"`
+	FromUserID    string    `json:"fromUserId"`
+	ToUserID      string    `json:"toUserId"`
+	StartDate     int64     `json:"startDate"`
+	EndDate       int64     `json:"endDate"`
+	Contact       string    `json:"contact"`
+	Comments      string    `json:"comments"`
+	BookingStatus string    `json:"bookingStatus"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+}
