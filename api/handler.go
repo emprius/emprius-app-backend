@@ -86,7 +86,9 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 				msg, _ := json.Marshal(resp)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)
-				w.Write(msg)
+				if _, err := w.Write(msg); err != nil {
+					log.Error().Err(err).Msg("failed to write response")
+				}
 				return
 			}
 			if err := req.Body.Close(); err != nil {
@@ -100,7 +102,9 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 				msg, _ := json.Marshal(resp)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write(msg)
+				if _, err := w.Write(msg); err != nil {
+					log.Error().Err(err).Msg("failed to write response")
+				}
 				return
 			}
 			if len(body) > 0 {
@@ -129,7 +133,9 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 				log.Error().Err(marshalErr).Msg("failed to marshal response")
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusInternalServerError)
-				w.Write([]byte(`{"header":{"success":false,"message":"internal server error"}}`))
+				if _, err := w.Write([]byte(`{"header":{"success":false,"message":"internal server error"}}`)); err != nil {
+					log.Error().Err(err).Msg("failed to write response")
+				}
 				return
 			}
 			statusCode := http.StatusBadRequest
@@ -143,7 +149,9 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(statusCode)
-			w.Write(msg)
+			if _, err := w.Write(msg); err != nil {
+				log.Error().Err(err).Msg("failed to write response")
+			}
 			return
 		}
 		resp.Header.Success = true
@@ -160,11 +168,15 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			msg, _ := json.Marshal(resp)
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write(msg)
+			if _, err := w.Write(msg); err != nil {
+				log.Error().Err(err).Msg("failed to write response")
+			}
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			log.Error().Err(err).Msg("failed to write response")
+		}
 	}
 }

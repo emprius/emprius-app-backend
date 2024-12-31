@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -84,7 +85,11 @@ type CreateBookingRequest struct {
 }
 
 // Create creates a new booking
-func (s *BookingService) Create(ctx context.Context, req *CreateBookingRequest, fromUserID, toUserID primitive.ObjectID) (*Booking, error) {
+func (s *BookingService) Create(
+	ctx context.Context,
+	req *CreateBookingRequest,
+	fromUserID, toUserID primitive.ObjectID,
+) (*Booking, error) {
 	// Set timestamps
 	now := time.Now()
 
@@ -137,7 +142,11 @@ func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.O
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var bookings []*Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
@@ -154,7 +163,11 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var bookings []*Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
@@ -182,8 +195,14 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 	return nil
 }
 
-// checkDateConflicts checks if there are any conflicting bookings for the given tool and dates
-func (s *BookingService) checkDateConflicts(ctx context.Context, toolID primitive.ObjectID, start, end time.Time, excludeID primitive.ObjectID) (bool, error) {
+// checkDateConflicts checks if there are any conflicting bookings for the given tool and dates.
+// It takes a tool ID, start and end times, and an optional booking ID to exclude from the check.
+func (s *BookingService) checkDateConflicts(
+	ctx context.Context,
+	toolID primitive.ObjectID,
+	start, end time.Time,
+	excludeID primitive.ObjectID,
+) (bool, error) {
 	filter := bson.M{
 		"toolId": toolID,
 		"bookingStatus": bson.M{
@@ -225,7 +244,11 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var bookings []*Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
