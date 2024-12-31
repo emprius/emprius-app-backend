@@ -12,17 +12,17 @@ import (
 
 // User represents the schema for the "users" collection.
 type User struct {
-	ID         primitive.ObjectID `bson:"_id,omitempty"`
-	Email      string             `bson:"email"`
-	Name       string             `bson:"name"`
-	Community  string             `bson:"community,omitempty"`
-	Password   []byte             `bson:"password"`
-	Tokens     uint64             `bson:"tokens" default:"1000"`
-	Active     bool               `bson:"active" default:"true"`
-	Rating     int32              `bson:"rating" default:"50"`
-	AvatarHash []byte             `bson:"avatarHash,omitempty"`
-	Location   Location           `bson:"location"`
-	Verified   bool               `bson:"verified" default:"false"`
+	ID         primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	Email      string             `bson:"email" json:"email"`
+	Name       string             `bson:"name" json:"name"`
+	Community  string             `bson:"community,omitempty" json:"community,omitempty"`
+	Password   []byte             `bson:"password" json:"-"` // Don't include password in JSON
+	Tokens     uint64             `bson:"tokens" json:"tokens" default:"1000"`
+	Active     bool               `bson:"active" json:"active" default:"true"`
+	Rating     int32              `bson:"rating" json:"rating" default:"50"`
+	AvatarHash []byte             `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
+	Location   Location           `bson:"location" json:"location"`
+	Verified   bool               `bson:"verified" json:"verified" default:"false"`
 }
 
 // Validate checks if the user data meets the required constraints

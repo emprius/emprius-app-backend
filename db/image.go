@@ -10,10 +10,10 @@ import (
 
 // Image represents the schema for the "images" collection.
 type Image struct {
-	Hash    []byte `bson:"hash"`
-	Name    string `bson:"name"`
-	Content []byte `bson:"content"`
-	Link    string `bson:"link"`
+	Hash    []byte `bson:"hash" json:"hash"`
+	Name    string `bson:"name" json:"name"`
+	Content []byte `bson:"content" json:"content"`
+	Link    string `bson:"link" json:"link,omitempty"`
 }
 
 // ImageService provides methods to interact with the "images" collection.

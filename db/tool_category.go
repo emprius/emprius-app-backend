@@ -11,8 +11,8 @@ import (
 
 // ToolCategory represents the schema for the "tool_categories" collection.
 type ToolCategory struct {
-	ID   int    `bson:"id"`
-	Name string `bson:"name"`
+	ID   int    `bson:"id" json:"id"`
+	Name string `bson:"name" json:"name"`
 }
 
 // ToolCategoryService provides methods to interact with the "tool_categories" collection.

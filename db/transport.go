@@ -10,8 +10,8 @@ import (
 
 // Transport represents the schema for the "transports" collection.
 type Transport struct {
-	ID   int64  `bson:"id"`
-	Name string `bson:"name"`
+	ID   int64  `bson:"id" json:"id"`
+	Name string `bson:"name" json:"name"`
 }
 
 // TransportService provides methods to interact with the "transports" collection.

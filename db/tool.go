@@ -20,35 +20,35 @@ const (
 
 // Location represents a geographical location in microdegrees.
 type Location struct {
-	Latitude  int64 `bson:"latitude"`
-	Longitude int64 `bson:"longitude"`
+	Latitude  int64 `bson:"latitude" json:"latitude"`
+	Longitude int64 `bson:"longitude" json:"longitude"`
 }
 
 // DateRange represents a range of dates using UNIX time format.
 type DateRange struct {
-	From uint32 `bson:"from"`
-	To   uint32 `bson:"to"`
+	From uint32 `bson:"from" json:"from"`
+	To   uint32 `bson:"to" json:"to"`
 }
 
 // Tool represents the schema for the "tools" collection.
 type Tool struct {
-	ID               int64       `bson:"_id"`
-	Title            string      `bson:"title"`
-	Description      string      `bson:"description"`
-	IsAvailable      bool        `bson:"isAvailable"`
-	MayBeFree        bool        `bson:"mayBeFree"`
-	AskWithFee       bool        `bson:"askWithFee"`
-	Cost             uint64      `bson:"cost"`
-	UserID           string      `bson:"userId"`
-	Images           []Image     `bson:"images"`
-	TransportOptions []Transport `bson:"transportOptions"`
-	ToolCategory     int         `bson:"toolCategory"`
-	Location         Location    `bson:"location"`
-	Rating           int32       `bson:"rating"`
-	EstimatedValue   uint64      `bson:"estimatedValue"`
-	Height           uint32      `bson:"height"`
-	Weight           uint32      `bson:"weight"`
-	ReservedDates    []DateRange `bson:"reservedDates"`
+	ID               int64       `bson:"_id" json:"id"`
+	Title            string      `bson:"title" json:"title"`
+	Description      string      `bson:"description" json:"description"`
+	IsAvailable      bool        `bson:"isAvailable" json:"isAvailable"`
+	MayBeFree        bool        `bson:"mayBeFree" json:"mayBeFree"`
+	AskWithFee       bool        `bson:"askWithFee" json:"askWithFee"`
+	Cost             uint64      `bson:"cost" json:"cost"`
+	UserID           string      `bson:"userId" json:"userId"`
+	Images           []Image     `bson:"images" json:"images"`
+	TransportOptions []Transport `bson:"transportOptions" json:"transportOptions"`
+	ToolCategory     int         `bson:"toolCategory" json:"toolCategory"`
+	Location         Location    `bson:"location" json:"location"`
+	Rating           int32       `bson:"rating" json:"rating"`
+	EstimatedValue   uint64      `bson:"estimatedValue" json:"estimatedValue"`
+	Height           uint32      `bson:"height" json:"height"`
+	Weight           uint32      `bson:"weight" json:"weight"`
+	ReservedDates    []DateRange `bson:"reservedDates" json:"reservedDates"`
 }
 
 // SanitizeString removes all non-alphanumeric characters from a string, except for commas, dots, minus signs, and underscores.

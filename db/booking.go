@@ -23,17 +23,17 @@ const (
 
 // Booking represents a tool booking in the system
 type Booking struct {
-	ID            primitive.ObjectID `bson:"_id,omitempty"`
-	ToolID        primitive.ObjectID `bson:"toolId"`
-	FromUserID    primitive.ObjectID `bson:"fromUserId"`
-	ToUserID      primitive.ObjectID `bson:"toUserId"`
-	StartDate     time.Time          `bson:"startDate"`
-	EndDate       time.Time          `bson:"endDate"`
-	Contact       string             `bson:"contact"`
-	Comments      string             `bson:"comments"`
-	BookingStatus BookingStatus      `bson:"bookingStatus"`
-	CreatedAt     time.Time          `bson:"createdAt"`
-	UpdatedAt     time.Time          `bson:"updatedAt"`
+	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	ToolID        primitive.ObjectID `bson:"toolId" json:"toolId"`
+	FromUserID    primitive.ObjectID `bson:"fromUserId" json:"fromUserId"`
+	ToUserID      primitive.ObjectID `bson:"toUserId" json:"toUserId"`
+	StartDate     time.Time          `bson:"startDate" json:"startDate"`
+	EndDate       time.Time          `bson:"endDate" json:"endDate"`
+	Contact       string             `bson:"contact" json:"contact"`
+	Comments      string             `bson:"comments" json:"comments"`
+	BookingStatus BookingStatus      `bson:"bookingStatus" json:"bookingStatus"`
+	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
+	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
 
 // BookingService handles all booking related database operations
@@ -76,11 +76,11 @@ func NewBookingService(db *mongo.Database) *BookingService {
 
 // CreateBookingRequest represents the request to create a new booking
 type CreateBookingRequest struct {
-	ToolID    primitive.ObjectID `bson:"toolId"`
-	StartDate time.Time          `bson:"startDate"`
-	EndDate   time.Time          `bson:"endDate"`
-	Contact   string             `bson:"contact"`
-	Comments  string             `bson:"comments"`
+	ToolID    primitive.ObjectID `bson:"toolId" json:"toolId"`
+	StartDate time.Time          `bson:"startDate" json:"startDate"`
+	EndDate   time.Time          `bson:"endDate" json:"endDate"`
+	Contact   string             `bson:"contact" json:"contact"`
+	Comments  string             `bson:"comments" json:"comments"`
 }
 
 // Create creates a new booking
