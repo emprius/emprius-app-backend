@@ -110,6 +110,29 @@ func (a *API) router() http.Handler {
 		// GET /tools/search
 		log.Info().Msg("register route GET /tools/search")
 		r.Get("/tools/search", a.routerHandler(a.toolSearchHandler))
+
+		// Bookings
+		// POST /bookings
+		log.Info().Msg("register route POST /bookings")
+		r.Post("/bookings", a.routerHandler(a.HandleCreateBooking))
+		// GET /bookings/requests
+		log.Info().Msg("register route GET /bookings/requests")
+		r.Get("/bookings/requests", a.routerHandler(a.HandleGetBookingRequests))
+		// GET /bookings/petitions
+		log.Info().Msg("register route GET /bookings/petitions")
+		r.Get("/bookings/petitions", a.routerHandler(a.HandleGetBookingPetitions))
+		// GET /bookings/{bookingId}
+		log.Info().Msg("register route GET /bookings/{bookingId}")
+		r.Get("/bookings/{bookingId}", a.routerHandler(a.HandleGetBooking))
+		// POST /bookings/{bookingId}/return
+		log.Info().Msg("register route POST /bookings/{bookingId}/return")
+		r.Post("/bookings/{bookingId}/return", a.routerHandler(a.HandleReturnBooking))
+		// GET /bookings/rates
+		log.Info().Msg("register route GET /bookings/rates")
+		r.Get("/bookings/rates", a.routerHandler(a.HandleGetPendingRatings))
+		// POST /bookings/rates
+		log.Info().Msg("register route POST /bookings/rates")
+		r.Post("/bookings/rates", a.routerHandler(a.HandleRateBooking))
 	})
 
 	// Public routes
