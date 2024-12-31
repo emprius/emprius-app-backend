@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -47,12 +47,12 @@ func convertBookingToResponse(booking *db.Booking) BookingResponse {
 // HandleGetBookingRequests handles GET /bookings/requests
 func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, errors.New("unauthorized")
+		return nil, fmt.Errorf("unauthorized")
 	}
 
 	userID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, errors.New("invalid user ID")
+		return nil, fmt.Errorf("invalid user ID")
 	}
 
 	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), userID)
@@ -71,12 +71,12 @@ func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
 // HandleGetBookingPetitions handles GET /bookings/petitions
 func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, errors.New("unauthorized")
+		return nil, fmt.Errorf("unauthorized")
 	}
 
 	userID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, errors.New("invalid user ID")
+		return nil, fmt.Errorf("invalid user ID")
 	}
 
 	bookings, err := a.database.BookingService.GetUserPetitions(r.Context.Request.Context(), userID)
@@ -96,7 +96,7 @@ func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
 	if err != nil {
-		return nil, errors.New("invalid booking ID")
+		return nil, fmt.Errorf("invalid booking ID")
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
@@ -104,7 +104,7 @@ func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 		return nil, err
 	}
 	if booking == nil {
-		return nil, errors.New("booking not found")
+		return nil, fmt.Errorf("booking not found")
 	}
 
 	return convertBookingToResponse(booking), nil
@@ -113,17 +113,17 @@ func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 // HandleReturnBooking handles POST /bookings/{bookingId}/return
 func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, errors.New("unauthorized")
+		return nil, fmt.Errorf("unauthorized")
 	}
 
 	userID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, errors.New("invalid user ID")
+		return nil, fmt.Errorf("invalid user ID")
 	}
 
 	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
 	if err != nil {
-		return nil, errors.New("invalid booking ID")
+		return nil, fmt.Errorf("invalid booking ID")
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
@@ -131,12 +131,12 @@ func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 		return nil, err
 	}
 	if booking == nil {
-		return nil, errors.New("booking not found")
+		return nil, fmt.Errorf("booking not found")
 	}
 
 	// Verify user is the tool owner
 	if booking.ToUserID != userID {
-		return nil, errors.New("only tool owner can mark as returned")
+		return nil, fmt.Errorf("only tool owner can mark as returned")
 	}
 
 	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusReturned)
@@ -150,12 +150,12 @@ func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 // HandleGetPendingRatings handles GET /bookings/rates
 func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, errors.New("unauthorized")
+		return nil, fmt.Errorf("unauthorized")
 	}
 
 	userID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, errors.New("invalid user ID")
+		return nil, fmt.Errorf("invalid user ID")
 	}
 
 	bookings, err := a.database.BookingService.GetPendingRatings(r.Context.Request.Context(), userID)
@@ -188,22 +188,22 @@ type CreateBookingRequest struct {
 // HandleCreateBooking handles POST /bookings
 func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, errors.New("unauthorized")
+		return nil, fmt.Errorf("unauthorized")
 	}
 
 	fromUserID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, errors.New("invalid user ID")
+		return nil, fmt.Errorf("invalid user ID")
 	}
 
 	var req CreateBookingRequest
 	if err := json.Unmarshal(r.Data, &req); err != nil {
-		return nil, errors.New("invalid request body")
+		return nil, fmt.Errorf("invalid request body")
 	}
 
 	toolID, err := strconv.ParseInt(req.ToolID, 10, 64)
 	if err != nil {
-		return nil, errors.New("invalid tool ID")
+		return nil, fmt.Errorf("invalid tool ID")
 	}
 
 	// Get tool to verify it exists and get owner ID
@@ -212,18 +212,18 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, err
 	}
 	if tool == nil {
-		return nil, errors.New("tool not found")
+		return nil, fmt.Errorf("tool not found")
 	}
 
 	toUserID, err := primitive.ObjectIDFromHex(tool.UserID)
 	if err != nil {
-		return nil, errors.New("invalid tool owner ID")
+		return nil, fmt.Errorf("invalid tool owner ID")
 	}
 
 	// Convert tool ID to ObjectID for booking
 	toolObjID, err := primitive.ObjectIDFromHex(req.ToolID)
 	if err != nil {
-		return nil, errors.New("invalid tool ID format")
+		return nil, fmt.Errorf("invalid tool ID format")
 	}
 
 	// Create booking request
@@ -246,17 +246,17 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 // HandleRateBooking handles POST /bookings/rates
 func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, errors.New("unauthorized")
+		return nil, fmt.Errorf("unauthorized")
 	}
 
 	userID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, errors.New("invalid user ID")
+		return nil, fmt.Errorf("invalid user ID")
 	}
 
 	bookingID, err := primitive.ObjectIDFromHex(r.Context.Request.URL.Query().Get("bookingId"))
 	if err != nil {
-		return nil, errors.New("invalid booking ID")
+		return nil, fmt.Errorf("invalid booking ID")
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
@@ -264,17 +264,17 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		return nil, err
 	}
 	if booking == nil {
-		return nil, errors.New("booking not found")
+		return nil, fmt.Errorf("booking not found")
 	}
 
 	// Verify user is involved in the booking
 	if booking.FromUserID != userID && booking.ToUserID != userID {
-		return nil, errors.New("user not involved in booking")
+		return nil, fmt.Errorf("user not involved in booking")
 	}
 
 	var rateReq RateRequest
 	if err := json.Unmarshal(r.Data, &rateReq); err != nil {
-		return nil, errors.New("invalid request body")
+		return nil, fmt.Errorf("invalid request body")
 	}
 
 	// TODO: Implement rating logic once rating schema is defined

@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -107,7 +107,7 @@ func (s *BookingService) Create(ctx context.Context, req *CreateBookingRequest, 
 		return nil, err
 	}
 	if conflictExists {
-		return nil, errors.New("booking dates conflict with existing booking")
+		return nil, fmt.Errorf("booking dates conflict with existing booking")
 	}
 
 	result, err := s.collection.InsertOne(ctx, booking)
@@ -179,7 +179,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		return err
 	}
 	if result.MatchedCount == 0 {
-		return errors.New("booking not found")
+		return fmt.Errorf("booking not found")
 	}
 	return nil
 }
