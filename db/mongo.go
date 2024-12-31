@@ -8,6 +8,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+const (
+	// DatabaseName is the name of the MongoDB database.
+	DatabaseName = "emprius-backend"
+)
+
 // Database struct encapsulates MongoDB client and database.
 type Database struct {
 	Client              *mongo.Client
@@ -35,9 +40,7 @@ func New(uri string) (*Database, error) {
 		return nil, err
 	}
 
-	// Use a random database name for isolation in tests
-	dbName := RandomDatabaseName()
-	db := client.Database(dbName)
+	db := client.Database(DatabaseName)
 	database := &Database{
 		Client:   client,
 		Database: db,
