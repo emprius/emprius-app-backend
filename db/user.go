@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/emprius/emprius-app-backend/types"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -20,7 +21,7 @@ type User struct {
 	Tokens     uint64             `bson:"tokens" json:"tokens" default:"1000"`
 	Active     bool               `bson:"active" json:"active" default:"true"`
 	Rating     int32              `bson:"rating" json:"rating" default:"50"`
-	AvatarHash []byte             `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
+	AvatarHash types.HexBytes     `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
 	Location   Location           `bson:"location" json:"location"`
 	Verified   bool               `bson:"verified" json:"verified" default:"false"`
 }

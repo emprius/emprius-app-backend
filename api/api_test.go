@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
 
 	"github.com/emprius/emprius-app-backend/db"
+	"github.com/emprius/emprius-app-backend/types"
 )
 
 var testLatitudeA = db.Location{
@@ -41,6 +43,16 @@ var testUser2 = db.User{
 	Email:     "alice@emprius.cat",
 }
 
+func pngImageForTest() []byte {
+	data, err := base64.StdEncoding.DecodeString(
+		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+	)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
 func boolPtr(b bool) *bool {
 	return &b
 }
@@ -56,7 +68,7 @@ var testTool1 = Tool{
 	AskWithFee:       boolPtr(false),
 	EstimatedValue:   10000,
 	Cost:             uint64Ptr(10),
-	Images:           []HexBytes{},
+	Images:           []types.HexBytes{},
 	Location:         testLatitudeA10km,
 	Category:         1,
 	TransportOptions: []int{1, 2},
@@ -69,7 +81,7 @@ var testTool2 = Tool{
 	AskWithFee:       boolPtr(false),
 	EstimatedValue:   5000,
 	Cost:             uint64Ptr(5),
-	Images:           []HexBytes{},
+	Images:           []types.HexBytes{},
 	Location:         testLatitudeA100km,
 	Category:         1,
 	TransportOptions: []int{1},
@@ -82,7 +94,7 @@ var testTool3 = Tool{
 	AskWithFee:       boolPtr(false),
 	EstimatedValue:   5000,
 	Cost:             uint64Ptr(5),
-	Images:           []HexBytes{},
+	Images:           []types.HexBytes{},
 	Location:         testLatitudeA200km,
 	Category:         1,
 	TransportOptions: []int{1},
@@ -179,11 +191,11 @@ func TestImage(t *testing.T) {
 	a := testAPI(t)
 
 	// insert image
-	i, err := a.addImage("image1", []byte("image1"))
+	i, err := a.addImage("image1", pngImageForTest())
 	qt.Assert(t, err, qt.IsNil)
 
 	// get image
 	image, err := a.image(i.Hash)
 	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, image.Content, qt.DeepEquals, []byte("image1"))
+	qt.Assert(t, image.Content, qt.DeepEquals, pngImageForTest())
 }

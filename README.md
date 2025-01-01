@@ -56,14 +56,14 @@ Request:
 {
   "email": "user@example.com",
   "invitationToken": "required-token",
-  "name": "Username",
+  "name": "john smith",
   "community": "Community1",
   "location": {
     "latitude": 42202259,
     "longitude": 1815044
   },
   "password": "userpassword",
-  "active": true
+  "avatar": "base64-encoded-image"
 }
 ```
 
@@ -495,7 +495,7 @@ Request:
 ```json
 {
   "name": "image-name",
-  "data": "base64-encoded-image"
+  "content": "base64-encoded-image"
 }
 ```
 

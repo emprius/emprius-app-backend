@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 
+	"github.com/emprius/emprius-app-backend/types"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -10,10 +11,10 @@ import (
 
 // Image represents the schema for the "images" collection.
 type Image struct {
-	Hash    []byte `bson:"hash" json:"hash"`
-	Name    string `bson:"name" json:"name"`
-	Content []byte `bson:"content" json:"content"`
-	Link    string `bson:"link" json:"link,omitempty"`
+	Hash    types.HexBytes `bson:"hash" json:"hash"`
+	Name    string         `bson:"name" json:"name"`
+	Content []byte         `bson:"content" json:"content,omitempty"`
+	Link    string         `bson:"link" json:"link,omitempty"`
 }
 
 // ImageService provides methods to interact with the "images" collection.

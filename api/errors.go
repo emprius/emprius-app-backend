@@ -21,6 +21,7 @@ var (
 	ErrWrongLogin               = fmt.Errorf("wrong password or email")
 	ErrInvalidHash              = fmt.Errorf("invalid hash")
 	ErrImageNotFound            = fmt.Errorf("image not found")
+	ErrInvalidImageFormat       = fmt.Errorf("invalid image format")
 	ErrInvalidJSON              = fmt.Errorf("invalid json body")
 	ErrBookingDatesConflict     = fmt.Errorf("booking dates conflict with existing booking")
 	ErrToolNotFound             = fmt.Errorf("tool not found")
