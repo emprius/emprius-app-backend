@@ -34,10 +34,18 @@ func (a *API) toolCategories() []db.ToolCategory {
 
 func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	// check if images are in database
-	dbImages, err := a.imageListFromSlice(t.Images)
+	images, err := a.imageListFromSlice(t.Images)
 	if err != nil {
 		return 0, err
 	}
+	dbImages := []db.Image{}
+	for _, i := range images {
+		dbImages = append(dbImages, db.Image{
+			Hash: i.Hash,
+			Name: i.Name,
+		})
+	}
+
 	if t.Title == "" || t.Description == "" {
 		return 0, fmt.Errorf("title and description must not be empty")
 	}
@@ -175,9 +183,16 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		tool.Location = newTool.Location
 	}
 	if len(newTool.Images) > 0 {
-		dbImages, err := a.imageListFromSlice(newTool.Images)
+		images, err := a.imageListFromSlice(newTool.Images)
 		if err != nil {
 			return err
+		}
+		dbImages := []db.Image{}
+		for _, i := range images {
+			dbImages = append(dbImages, db.Image{
+				Hash: i.Hash,
+				Name: i.Name,
+			})
 		}
 		tool.Images = dbImages
 	}

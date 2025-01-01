@@ -49,15 +49,15 @@ func (a *API) image(hash []byte) (*db.Image, error) {
 	return image, nil
 }
 
-func (a *API) imageListFromSlice(hashes [][]byte) ([]db.Image, error) {
-	var images []db.Image
+func (a *API) imageListFromSlice(hashes []HexBytes) ([]*Image, error) {
+	var images []*Image
 	ctx := context.Background()
 	for _, hash := range hashes {
 		image, err := a.database.ImageService.GetImage(ctx, hash)
 		if err != nil {
 			return nil, fmt.Errorf("could not get image: %x", hash)
 		}
-		images = append(images, *image)
+		images = append(images, &Image{Hash: image.Hash, Name: image.Name})
 	}
 	return images, nil
 }
@@ -73,7 +73,7 @@ func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 		return nil, fmt.Errorf("could not add image: %w", err)
 	}
 
-	return &Image{Hash: hex.EncodeToString(dbImage.Hash)}, nil
+	return &Image{Hash: dbImage.Hash}, nil
 }
 
 // GET /image/:hash returns the image with the given hash.
