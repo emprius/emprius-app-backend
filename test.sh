@@ -5,7 +5,7 @@ RND=$RANDOM
 MAIL="pepe$RND@botika.cat"
 PASSW="pepebotika$RND"
 NAME="PepeBotika$RND"
-avatar="iVBORw0KGgoAAAANSUhEUgAABAEAAAFBCAYAAAAG47bTAAAACXBIWXMAAC4jAAAuIwF4pT92AAA5nWlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJX"
+avatar="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 HOST="${HOST:-http://localhost:3333}"
 
 set -x 
@@ -29,16 +29,23 @@ curl -s $HOST/info | jq .
 echo "=> update profile"
 curl -s $HOST/profile -X POST -H "$jwt" -d '{"location":{ "latitude":42202259,"longitude":1815044}, "community":"Karabanchel" }' | jq .
 
+echo "=> upload avatar image (should be fine using the same image)"
+avatarHash=$(curl -s $HOST/images -X POST -H "$jwt" -H 'Content-Type: application/json' -d '{"content":"'$avatar'"}' | jq .data.hash | tr -d \")
+
 echo "=> update profile with avatar"
 curl -s $HOST/profile -X POST -H "$jwt" -d '{"avatar":"'$avatar'"}' | jq .
 
+read
+
 echo "=> get image avatar"
-curl -s $HOST/profile -H "$jwt" | jq .
 image=$(curl -s $HOST/profile -H "$jwt" | jq .data.avatarHash | tr -d \")
+
 curl -s $HOST/images/$image -H "$jwt" | jq .
 
 echo "=> list users"
 curl -s $HOST/users -H "$jwt" | jq .
+
+read
 
 echo "=> add a new tool"
 curl -s $HOST/tools -X POST -H "$jwt" -H 'Content-Type: application/json' -d '{

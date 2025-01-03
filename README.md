@@ -51,6 +51,17 @@ Authorization: BEARER <your-jwt-token>
 ### POST /register
 Register a new user.
 
+Curl example:
+```bash
+curl -X POST http://localhost:3333/register \
+  -d '{
+    "email": "user@example.com",
+    "name": "Username",
+    "password": "userpassword",
+    "invitationToken": "comunals"
+  }'
+```
+
 Request:
 ```json
 {
@@ -83,6 +94,15 @@ Response:
 ### POST /login
 Authenticate user and get JWT token.
 
+Curl example:
+```bash
+curl -X POST http://localhost:3333/login \
+  -d '{
+    "email": "user@example.com",
+    "password": "userpassword"
+  }'
+```
+
 Request:
 ```json
 {
@@ -106,6 +126,11 @@ Response:
 
 ### GET /info
 Get general platform information.
+
+Curl example:
+```bash
+curl http://localhost:3333/info
+```
 
 Response:
 ```json
@@ -133,6 +158,12 @@ Response:
 ### GET /profile
 Get user profile information.
 
+Curl example:
+```bash
+curl http://localhost:3333/profile \
+  -H "Authorization: BEARER your-jwt-token"
+```
+
 Response:
 ```json
 {
@@ -156,6 +187,19 @@ Response:
 ### POST /profile
 Update user profile.
 
+Curl example:
+```bash
+curl -X POST http://localhost:3333/profile \
+  -H "Authorization: BEARER your-jwt-token" \
+  -d '{
+    "location": {
+      "latitude": 42202259,
+      "longitude": 1815044
+    },
+    "community": "Karabanchel"
+  }'
+```
+
 Request:
 ```json
 {
@@ -171,6 +215,12 @@ Request:
 
 ### GET /users
 List all users.
+
+Curl example:
+```bash
+curl http://localhost:3333/users \
+  -H "Authorization: BEARER your-jwt-token"
+```
 
 Response:
 ```json
@@ -192,6 +242,30 @@ Response:
 
 ### POST /tools
 Add a new tool.
+
+Curl example:
+```bash
+curl -X POST http://localhost:3333/tools \
+  -H "Authorization: BEARER your-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Hammer",
+    "description": "A useful tool",
+    "mayBeFree": true,
+    "askWithFee": false,
+    "cost": 10,
+    "images": [],
+    "transportOptions": [1, 2],
+    "category": 1,
+    "location": {
+      "latitude": 42202259,
+      "longitude": 1815044
+    },
+    "estimatedValue": 20,
+    "height": 30,
+    "weight": 40
+  }'
+```
 
 Request:
 ```json
@@ -267,6 +341,18 @@ Get specific tool details.
 ### PUT /tools/{id}
 Update tool information.
 
+Curl example:
+```bash
+curl -X PUT http://localhost:3333/tools/tool-id \
+  -H "Authorization: BEARER your-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "New Description",
+    "cost": 20,
+    "category": 2
+  }'
+```
+
 Request:
 ```json
 {
@@ -281,6 +367,19 @@ Delete a tool.
 
 ### GET /tools/search
 Search for tools with filters.
+
+Curl example:
+```bash
+curl -X GET http://localhost:3333/tools/search \
+  -H "Authorization: BEARER your-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "categories": [1, 2],
+    "maxCost": 100,
+    "distance": 20000,
+    "mayBeFree": true
+  }'
+```
 
 Request:
 ```json
@@ -314,6 +413,20 @@ Response:
 
 ### POST /bookings
 Create a new booking request.
+
+Curl example:
+```bash
+curl -X POST http://localhost:3333/bookings \
+  -H "Authorization: BEARER your-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "toolId": "tool-id",
+    "startDate": 1735734735,
+    "endDate": 1735821135,
+    "contact": "user@example.com",
+    "comments": "I need this tool for a project"
+  }'
+```
 
 Request:
 ```json
@@ -351,6 +464,12 @@ Response:
 ### GET /bookings/requests
 Get list of booking requests for tools you own.
 
+Curl example:
+```bash
+curl http://localhost:3333/bookings/requests \
+  -H "Authorization: BEARER your-jwt-token"
+```
+
 Response:
 ```json
 {
@@ -379,6 +498,12 @@ Response:
 
 ### GET /bookings/petitions
 Get list of your booking requests.
+
+Curl example:
+```bash
+curl http://localhost:3333/bookings/petitions \
+  -H "Authorization: BEARER your-jwt-token"
+```
 
 Response:
 ```json
@@ -434,6 +559,12 @@ Response:
 ### POST /bookings/{bookingId}/return
 Mark a tool as returned (tool owner only).
 
+Curl example:
+```bash
+curl -X POST http://localhost:3333/bookings/booking-id/return \
+  -H "Authorization: BEARER your-jwt-token"
+```
+
 Response:
 ```json
 {
@@ -445,6 +576,12 @@ Response:
 
 ### GET /bookings/rates
 Get list of pending ratings.
+
+Curl example:
+```bash
+curl http://localhost:3333/bookings/rates \
+  -H "Authorization: BEARER your-jwt-token"
+```
 
 Response:
 ```json
@@ -470,6 +607,17 @@ Response:
 ### POST /bookings/rates
 Submit a rating for a booking.
 
+Curl example:
+```bash
+curl -X POST http://localhost:3333/bookings/rates \
+  -H "Authorization: BEARER your-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "bookingId": "booking-id",
+    "rating": 5
+  }'
+```
+
 Request:
 ```json
 {
@@ -490,6 +638,16 @@ Response:
 
 ### POST /images
 Upload an image.
+
+Curl example:
+```bash
+curl -X POST http://localhost:3333/images \
+  -H "Authorization: BEARER your-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "base64-encoded-image"
+  }'
+```
 
 Request:
 ```json
@@ -513,6 +671,12 @@ Response:
 
 ### GET /images/{hash}
 Get an image by its hash.
+
+Curl example:
+```bash
+curl http://localhost:3333/images/image-hash \
+  -H "Authorization: BEARER your-jwt-token"
+```
 
 ## Error Responses
 
