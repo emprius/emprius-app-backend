@@ -83,6 +83,8 @@ func (a *API) router() http.Handler {
 		r.Get("/users", a.routerHandler(a.usersHandler))
 		log.Info().Msg("register route GET /users/{id}")
 		r.Get("/users/{id}", a.routerHandler(a.getUserHandler))
+		log.Info().Msg("register route GET /profile/{id}")
+		r.Get("/profile/{id}", a.routerHandler(a.getUserProfileByIDHandler))
 
 		// Images
 		// GET /images/{hash}

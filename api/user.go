@@ -189,3 +189,31 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	}
 	return &user, nil
 }
+
+// getUserProfileByIDHandler handles GET /users/{id}/profile
+func (a *API) getUserProfileByIDHandler(r *Request) (interface{}, error) {
+	userID, err := primitive.ObjectIDFromHex(r.Context.URLParam("id"))
+	if err != nil {
+		return nil, &HTTPError{
+			Code:    404,
+			Message: "user not found",
+		}
+	}
+
+	user, err := a.database.UserService.GetUserByID(context.Background(), userID)
+	if err != nil {
+		return nil, &HTTPError{
+			Code:    404,
+			Message: "user not found",
+		}
+	}
+
+	// Return only public profile information
+	return &UserProfile{
+		Name:      user.Name,
+		Community: user.Community,
+		Location:  &user.Location,
+		Active:    &user.Active,
+		Avatar:    user.AvatarHash,
+	}, nil
+}
