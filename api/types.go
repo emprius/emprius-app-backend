@@ -52,6 +52,7 @@ type Tool struct {
 	ID               int64            `json:"id"`
 	Title            string           `json:"title"`
 	Description      string           `json:"description"`
+	IsAvailable      *bool            `json:"isAvailable"`
 	MayBeFree        *bool            `json:"mayBeFree"`
 	AskWithFee       *bool            `json:"askWithFee"`
 	Cost             *uint64          `json:"cost"`

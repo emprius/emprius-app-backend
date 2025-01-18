@@ -202,6 +202,9 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 	if newTool.Location.Latitude != 0 && newTool.Location.Longitude != 0 {
 		tool.Location = newTool.Location
 	}
+	if newTool.IsAvailable != nil {
+		tool.IsAvailable = *newTool.IsAvailable
+	}
 	if len(newTool.Images) > 0 {
 		images, err := a.imageListFromSlice(newTool.Images)
 		if err != nil {

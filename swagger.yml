@@ -66,6 +66,8 @@ components:
           type: string
         isAvailable:
           type: boolean
+          description: Whether the tool is currently available for booking
+          default: true
         mayBeFree:
           type: boolean
         askWithFee:

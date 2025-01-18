@@ -121,6 +121,36 @@ func testAPI(t *testing.T) *API {
 	return New("secret", "authtoken", database)
 }
 
+func TestToolAvailability(t *testing.T) {
+	a := testAPI(t)
+
+	// Create a test user
+	err := a.addUser(&testUser1)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create a tool
+	tool := testTool1
+	toolID, err := a.addTool(&tool, testUser1.Email)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Verify tool is available by default
+	dbTool, err := a.tool(toolID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, dbTool.IsAvailable, qt.IsTrue)
+
+	// Update tool to be unavailable
+	updatedTool := Tool{
+		IsAvailable: boolPtr(false),
+	}
+	err = a.editTool(toolID, &updatedTool)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Verify tool is now unavailable
+	dbTool, err = a.tool(toolID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, dbTool.IsAvailable, qt.IsFalse)
+}
+
 func TestTransportOptions(t *testing.T) {
 	a := testAPI(t)
 
