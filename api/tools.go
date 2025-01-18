@@ -72,9 +72,22 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	if t.Category < 0 || t.Category >= len(a.toolCategories()) {
 		return 0, fmt.Errorf("invalid category %d", t.Category)
 	}
-	// Convert transport options from []int to []db.Transport
+
+	// Validate and convert transport options
+	transports, err := a.database.TransportService.GetAllTransports(context.Background())
+	if err != nil {
+		return 0, fmt.Errorf("could not get transports: %w", err)
+	}
+	validTransportIDs := make(map[int64]bool)
+	for _, t := range transports {
+		validTransportIDs[t.ID] = true
+	}
+
 	transportOptions := make([]db.Transport, len(t.TransportOptions))
 	for i, id := range t.TransportOptions {
+		if !validTransportIDs[int64(id)] {
+			return 0, fmt.Errorf("invalid transport option ID: %d", id)
+		}
 		transportOptions[i] = db.Transport{ID: int64(id)}
 	}
 
@@ -204,8 +217,21 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		tool.Images = dbImages
 	}
 	if len(newTool.TransportOptions) > 0 {
+		// Validate and convert transport options
+		transports, err := a.database.TransportService.GetAllTransports(context.Background())
+		if err != nil {
+			return fmt.Errorf("could not get transports: %w", err)
+		}
+		validTransportIDs := make(map[int64]bool)
+		for _, t := range transports {
+			validTransportIDs[t.ID] = true
+		}
+
 		transportOptions := make([]db.Transport, len(newTool.TransportOptions))
 		for i, id := range newTool.TransportOptions {
+			if !validTransportIDs[int64(id)] {
+				return fmt.Errorf("invalid transport option ID: %d", id)
+			}
 			transportOptions[i] = db.Transport{ID: int64(id)}
 		}
 		tool.TransportOptions = transportOptions
@@ -231,11 +257,12 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 // TODO: this is very naive, we should use a proper SQL query
 func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Tool, error) {
 	opts := db.SearchToolsOptions{
-		Categories: query.Categories,
-		MayBeFree:  query.MayBeFree,
-		MaxCost:    query.MaxCost,
-		Distance:   query.Distance,
-		Location:   userLocation,
+		Categories:       query.Categories,
+		MayBeFree:        query.MayBeFree,
+		MaxCost:          query.MaxCost,
+		Distance:         query.Distance,
+		Location:         userLocation,
+		TransportOptions: query.TransportOptions,
 	}
 	tools, err := a.database.ToolService.SearchTools(context.Background(), opts)
 	if err != nil {
@@ -334,12 +361,29 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		}
 	}
 
+	// Parse transport options
+	transportOptionsStr := r.Context.URLParam("transportOptions")
+	var transportOptions []int
+	if transportOptionsStr != "" {
+		// Parse comma-separated list of transport options
+		transportStrings := strings.Split(transportOptionsStr, ",")
+		transportOptions = make([]int, len(transportStrings))
+		for i, t := range transportStrings {
+			val, err := strconv.Atoi(t)
+			if err != nil {
+				return nil, fmt.Errorf("invalid transport option: %w", err)
+			}
+			transportOptions[i] = val
+		}
+	}
+
 	query := ToolSearch{
-		Term:          searchTerm,
-		Categories:    categories,
-		MaxCost:       maxCost,
-		MayBeFree:     mayBeFree,
-		AvailableFrom: availableFrom,
+		Term:             searchTerm,
+		Categories:       categories,
+		MaxCost:          maxCost,
+		MayBeFree:        mayBeFree,
+		AvailableFrom:    availableFrom,
+		TransportOptions: transportOptions,
 	}
 	user, err := a.userByEmail(r.UserID)
 	if err != nil {

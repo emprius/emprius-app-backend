@@ -173,11 +173,12 @@ func (s *ToolService) UpdateToolFields(ctx context.Context, id int64, updates ma
 
 // SearchToolsOptions represents the search criteria for tools.
 type SearchToolsOptions struct {
-	Categories []int
-	MayBeFree  *bool
-	MaxCost    *uint64
-	Distance   int
-	Location   *Location
+	Categories       []int
+	MayBeFree        *bool
+	MaxCost          *uint64
+	Distance         int
+	Location         *Location
+	TransportOptions []int
 }
 
 // SearchTools searches for tools based on various criteria.
@@ -218,6 +219,25 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 		// Check distance
 		if opts.Distance > 0 && opts.Location != nil {
 			if !WithinCircumference(tool.Location, *opts.Location, opts.Distance) {
+				continue
+			}
+		}
+
+		// Check transport options
+		if len(opts.TransportOptions) > 0 {
+			found := false
+			for _, reqTransport := range opts.TransportOptions {
+				for _, toolTransport := range tool.TransportOptions {
+					if toolTransport.ID == int64(reqTransport) {
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
 				continue
 			}
 		}

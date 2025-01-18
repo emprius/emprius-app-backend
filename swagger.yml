@@ -509,6 +509,14 @@ paths:
           in: query
           schema:
             type: boolean
+        - name: transportOptions
+          in: query
+          schema:
+            type: array
+            items:
+              type: integer
+          description: Array of transport option IDs to filter by
+          example: [1, 2]
       responses:
         '200':
           description: Search results

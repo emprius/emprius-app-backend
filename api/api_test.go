@@ -213,6 +213,15 @@ func TestToolSearch(t *testing.T) {
 	qt.Assert(t, tools, qt.HasLen, 1)
 	qt.Assert(t, tools[0].Title, qt.Equals, testTool2.Title)
 
+	// search tools by transport options
+	tools, err = a.toolSearch(&ToolSearch{
+		Distance:         120000,
+		TransportOptions: []int{2},
+	}, &testUser1.Location)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, tools, qt.HasLen, 1)
+	qt.Assert(t, tools[0].Title, qt.Equals, testTool1.Title)
+
 	// sarch tools with no results
 	tools, err = a.toolSearch(&ToolSearch{
 		Distance:  240000,
