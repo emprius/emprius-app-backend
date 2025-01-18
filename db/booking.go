@@ -238,10 +238,8 @@ func (s *BookingService) checkDateConflicts(
 	excludeID primitive.ObjectID,
 ) (bool, error) {
 	filter := bson.M{
-		"toolId": toolID,
-		"bookingStatus": bson.M{
-			"$in": []BookingStatus{BookingStatusPending, BookingStatusAccepted},
-		},
+		"toolId":        toolID,
+		"bookingStatus": BookingStatusAccepted,
 		"$or": []bson.M{
 			{
 				"startDate": bson.M{"$lte": end},

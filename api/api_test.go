@@ -264,6 +264,71 @@ func TestToolSearch(t *testing.T) {
 	qt.Assert(t, tools, qt.HasLen, 0)
 }
 
+func TestBookingDateConflicts(t *testing.T) {
+	a := testAPI(t)
+
+	// Create users
+	err := a.addUser(&testUser1) // Tool owner
+	qt.Assert(t, err, qt.IsNil)
+	err = a.addUser(&testUser2) // Tool requester
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create a tool
+	toolID, err := a.addTool(&testTool1, testUser1.Email)
+	qt.Assert(t, err, qt.IsNil)
+	toolObjID := primitive.NewObjectIDFromTimestamp(time.Unix(toolID, 0))
+
+	// Get user IDs
+	user1, err := a.database.UserService.GetUserByEmail(context.Background(), testUser1.Email)
+	qt.Assert(t, err, qt.IsNil)
+	user2, err := a.database.UserService.GetUserByEmail(context.Background(), testUser2.Email)
+	qt.Assert(t, err, qt.IsNil)
+
+	startDate := time.Now().Add(24 * time.Hour)
+	endDate := time.Now().Add(48 * time.Hour)
+
+	// Create first booking request
+	booking1 := &db.CreateBookingRequest{
+		ToolID:    toolObjID,
+		StartDate: startDate,
+		EndDate:   endDate,
+		Contact:   "test1@test.com",
+		Comments:  "Test booking 1",
+	}
+	createdBooking1, err := a.database.BookingService.Create(context.Background(), booking1, user2.ID, user1.ID)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create second booking request for same dates (should be allowed since first is pending)
+	booking2 := &db.CreateBookingRequest{
+		ToolID:    toolObjID,
+		StartDate: startDate,
+		EndDate:   endDate,
+		Contact:   "test2@test.com",
+		Comments:  "Test booking 2",
+	}
+	createdBooking2, err := a.database.BookingService.Create(context.Background(), booking2, user2.ID, user1.ID)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Accept first booking
+	err = a.database.BookingService.UpdateStatus(context.Background(), createdBooking1.ID, db.BookingStatusAccepted)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Try to create third booking for same dates (should fail since there's an accepted booking)
+	booking3 := &db.CreateBookingRequest{
+		ToolID:    toolObjID,
+		StartDate: startDate,
+		EndDate:   endDate,
+		Contact:   "test3@test.com",
+		Comments:  "Test booking 3",
+	}
+	_, err = a.database.BookingService.Create(context.Background(), booking3, user2.ID, user1.ID)
+	qt.Assert(t, err, qt.ErrorMatches, "booking dates conflict with existing booking")
+
+	// Verify the second booking can still be accepted or rejected
+	err = a.database.BookingService.UpdateStatus(context.Background(), createdBooking2.ID, db.BookingStatusRejected)
+	qt.Assert(t, err, qt.IsNil)
+}
+
 func TestBookingStatusTransitions(t *testing.T) {
 	a := testAPI(t)
 
