@@ -38,7 +38,7 @@ func TestBookingService(t *testing.T) {
 
 	c.Run("Create and Get Booking", func(c *qt.C) {
 		// Create test booking
-		toolID := primitive.NewObjectID()
+		toolID := "123456"
 		fromUserID := primitive.NewObjectID()
 		toUserID := primitive.NewObjectID()
 
@@ -66,21 +66,25 @@ func TestBookingService(t *testing.T) {
 	})
 
 	c.Run("Date Conflict Detection", func(c *qt.C) {
-		toolID := primitive.NewObjectID()
+		toolID := "123456"
 		fromUserID := primitive.NewObjectID()
 		toUserID := primitive.NewObjectID()
 
-		// Create initial booking
+		// Create and accept initial booking
 		req1 := &CreateBookingRequest{
 			ToolID:    toolID,
 			StartDate: time.Now().Add(24 * time.Hour),
 			EndDate:   time.Now().Add(48 * time.Hour),
 			Contact:   "test1@example.com",
 		}
-		_, err := bookingService.Create(ctx, req1, fromUserID, toUserID)
+		booking1, err := bookingService.Create(ctx, req1, fromUserID, toUserID)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create first booking"))
 
-		// Try to create overlapping booking
+		// Accept first booking
+		err = bookingService.UpdateStatus(ctx, booking1.ID, BookingStatusAccepted)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to accept first booking"))
+
+		// Try to create overlapping booking (should fail since first booking is accepted)
 		req2 := &CreateBookingRequest{
 			ToolID:    toolID,
 			StartDate: time.Now().Add(36 * time.Hour),
@@ -97,7 +101,7 @@ func TestBookingService(t *testing.T) {
 		// Create multiple bookings
 		for i := 0; i < 3; i++ {
 			req := &CreateBookingRequest{
-				ToolID:    primitive.NewObjectID(),
+				ToolID:    "789012",
 				StartDate: time.Now().Add(time.Duration(i+1) * 24 * time.Hour),
 				EndDate:   time.Now().Add(time.Duration(i+2) * 24 * time.Hour),
 				Contact:   "test@example.com",
@@ -118,7 +122,7 @@ func TestBookingService(t *testing.T) {
 		// Create multiple bookings
 		for i := 0; i < 3; i++ {
 			req := &CreateBookingRequest{
-				ToolID:    primitive.NewObjectID(),
+				ToolID:    "345678",
 				StartDate: time.Now().Add(time.Duration(i+1) * 24 * time.Hour),
 				EndDate:   time.Now().Add(time.Duration(i+2) * 24 * time.Hour),
 				Contact:   "test@example.com",
@@ -135,7 +139,7 @@ func TestBookingService(t *testing.T) {
 
 	c.Run("Update Booking Status", func(c *qt.C) {
 		req := &CreateBookingRequest{
-			ToolID:    primitive.NewObjectID(),
+			ToolID:    "901234",
 			StartDate: time.Now().Add(24 * time.Hour),
 			EndDate:   time.Now().Add(48 * time.Hour),
 			Contact:   "test@example.com",
@@ -158,7 +162,7 @@ func TestBookingService(t *testing.T) {
 
 		// Create returned booking
 		req := &CreateBookingRequest{
-			ToolID:    primitive.NewObjectID(),
+			ToolID:    "567890",
 			StartDate: time.Now().Add(-48 * time.Hour),
 			EndDate:   time.Now().Add(-24 * time.Hour),
 			Contact:   "test@example.com",
