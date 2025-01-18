@@ -556,6 +556,75 @@ Response:
 }
 ```
 
+### POST /bookings/petitions/{petitionId}/accept
+Accept a booking petition (tool owner only). Updates booking status and tool's reserved dates.
+
+Curl example:
+```bash
+curl -X POST http://localhost:3333/bookings/petitions/petition-id/accept \
+  -H "Authorization: BEARER your-jwt-token"
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  }
+}
+```
+
+Error responses:
+- 403: Only tool owner can accept petitions
+- 404: Booking not found
+- 400: Can only accept pending petitions
+
+### POST /bookings/petitions/{petitionId}/deny
+Deny a booking petition (tool owner only).
+
+Curl example:
+```bash
+curl -X POST http://localhost:3333/bookings/petitions/petition-id/deny \
+  -H "Authorization: BEARER your-jwt-token"
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  }
+}
+```
+
+Error responses:
+- 403: Only tool owner can deny petitions
+- 404: Booking not found
+- 400: Can only deny pending petitions
+
+### POST /bookings/request/{petitionId}/cancel
+Cancel a booking request (requester only).
+
+Curl example:
+```bash
+curl -X POST http://localhost:3333/bookings/request/petition-id/cancel \
+  -H "Authorization: BEARER your-jwt-token"
+```
+
+Response:
+```json
+{
+  "header": {
+    "success": true
+  }
+}
+```
+
+Error responses:
+- 403: Only requester can cancel their requests
+- 404: Booking not found
+- 400: Can only cancel pending requests
+
 ### POST /bookings/{bookingId}/return
 Mark a tool as returned (tool owner only).
 

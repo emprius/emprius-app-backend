@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"testing"
+	"time"
 
 	qt "github.com/frankban/quicktest"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
@@ -260,6 +262,89 @@ func TestToolSearch(t *testing.T) {
 	}, &testUser1.Location)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, tools, qt.HasLen, 0)
+}
+
+func TestBookingStatusTransitions(t *testing.T) {
+	a := testAPI(t)
+
+	// Create users
+	err := a.addUser(&testUser1) // Tool owner
+	qt.Assert(t, err, qt.IsNil)
+	err = a.addUser(&testUser2) // Tool requester
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create a tool and convert its ID to ObjectID
+	toolID, err := a.addTool(&testTool1, testUser1.Email)
+	qt.Assert(t, err, qt.IsNil)
+	toolObjID := primitive.NewObjectIDFromTimestamp(time.Unix(toolID, 0))
+
+	// Create a booking request
+	booking := &db.CreateBookingRequest{
+		ToolID:    toolObjID,
+		StartDate: time.Now().Add(24 * time.Hour),
+		EndDate:   time.Now().Add(48 * time.Hour),
+		Contact:   "test@test.com",
+		Comments:  "Test booking",
+	}
+
+	// Get user IDs
+	user1, err := a.database.UserService.GetUserByEmail(context.Background(), testUser1.Email)
+	qt.Assert(t, err, qt.IsNil)
+	user2, err := a.database.UserService.GetUserByEmail(context.Background(), testUser2.Email)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create booking
+	createdBooking, err := a.database.BookingService.Create(context.Background(), booking, user2.ID, user1.ID)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Test accepting a petition
+	err = a.database.BookingService.UpdateStatus(context.Background(), createdBooking.ID, db.BookingStatusAccepted)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Verify booking status
+	updatedBooking, err := a.database.BookingService.Get(context.Background(), createdBooking.ID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, updatedBooking.BookingStatus, qt.Equals, db.BookingStatusAccepted)
+
+	// Create another booking for deny test
+	booking2 := &db.CreateBookingRequest{
+		ToolID:    toolObjID,
+		StartDate: time.Now().Add(72 * time.Hour),
+		EndDate:   time.Now().Add(96 * time.Hour),
+		Contact:   "test@test.com",
+		Comments:  "Test booking 2",
+	}
+	createdBooking2, err := a.database.BookingService.Create(context.Background(), booking2, user2.ID, user1.ID)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Test denying a petition
+	err = a.database.BookingService.UpdateStatus(context.Background(), createdBooking2.ID, db.BookingStatusRejected)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Verify booking status
+	updatedBooking2, err := a.database.BookingService.Get(context.Background(), createdBooking2.ID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, updatedBooking2.BookingStatus, qt.Equals, db.BookingStatusRejected)
+
+	// Create another booking for cancel test
+	booking3 := &db.CreateBookingRequest{
+		ToolID:    toolObjID,
+		StartDate: time.Now().Add(120 * time.Hour),
+		EndDate:   time.Now().Add(144 * time.Hour),
+		Contact:   "test@test.com",
+		Comments:  "Test booking 3",
+	}
+	createdBooking3, err := a.database.BookingService.Create(context.Background(), booking3, user2.ID, user1.ID)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Test canceling a request
+	err = a.database.BookingService.UpdateStatus(context.Background(), createdBooking3.ID, db.BookingStatusCancelled)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Verify booking status
+	updatedBooking3, err := a.database.BookingService.Get(context.Background(), createdBooking3.ID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, updatedBooking3.BookingStatus, qt.Equals, db.BookingStatusCancelled)
 }
 
 func TestImage(t *testing.T) {

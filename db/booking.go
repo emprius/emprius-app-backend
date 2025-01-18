@@ -16,10 +16,11 @@ import (
 type BookingStatus string
 
 const (
-	BookingStatusPending  BookingStatus = "PENDING"
-	BookingStatusAccepted BookingStatus = "ACCEPTED"
-	BookingStatusRejected BookingStatus = "REJECTED"
-	BookingStatusReturned BookingStatus = "RETURNED"
+	BookingStatusPending   BookingStatus = "PENDING"
+	BookingStatusAccepted  BookingStatus = "ACCEPTED"
+	BookingStatusRejected  BookingStatus = "REJECTED"
+	BookingStatusCancelled BookingStatus = "CANCELLED"
+	BookingStatusReturned  BookingStatus = "RETURNED"
 )
 
 // Booking represents a tool booking in the system
@@ -40,6 +41,7 @@ type Booking struct {
 // BookingService handles all booking related database operations
 type BookingService struct {
 	collection *mongo.Collection
+	database   *mongo.Database
 }
 
 // NewBookingService creates a new BookingService instance
@@ -72,7 +74,10 @@ func NewBookingService(db *mongo.Database) *BookingService {
 		panic(err)
 	}
 
-	return &BookingService{collection: collection}
+	return &BookingService{
+		collection: collection,
+		database:   db,
+	}
 }
 
 // CreateBookingRequest represents the request to create a new booking
@@ -176,8 +181,16 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 	return bookings, nil
 }
 
-// UpdateStatus updates the booking status
+// UpdateStatus updates the booking status and handles any related updates
 func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID, status BookingStatus) error {
+	booking, err := s.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("could not get booking: %w", err)
+	}
+	if booking == nil {
+		return fmt.Errorf("booking not found")
+	}
+
 	update := bson.M{
 		"$set": bson.M{
 			"bookingStatus": status,
@@ -192,6 +205,27 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 	if result.MatchedCount == 0 {
 		return fmt.Errorf("booking not found")
 	}
+
+	// If accepting booking, update tool's reserved dates
+	if status == BookingStatusAccepted {
+		// Get tool service from database
+		toolService := s.database.Collection("tools")
+
+		// Add reserved dates to tool
+		update := bson.M{
+			"$push": bson.M{
+				"reservedDates": bson.M{
+					"from": booking.StartDate,
+					"to":   booking.EndDate,
+				},
+			},
+		}
+		_, err = toolService.UpdateOne(ctx, bson.M{"_id": booking.ToolID}, update)
+		if err != nil {
+			return fmt.Errorf("could not update tool reserved dates: %w", err)
+		}
+	}
+
 	return nil
 }
 

@@ -97,6 +97,144 @@ func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 	return convertBookingToResponse(booking), nil
 }
 
+// HandleAcceptPetition handles POST /bookings/petitions/{petitionId}/accept
+func (a *API) HandleAcceptPetition(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	// Get user from database
+	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	petitionID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "petitionId"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid petition ID")
+	}
+
+	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), petitionID)
+	if err != nil {
+		return nil, err
+	}
+	if booking == nil {
+		return nil, fmt.Errorf("booking not found")
+	}
+
+	// Verify user is the tool owner
+	if booking.ToUserID != user.ID {
+		return nil, &HTTPError{
+			Code:    403,
+			Message: "only tool owner can accept petitions",
+		}
+	}
+
+	// Verify booking is in PENDING state
+	if booking.BookingStatus != db.BookingStatusPending {
+		return nil, fmt.Errorf("can only accept pending petitions")
+	}
+
+	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), petitionID, db.BookingStatusAccepted)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+// HandleDenyPetition handles POST /bookings/petitions/{petitionId}/deny
+func (a *API) HandleDenyPetition(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	// Get user from database
+	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	petitionID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "petitionId"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid petition ID")
+	}
+
+	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), petitionID)
+	if err != nil {
+		return nil, err
+	}
+	if booking == nil {
+		return nil, fmt.Errorf("booking not found")
+	}
+
+	// Verify user is the tool owner
+	if booking.ToUserID != user.ID {
+		return nil, &HTTPError{
+			Code:    403,
+			Message: "only tool owner can deny petitions",
+		}
+	}
+
+	// Verify booking is in PENDING state
+	if booking.BookingStatus != db.BookingStatusPending {
+		return nil, fmt.Errorf("can only deny pending petitions")
+	}
+
+	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), petitionID, db.BookingStatusRejected)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+// HandleCancelRequest handles POST /bookings/request/{petitionId}/cancel
+func (a *API) HandleCancelRequest(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	// Get user from database
+	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	petitionID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "petitionId"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid petition ID")
+	}
+
+	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), petitionID)
+	if err != nil {
+		return nil, err
+	}
+	if booking == nil {
+		return nil, fmt.Errorf("booking not found")
+	}
+
+	// Verify user is the requester
+	if booking.FromUserID != user.ID {
+		return nil, &HTTPError{
+			Code:    403,
+			Message: "only requester can cancel their requests",
+		}
+	}
+
+	// Verify booking is in PENDING state
+	if booking.BookingStatus != db.BookingStatusPending {
+		return nil, fmt.Errorf("can only cancel pending requests")
+	}
+
+	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), petitionID, db.BookingStatusCancelled)
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 // HandleReturnBooking handles POST /bookings/{bookingId}/return
 func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {

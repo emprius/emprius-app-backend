@@ -665,6 +665,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/BookingResponse'
 
+  /bookings/petitions/{petitionId}/accept:
+    post:
+      tags:
+        - Bookings
+      summary: Accept a booking petition
+      description: Tool owner accepts a booking request. Updates booking status and tool's reserved dates.
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: petitionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Petition accepted successfully
+        '403':
+          description: Only tool owner can accept petitions
+        '404':
+          description: Booking not found
+        '400':
+          description: Can only accept pending petitions
+
+  /bookings/petitions/{petitionId}/deny:
+    post:
+      tags:
+        - Bookings
+      summary: Deny a booking petition
+      description: Tool owner denies a booking request
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: petitionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Petition denied successfully
+        '403':
+          description: Only tool owner can deny petitions
+        '404':
+          description: Booking not found
+        '400':
+          description: Can only deny pending petitions
+
+  /bookings/request/{petitionId}/cancel:
+    post:
+      tags:
+        - Bookings
+      summary: Cancel a booking request
+      description: Requester cancels their own booking request
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: petitionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Request cancelled successfully
+        '403':
+          description: Only requester can cancel their requests
+        '404':
+          description: Booking not found
+        '400':
+          description: Can only cancel pending requests
+
   /bookings/{bookingId}/return:
     post:
       tags:
