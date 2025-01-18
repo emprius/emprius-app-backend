@@ -143,30 +143,6 @@ func (a *API) toolsByUerID(id string) ([]db.Tool, error) {
 	return result, nil
 }
 
-func (a *API) tools() ([]db.Tool, error) {
-	tools, err := a.database.ToolService.GetAllTools(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	result := make([]db.Tool, len(tools))
-	for i, t := range tools {
-		result[i] = *t
-	}
-	return result, nil
-}
-
-func (a *API) toolsByDistance(location db.Location, distance int) ([]db.Tool, error) {
-	tools, err := a.database.ToolService.SearchToolsByLocation(context.Background(), location, distance)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]db.Tool, len(tools))
-	for i, t := range tools {
-		result[i] = *t
-	}
-	return result, nil
-}
-
 func (a *API) editTool(id int64, newTool *Tool) error {
 	tool, err := a.tool(id)
 	if err != nil {
@@ -257,7 +233,6 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 	return a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 }
 
-// TODO: this is very naive, we should use a proper SQL query
 func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Tool, error) {
 	opts := db.SearchToolsOptions{
 		Categories:       query.Categories,
