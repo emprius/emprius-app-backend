@@ -56,7 +56,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		bookingID := response.Data.ID
 
-		// Try to create overlapping booking
+		// Create overlapping booking (should be allowed since first booking is pending)
 		_, code = c.Request(http.MethodPost, renterJWT,
 			map[string]interface{}{
 				"toolId":    fmt.Sprint(toolID),
@@ -67,9 +67,26 @@ func TestBookings(t *testing.T) {
 			},
 			"bookings",
 		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Accept first booking
+		_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID, "accept")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Try to create another overlapping booking (should fail since there's an accepted booking)
+		_, code = c.Request(http.MethodPost, renterJWT,
+			map[string]interface{}{
+				"toolId":    fmt.Sprint(toolID),
+				"startDate": time.Now().Add(36 * time.Hour).Unix(),
+				"endDate":   time.Now().Add(60 * time.Hour).Unix(),
+				"contact":   "test3@example.com",
+				"comments":  "Test booking 3",
+			},
+			"bookings",
+		)
 		qt.Assert(t, code, qt.Equals, 400)
 
-		// Get booking requests (owner)
+		// Get booking requests (owner) - should show both pending and accepted bookings
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests")
 		qt.Assert(t, code, qt.Equals, 200)
 		var requestsResp struct {
@@ -77,9 +94,21 @@ func TestBookings(t *testing.T) {
 		}
 		err = json.Unmarshal(resp, &requestsResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(requestsResp.Data), qt.Equals, 1)
+		qt.Assert(t, len(requestsResp.Data), qt.Equals, 2)
 
-		// Get booking petitions (renter)
+		// Verify one booking is accepted and one is pending
+		var hasAccepted, hasPending bool
+		for _, booking := range requestsResp.Data {
+			if booking.BookingStatus == "ACCEPTED" {
+				hasAccepted = true
+			} else if booking.BookingStatus == "PENDING" {
+				hasPending = true
+			}
+		}
+		qt.Assert(t, hasAccepted, qt.IsTrue)
+		qt.Assert(t, hasPending, qt.IsTrue)
+
+		// Get booking petitions (renter) - should show both pending and accepted bookings
 		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "petitions")
 		qt.Assert(t, code, qt.Equals, 200)
 		var petitionsResp struct {
@@ -87,7 +116,20 @@ func TestBookings(t *testing.T) {
 		}
 		err = json.Unmarshal(resp, &petitionsResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(petitionsResp.Data), qt.Equals, 1)
+		qt.Assert(t, len(petitionsResp.Data), qt.Equals, 2)
+
+		// Verify one booking is accepted and one is pending
+		hasAccepted = false
+		hasPending = false
+		for _, booking := range petitionsResp.Data {
+			if booking.BookingStatus == "ACCEPTED" {
+				hasAccepted = true
+			} else if booking.BookingStatus == "PENDING" {
+				hasPending = true
+			}
+		}
+		qt.Assert(t, hasAccepted, qt.IsTrue)
+		qt.Assert(t, hasPending, qt.IsTrue)
 
 		// Get specific booking
 		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID)
@@ -117,7 +159,6 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(ratingsResp.Data), qt.Equals, 1)
 
-		// Submit rating
 		// Submit rating
 		_, code = c.Request(http.MethodPost, renterJWT,
 			map[string]interface{}{

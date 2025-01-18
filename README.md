@@ -414,6 +414,11 @@ Response:
 ### POST /bookings
 Create a new booking request.
 
+Note on booking date conflicts:
+- Multiple pending booking requests can exist for the same tool and dates
+- Once a booking is accepted, new booking requests for overlapping dates will be rejected
+- Other pending requests for those dates can still be accepted or rejected by the tool owner
+
 Curl example:
 ```bash
 curl -X POST http://localhost:3333/bookings \

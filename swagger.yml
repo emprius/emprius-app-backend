@@ -593,7 +593,11 @@ paths:
     post:
       tags:
         - Bookings
-      summary: Create a new booking
+      summary: Create a new booking request
+      description: |
+        Creates a new booking request for a tool. Multiple pending requests can exist for the same tool and dates.
+        Once a booking is accepted, new booking requests for overlapping dates will be rejected.
+        Other pending requests for those dates can still be accepted or rejected by the tool owner.
       security:
         - bearerAuth: [ ]
       requestBody:
@@ -609,6 +613,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: |
+            Bad request. Possible reasons:
+            - Invalid request body
+            - Invalid tool ID
+            - Tool not found
+            - Booking dates conflict with existing accepted booking
 
   /bookings/requests:
     get:
