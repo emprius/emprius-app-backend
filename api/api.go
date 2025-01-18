@@ -153,9 +153,12 @@ func (a *API) router() http.Handler {
 				return nil, fmt.Errorf("invalid tool owner ID: %w", err)
 			}
 
+			// Convert tool ID to string
+			toolIDStr := fmt.Sprintf("%d", tool.ID)
+
 			// Create booking request
 			dbReq := &db.CreateBookingRequest{
-				ToolID:    fromUser.ID,
+				ToolID:    toolIDStr,
 				StartDate: time.Unix(req.StartDate, 0),
 				EndDate:   time.Unix(req.EndDate, 0),
 				Contact:   req.Contact,
@@ -187,6 +190,17 @@ func (a *API) router() http.Handler {
 		// POST /bookings/rates
 		log.Info().Msg("register route POST /bookings/rates")
 		r.Post("/bookings/rates", a.routerHandler(a.HandleRateBooking))
+
+		// New booking endpoints
+		// POST /bookings/petitions/{petitionId}/accept
+		log.Info().Msg("register route POST /bookings/petitions/{petitionId}/accept")
+		r.Post("/bookings/petitions/{petitionId}/accept", a.routerHandler(a.HandleAcceptPetition))
+		// POST /bookings/petitions/{petitionId}/deny
+		log.Info().Msg("register route POST /bookings/petitions/{petitionId}/deny")
+		r.Post("/bookings/petitions/{petitionId}/deny", a.routerHandler(a.HandleDenyPetition))
+		// POST /bookings/request/{petitionId}/cancel
+		log.Info().Msg("register route POST /bookings/request/{petitionId}/cancel")
+		r.Post("/bookings/request/{petitionId}/cancel", a.routerHandler(a.HandleCancelRequest))
 	})
 
 	// Public routes

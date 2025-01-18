@@ -16,7 +16,7 @@ import (
 func convertBookingToResponse(booking *db.Booking) BookingResponse {
 	return BookingResponse{
 		ID:            booking.ID.Hex(),
-		ToolID:        booking.ToolID.Hex(),
+		ToolID:        booking.ToolID,
 		FromUserID:    booking.FromUserID.Hex(),
 		ToUserID:      booking.ToUserID.Hex(),
 		StartDate:     booking.StartDate.Unix(),
@@ -343,12 +343,9 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, fmt.Errorf("invalid tool owner ID: %w", err)
 	}
 
-	// Convert int64 toolID to ObjectID
-	toolObjID := primitive.NewObjectIDFromTimestamp(time.Unix(toolID, 0))
-
 	// Create booking request
 	dbReq := &db.CreateBookingRequest{
-		ToolID:    toolObjID,
+		ToolID:    fmt.Sprintf("%d", toolID),
 		StartDate: time.Unix(req.StartDate, 0),
 		EndDate:   time.Unix(req.EndDate, 0),
 		Contact:   req.Contact,

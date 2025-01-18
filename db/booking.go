@@ -26,7 +26,7 @@ const (
 // Booking represents a tool booking in the system
 type Booking struct {
 	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	ToolID        primitive.ObjectID `bson:"toolId" json:"toolId"`
+	ToolID        string             `bson:"toolId" json:"toolId"`
 	FromUserID    primitive.ObjectID `bson:"fromUserId" json:"fromUserId"`
 	ToUserID      primitive.ObjectID `bson:"toUserId" json:"toUserId"`
 	StartDate     time.Time          `bson:"startDate" json:"startDate"`
@@ -82,11 +82,11 @@ func NewBookingService(db *mongo.Database) *BookingService {
 
 // CreateBookingRequest represents the request to create a new booking
 type CreateBookingRequest struct {
-	ToolID    primitive.ObjectID `bson:"toolId" json:"toolId"`
-	StartDate time.Time          `bson:"startDate" json:"startDate"`
-	EndDate   time.Time          `bson:"endDate" json:"endDate"`
-	Contact   string             `bson:"contact" json:"contact"`
-	Comments  string             `bson:"comments" json:"comments"`
+	ToolID    string    `bson:"toolId" json:"toolId"`
+	StartDate time.Time `bson:"startDate" json:"startDate"`
+	EndDate   time.Time `bson:"endDate" json:"endDate"`
+	Contact   string    `bson:"contact" json:"contact"`
+	Comments  string    `bson:"comments" json:"comments"`
 }
 
 // Create creates a new booking
@@ -233,7 +233,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 // It takes a tool ID, start and end times, and an optional booking ID to exclude from the check.
 func (s *BookingService) checkDateConflicts(
 	ctx context.Context,
-	toolID primitive.ObjectID,
+	toolID string,
 	start, end time.Time,
 	excludeID primitive.ObjectID,
 ) (bool, error) {
