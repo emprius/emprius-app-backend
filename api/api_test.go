@@ -121,6 +121,42 @@ func testAPI(t *testing.T) *API {
 	return New("secret", "authtoken", database)
 }
 
+func TestTransportOptions(t *testing.T) {
+	a := testAPI(t)
+
+	// Create a test user
+	err := a.addUser(&testUser1)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create a tool with transport options
+	toolWithTransport := testTool1
+	toolWithTransport.TransportOptions = []int{1, 2}
+
+	// Add the tool
+	toolID, err := a.addTool(&toolWithTransport, testUser1.Email)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Retrieve the tool and verify transport options
+	tool, err := a.tool(toolID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, len(tool.TransportOptions), qt.Equals, 2)
+	qt.Assert(t, tool.TransportOptions[0].ID, qt.Equals, int64(1))
+	qt.Assert(t, tool.TransportOptions[1].ID, qt.Equals, int64(2))
+
+	// Edit the tool's transport options
+	updatedTool := Tool{
+		TransportOptions: []int{3},
+	}
+	err = a.editTool(toolID, &updatedTool)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Verify the updated transport options
+	tool, err = a.tool(toolID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, len(tool.TransportOptions), qt.Equals, 1)
+	qt.Assert(t, tool.TransportOptions[0].ID, qt.Equals, int64(3))
+}
+
 func TestToolSearch(t *testing.T) {
 	a := testAPI(t)
 	// insert user1 and user2

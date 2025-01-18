@@ -72,22 +72,29 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	if t.Category < 0 || t.Category >= len(a.toolCategories()) {
 		return 0, fmt.Errorf("invalid category %d", t.Category)
 	}
+	// Convert transport options from []int to []db.Transport
+	transportOptions := make([]db.Transport, len(t.TransportOptions))
+	for i, id := range t.TransportOptions {
+		transportOptions[i] = db.Transport{ID: int64(id)}
+	}
+
 	dbTool := db.Tool{
-		ID:             toolID(userID, t.Title),
-		UserID:         userID,
-		Title:          db.SanitizeString(t.Title),
-		Description:    t.Description,
-		IsAvailable:    true,
-		MayBeFree:      *t.MayBeFree,
-		AskWithFee:     *t.AskWithFee,
-		Cost:           *t.Cost,
-		ToolCategory:   t.Category,
-		Rating:         50,
-		EstimatedValue: t.EstimatedValue,
-		Height:         t.Height,
-		Weight:         t.Weight,
-		Images:         dbImages,
-		Location:       t.Location,
+		ID:               toolID(userID, t.Title),
+		UserID:           userID,
+		Title:            db.SanitizeString(t.Title),
+		Description:      t.Description,
+		IsAvailable:      true,
+		MayBeFree:        *t.MayBeFree,
+		AskWithFee:       *t.AskWithFee,
+		Cost:             *t.Cost,
+		ToolCategory:     t.Category,
+		Rating:           50,
+		EstimatedValue:   t.EstimatedValue,
+		Height:           t.Height,
+		Weight:           t.Weight,
+		Images:           dbImages,
+		Location:         t.Location,
+		TransportOptions: transportOptions,
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
@@ -196,19 +203,27 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		}
 		tool.Images = dbImages
 	}
+	if len(newTool.TransportOptions) > 0 {
+		transportOptions := make([]db.Transport, len(newTool.TransportOptions))
+		for i, id := range newTool.TransportOptions {
+			transportOptions[i] = db.Transport{ID: int64(id)}
+		}
+		tool.TransportOptions = transportOptions
+	}
 	updates := map[string]interface{}{
-		"title":          tool.Title,
-		"description":    tool.Description,
-		"isAvailable":    tool.IsAvailable,
-		"mayBeFree":      tool.MayBeFree,
-		"askWithFee":     tool.AskWithFee,
-		"cost":           tool.Cost,
-		"toolCategory":   tool.ToolCategory,
-		"estimatedValue": tool.EstimatedValue,
-		"height":         tool.Height,
-		"weight":         tool.Weight,
-		"images":         tool.Images,
-		"location":       tool.Location,
+		"title":            tool.Title,
+		"description":      tool.Description,
+		"isAvailable":      tool.IsAvailable,
+		"mayBeFree":        tool.MayBeFree,
+		"askWithFee":       tool.AskWithFee,
+		"cost":             tool.Cost,
+		"toolCategory":     tool.ToolCategory,
+		"estimatedValue":   tool.EstimatedValue,
+		"height":           tool.Height,
+		"weight":           tool.Weight,
+		"images":           tool.Images,
+		"location":         tool.Location,
+		"transportOptions": tool.TransportOptions,
 	}
 	return a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 }
