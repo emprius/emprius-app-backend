@@ -343,9 +343,12 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, fmt.Errorf("invalid tool owner ID: %w", err)
 	}
 
+	// Convert int64 toolID to ObjectID
+	toolObjID := primitive.NewObjectIDFromTimestamp(time.Unix(toolID, 0))
+
 	// Create booking request
 	dbReq := &db.CreateBookingRequest{
-		ToolID:    primitive.NewObjectID(), // Generate new ID for the booking
+		ToolID:    toolObjID,
 		StartDate: time.Unix(req.StartDate, 0),
 		EndDate:   time.Unix(req.EndDate, 0),
 		Contact:   req.Contact,

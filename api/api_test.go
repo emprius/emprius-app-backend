@@ -297,6 +297,20 @@ func TestBookingStatusTransitions(t *testing.T) {
 	createdBooking, err := a.database.BookingService.Create(context.Background(), booking, user2.ID, user1.ID)
 	qt.Assert(t, err, qt.IsNil)
 
+	// Verify toolId is set correctly
+	qt.Assert(t, createdBooking.ToolID, qt.Equals, toolObjID)
+
+	// Get bookings through API endpoints to verify toolId in responses
+	bookings, err := a.database.BookingService.GetUserRequests(context.Background(), user1.ID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, len(bookings), qt.Equals, 1)
+	qt.Assert(t, bookings[0].ToolID, qt.Equals, toolObjID)
+
+	bookings, err = a.database.BookingService.GetUserPetitions(context.Background(), user2.ID)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, len(bookings), qt.Equals, 1)
+	qt.Assert(t, bookings[0].ToolID, qt.Equals, toolObjID)
+
 	// Test accepting a petition
 	err = a.database.BookingService.UpdateStatus(context.Background(), createdBooking.ID, db.BookingStatusAccepted)
 	qt.Assert(t, err, qt.IsNil)
