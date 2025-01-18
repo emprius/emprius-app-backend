@@ -21,7 +21,7 @@ func TestTools(t *testing.T) {
 		// Try to create tool without auth
 		_, code := c.Request(http.MethodPost, "",
 			map[string]interface{}{
-				"title":          "TestTool",
+				"title":          "Test Tool",
 				"description":    "Test tool description",
 				"mayBeFree":      true,
 				"askWithFee":     false,
@@ -77,7 +77,7 @@ func TestTools(t *testing.T) {
 		}
 		err = json.Unmarshal(resp, &getToolResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, getToolResp.Data.Title, qt.Equals, "TestTool")
+		qt.Assert(t, getToolResp.Data.Title, qt.Equals, "Test Tool")
 
 		// Edit tool
 		_, code = c.Request(http.MethodPut, userJWT,

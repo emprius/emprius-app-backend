@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 const (
@@ -47,36 +47,36 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	}
 
 	if t.Title == "" || t.Description == "" {
-		return 0, fmt.Errorf("title and description must not be empty")
+		return 0, ErrEmptyTitleOrDescription
 	}
 	if t.EstimatedValue == 0 {
-		return 0, fmt.Errorf("estimated value must be greater than 0")
+		return 0, ErrInvalidEstimatedValue
 	}
 	if t.MayBeFree == nil {
-		return 0, fmt.Errorf("may be free must not be nil")
+		return 0, ErrMayBeFreeRequired
 	}
 	if t.AskWithFee == nil {
-		return 0, fmt.Errorf("ask with fee must not be nil")
+		return 0, ErrAskWithFeeRequired
 	}
 	if t.Cost == nil {
-		return 0, fmt.Errorf("cost must not be nil")
+		return 0, ErrCostRequired
 	}
 	user, err := a.userByEmail(userID)
 	if err != nil {
-		return 0, fmt.Errorf("user not found: %w", err)
+		return 0, ErrUserNotFound
 	}
 	if !db.WithinCircumference(user.Location, t.Location, maxAllowedToolDistance) {
-		return 0, fmt.Errorf("tool location is too far away, more than %d km", maxAllowedToolDistance)
+		return 0, ErrToolLocationTooFar
 	}
 
 	if t.Category < 0 || t.Category >= len(a.toolCategories()) {
-		return 0, fmt.Errorf("invalid category %d", t.Category)
+		return 0, ErrInvalidToolCategory
 	}
 
 	// Validate and convert transport options
 	transports, err := a.database.TransportService.GetAllTransports(context.Background())
 	if err != nil {
-		return 0, fmt.Errorf("could not get transports: %w", err)
+		return 0, ErrInternalServerError
 	}
 	validTransportIDs := make(map[int64]bool)
 	for _, t := range transports {
@@ -86,7 +86,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	transportOptions := make([]db.Transport, len(t.TransportOptions))
 	for i, id := range t.TransportOptions {
 		if !validTransportIDs[int64(id)] {
-			return 0, fmt.Errorf("invalid transport option ID: %d", id)
+			return 0, ErrInvalidTransportOption
 		}
 		transportOptions[i] = db.Transport{ID: int64(id)}
 	}
@@ -113,7 +113,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 
 	_, err = a.database.ToolService.InsertTool(context.Background(), &dbTool)
 	if err != nil {
-		return 0, fmt.Errorf("could not insert tool to database: %w", err)
+		return 0, ErrCouldNotInsertToDatabase
 	}
 
 	return dbTool.ID, nil
@@ -128,13 +128,20 @@ func toolID(ownerID string, title string) int64 {
 }
 
 func (a *API) tool(id int64) (*db.Tool, error) {
-	return a.database.ToolService.GetToolByID(context.Background(), id)
+	tool, err := a.database.ToolService.GetToolByID(context.Background(), id)
+	if err == mongo.ErrNoDocuments {
+		return nil, ErrToolNotFound
+	}
+	if err != nil {
+		return nil, ErrInternalServerError
+	}
+	return tool, nil
 }
 
 func (a *API) toolsByUerID(id string) ([]db.Tool, error) {
 	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), id)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 	result := make([]db.Tool, len(tools))
 	for i, t := range tools {
@@ -146,8 +153,12 @@ func (a *API) toolsByUerID(id string) ([]db.Tool, error) {
 func (a *API) editTool(id int64, newTool *Tool) error {
 	tool, err := a.tool(id)
 	if err != nil {
-		return fmt.Errorf("could not get tool: %w", err)
+		return err
 	}
+	if tool == nil {
+		return ErrToolNotFound
+	}
+
 	if newTool.Title != "" {
 		tool.Title = newTool.Title
 	}
@@ -173,6 +184,9 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		tool.Weight = newTool.Weight
 	}
 	if newTool.Category != 0 {
+		if newTool.Category < 0 || newTool.Category >= len(a.toolCategories()) {
+			return ErrInvalidToolCategory
+		}
 		tool.ToolCategory = newTool.Category
 	}
 	if newTool.Location.Latitude != 0 && newTool.Location.Longitude != 0 {
@@ -199,7 +213,7 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		// Validate and convert transport options
 		transports, err := a.database.TransportService.GetAllTransports(context.Background())
 		if err != nil {
-			return fmt.Errorf("could not get transports: %w", err)
+			return ErrInternalServerError
 		}
 		validTransportIDs := make(map[int64]bool)
 		for _, t := range transports {
@@ -209,7 +223,7 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		transportOptions := make([]db.Transport, len(newTool.TransportOptions))
 		for i, id := range newTool.TransportOptions {
 			if !validTransportIDs[int64(id)] {
-				return fmt.Errorf("invalid transport option ID: %d", id)
+				return ErrInvalidTransportOption
 			}
 			transportOptions[i] = db.Transport{ID: int64(id)}
 		}
@@ -230,7 +244,11 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		"location":         tool.Location,
 		"transportOptions": tool.TransportOptions,
 	}
-	return a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
+	err = a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
+	if err != nil {
+		return ErrInternalServerError
+	}
+	return nil
 }
 
 func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Tool, error) {
@@ -244,7 +262,7 @@ func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Too
 	}
 	tools, err := a.database.ToolService.SearchTools(context.Background(), opts)
 	if err != nil {
-		return nil, fmt.Errorf("could not search tools: %w", err)
+		return nil, ErrInternalServerError
 	}
 	result := make([]db.Tool, len(tools))
 	for i, t := range tools {
@@ -256,14 +274,20 @@ func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Too
 func (a *API) deleteTool(id int64) error {
 	filter := bson.M{"_id": id}
 	_, err := a.database.ToolService.Collection.DeleteOne(context.Background(), filter)
-	return err
+	if err != nil {
+		return ErrInternalServerError
+	}
+	return nil
 }
 
 // GET /tools returns tools owned by the user
 func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized
+	}
 	tools, err := a.toolsByUerID(r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("could not get tools: %w", err)
+		return nil, err
 	}
 	return &ToolsWrapper{Tools: tools}, nil
 }
@@ -272,26 +296,33 @@ func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 func (a *API) toolHandler(r *Request) (interface{}, error) {
 	id, err := strconv.ParseInt(r.Context.URLParam("id"), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid id: %w", err)
+		return nil, ErrInvalidRequestBodyData
 	}
 	tool, err := a.tool(id)
 	if err != nil {
-		return nil, &HTTPError{Code: http.StatusNotFound, Message: fmt.Sprintf("tool %d not found: %s", id, err)}
+		return nil, err
 	}
 	return tool, nil
 }
 
 // GET /tools/user/:id returns tools owned by the user
 func (a *API) userToolsHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized
+	}
 	tools, err := a.toolsByUerID(r.Context.URLParam("id"))
 	if err != nil {
-		return nil, fmt.Errorf("could not get tools: %w", err)
+		return nil, err
 	}
 	return &ToolsWrapper{Tools: tools}, nil
 }
 
 // GET /tools/search filters tools
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized
+	}
+
 	searchTerm := r.Context.URLParam("searchTerm")
 	maxCostStr := r.Context.URLParam("maxCost")
 	mayBeFreeStr := r.Context.URLParam("maybeFree")
@@ -302,7 +333,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if maxCostStr != "" {
 		cost, err := strconv.ParseUint(maxCostStr, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("invalid maxCost: %w", err)
+			return nil, ErrInvalidRequestBodyData
 		}
 		maxCost = &cost
 	}
@@ -311,7 +342,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if mayBeFreeStr != "" {
 		free, err := strconv.ParseBool(mayBeFreeStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid maybeFree: %w", err)
+			return nil, ErrInvalidRequestBodyData
 		}
 		mayBeFree = &free
 	}
@@ -320,7 +351,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if availableFromStr != "" {
 		from, err := strconv.Atoi(availableFromStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid availableFrom: %w", err)
+			return nil, ErrInvalidRequestBodyData
 		}
 		availableFrom = from
 	}
@@ -333,7 +364,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		for i, cat := range catStrings {
 			val, err := strconv.Atoi(cat)
 			if err != nil {
-				return nil, fmt.Errorf("invalid category: %w", err)
+				return nil, ErrInvalidRequestBodyData
 			}
 			categories[i] = val
 		}
@@ -349,7 +380,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		for i, t := range transportStrings {
 			val, err := strconv.Atoi(t)
 			if err != nil {
-				return nil, fmt.Errorf("invalid transport option: %w", err)
+				return nil, ErrInvalidRequestBodyData
 			}
 			transportOptions[i] = val
 		}
@@ -365,68 +396,80 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	}
 	user, err := a.userByEmail(r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("could not get user: %w", err)
+		return nil, ErrUserNotFound
 	}
 	tools, err := a.toolSearch(&query, &user.Location)
 	if err != nil {
-		return nil, fmt.Errorf("could not search tools: %w", err)
+		return nil, err
 	}
 	return &ToolsWrapper{Tools: tools}, nil
 }
 
 // POST /tools adds a new tool
 func (a *API) addToolHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized
+	}
+
 	t := Tool{}
 	if err := json.Unmarshal(r.Data, &t); err != nil {
-		return nil, fmt.Errorf("could not parse tool: %w", err)
+		return nil, ErrInvalidRequestBodyData
 	}
 	id, err := a.addTool(&t, r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("could not add tool: %w", err)
+		return nil, err
 	}
 	return &ToolID{ID: id}, nil
 }
 
 // DELETE /tools/:id deletes a tool
 func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized
+	}
+
 	id, err := strconv.ParseInt(r.Context.URLParam("id"), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid id: %w", err)
+		return nil, ErrInvalidRequestBodyData
 	}
 	// check the tool is owned by the user
 	tool, err := a.tool(id)
 	if err != nil {
-		return nil, fmt.Errorf("tool not found: %w", err)
+		return nil, err
 	}
 	if tool.UserID != r.UserID {
-		return nil, fmt.Errorf("tool not owned by user")
+		return nil, ErrToolNotOwnedByUser
 	}
 	if err := a.deleteTool(id); err != nil {
-		return nil, fmt.Errorf("could not delete tool: %w", err)
+		return nil, err
 	}
 	return nil, nil
 }
 
 // PUT /tools/:id edit a tool
 func (a *API) editToolHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized
+	}
+
 	id, err := strconv.ParseInt(r.Context.URLParam("id"), 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid id: %w", err)
+		return nil, ErrInvalidRequestBodyData
 	}
 	// check the tool is owned by the user
 	tool, err := a.tool(id)
 	if err != nil {
-		return nil, fmt.Errorf("tool not found: %w", err)
+		return nil, err
 	}
 	if tool.UserID != r.UserID {
-		return nil, fmt.Errorf("tool not owned by user")
+		return nil, ErrToolNotOwnedByUser
 	}
 	t := Tool{}
 	if err := json.Unmarshal(r.Data, &t); err != nil {
-		return nil, fmt.Errorf("could not parse tool: %w", err)
+		return nil, ErrInvalidRequestBodyData
 	}
 	if err := a.editTool(id, &t); err != nil {
-		return nil, fmt.Errorf("could not edit tool: %w", err)
+		return nil, err
 	}
 	return nil, nil
 }

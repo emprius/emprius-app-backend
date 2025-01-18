@@ -1,35 +1,181 @@
 package api
 
-import (
-	"fmt"
-)
+import "net/http"
 
 // HTTPError represents an error with an HTTP status code
 type HTTPError struct {
-	Code    int
-	Message string
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 func (e *HTTPError) Error() string {
 	return e.Message
 }
 
+// Authentication errors
 var (
-	ErrInvalidRegisterAuthToken = fmt.Errorf("invalid register auth token")
-	ErrInvalidRequestBodyData   = fmt.Errorf("invalid request body data")
-	ErrCouldNotInsertToDatabase = fmt.Errorf("could not insert to database")
-	ErrWrongLogin               = fmt.Errorf("wrong password or email")
-	ErrInvalidHash              = fmt.Errorf("invalid hash")
-	ErrImageNotFound            = fmt.Errorf("image not found")
-	ErrInvalidImageFormat       = fmt.Errorf("invalid image format")
-	ErrInvalidJSON              = fmt.Errorf("invalid json body")
-	ErrBookingDatesConflict     = fmt.Errorf("booking dates conflict with existing booking")
-	ErrToolNotFound             = fmt.Errorf("tool not found")
-	ErrUnauthorizedBooking      = fmt.Errorf("unauthorized booking operation")
-	ErrInvalidBookingDates      = fmt.Errorf("invalid booking dates")
-	ErrBookingNotFound          = fmt.Errorf("booking not found")
-	ErrOnlyOwnerCanReturn       = fmt.Errorf("only tool owner can mark as returned")
-	ErrBookingAlreadyReturned   = fmt.Errorf("booking already marked as returned")
-	ErrInvalidRating            = fmt.Errorf("invalid rating value")
-	ErrBookingAlreadyRated      = fmt.Errorf("booking already rated")
+	ErrUnauthorized = &HTTPError{
+		Code:    http.StatusUnauthorized,
+		Message: "unauthorized access",
+	}
+	ErrInvalidRegisterAuthToken = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid registration token",
+	}
+	ErrWrongLogin = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid email or password",
+	}
+)
+
+// Request validation errors
+var (
+	ErrInvalidRequestBodyData = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid request body data",
+	}
+	ErrInvalidJSON = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid JSON body",
+	}
+	ErrInvalidImageFormat = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid image format",
+	}
+	ErrInvalidHash = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid hash",
+	}
+	ErrInvalidBookingDates = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid booking dates",
+	}
+	ErrInvalidRating = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid rating value (must be between 1 and 5)",
+	}
+)
+
+// Resource not found errors
+var (
+	ErrImageNotFound = &HTTPError{
+		Code:    http.StatusNotFound,
+		Message: "image not found",
+	}
+	ErrToolNotFound = &HTTPError{
+		Code:    http.StatusNotFound,
+		Message: "tool not found",
+	}
+	ErrBookingNotFound = &HTTPError{
+		Code:    http.StatusNotFound,
+		Message: "booking not found",
+	}
+	ErrUserNotFound = &HTTPError{
+		Code:    http.StatusNotFound,
+		Message: "user not found",
+	}
+)
+
+// Permission errors
+var (
+	ErrToolNotOwnedByUser = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "tool not owned by user",
+	}
+	ErrOnlyOwnerCanReturn = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "only tool owner can mark as returned",
+	}
+	ErrOnlyOwnerCanAccept = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "only tool owner can accept petitions",
+	}
+	ErrOnlyOwnerCanDeny = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "only tool owner can deny petitions",
+	}
+	ErrOnlyRequesterCanCancel = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "only requester can cancel their requests",
+	}
+	ErrUserNotInvolved = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "user not involved in booking",
+	}
+)
+
+// Conflict errors
+var (
+	ErrBookingDatesConflict = &HTTPError{
+		Code:    http.StatusConflict,
+		Message: "booking dates conflict with existing booking",
+	}
+	ErrBookingAlreadyReturned = &HTTPError{
+		Code:    http.StatusConflict,
+		Message: "booking already marked as returned",
+	}
+	ErrBookingAlreadyRated = &HTTPError{
+		Code:    http.StatusConflict,
+		Message: "booking already rated",
+	}
+	ErrCanOnlyAcceptPending = &HTTPError{
+		Code:    http.StatusConflict,
+		Message: "can only accept pending petitions",
+	}
+	ErrCanOnlyDenyPending = &HTTPError{
+		Code:    http.StatusConflict,
+		Message: "can only deny pending petitions",
+	}
+	ErrCanOnlyCancelPending = &HTTPError{
+		Code:    http.StatusConflict,
+		Message: "can only cancel pending requests",
+	}
+)
+
+// Server errors
+var (
+	ErrCouldNotInsertToDatabase = &HTTPError{
+		Code:    http.StatusInternalServerError,
+		Message: "could not insert to database",
+	}
+	ErrInternalServerError = &HTTPError{
+		Code:    http.StatusInternalServerError,
+		Message: "internal server error",
+	}
+)
+
+// Tool validation errors
+var (
+	ErrEmptyTitleOrDescription = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "title and description must not be empty",
+	}
+	ErrInvalidEstimatedValue = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "estimated value must be greater than 0",
+	}
+	ErrMayBeFreeRequired = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "may be free must not be nil",
+	}
+	ErrAskWithFeeRequired = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "ask with fee must not be nil",
+	}
+	ErrCostRequired = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "cost must not be nil",
+	}
+	ErrToolLocationTooFar = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "tool location is too far away",
+	}
+	ErrInvalidToolCategory = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "invalid tool category",
+	}
+	ErrInvalidTransportOption = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "invalid transport option",
+	}
 )

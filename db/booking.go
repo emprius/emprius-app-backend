@@ -117,7 +117,7 @@ func (s *BookingService) Create(
 		return nil, err
 	}
 	if conflictExists {
-		return nil, fmt.Errorf("booking dates conflict with existing booking")
+		return nil, fmt.Errorf(ErrBookingDatesConflict)
 	}
 
 	result, err := s.collection.InsertOne(ctx, booking)
@@ -134,7 +134,7 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 	var booking Booking
 	err := s.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&booking)
 	if err == mongo.ErrNoDocuments {
-		return nil, nil
+		return nil, fmt.Errorf(ErrBookingNotFound)
 	}
 	return &booking, err
 }
@@ -185,10 +185,10 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID, status BookingStatus) error {
 	booking, err := s.Get(ctx, id)
 	if err != nil {
-		return fmt.Errorf("could not get booking: %w", err)
+		return err
 	}
 	if booking == nil {
-		return fmt.Errorf("booking not found")
+		return fmt.Errorf(ErrBookingNotFound)
 	}
 
 	update := bson.M{
@@ -203,7 +203,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		return err
 	}
 	if result.MatchedCount == 0 {
-		return fmt.Errorf("booking not found")
+		return fmt.Errorf(ErrBookingNotFound)
 	}
 
 	// If accepting booking, update tool's reserved dates

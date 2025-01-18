@@ -32,18 +32,18 @@ func convertBookingToResponse(booking *db.Booking) BookingResponse {
 // HandleGetBookingRequests handles GET /bookings/requests
 func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), user.ID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 
 	response := make([]BookingResponse, len(bookings))
@@ -57,18 +57,18 @@ func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
 // HandleGetBookingPetitions handles GET /bookings/petitions
 func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	bookings, err := a.database.BookingService.GetUserPetitions(r.Context.Request.Context(), user.ID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 
 	response := make([]BookingResponse, len(bookings))
@@ -83,15 +83,15 @@ func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid booking ID")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 	if booking == nil {
-		return nil, fmt.Errorf("booking not found")
+		return nil, ErrBookingNotFound
 	}
 
 	return convertBookingToResponse(booking), nil
@@ -100,44 +100,41 @@ func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 // HandleAcceptPetition handles POST /bookings/petitions/{petitionId}/accept
 func (a *API) HandleAcceptPetition(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	petitionID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "petitionId"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid petition ID")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), petitionID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 	if booking == nil {
-		return nil, fmt.Errorf("booking not found")
+		return nil, ErrBookingNotFound
 	}
 
 	// Verify user is the tool owner
 	if booking.ToUserID != user.ID {
-		return nil, &HTTPError{
-			Code:    403,
-			Message: "only tool owner can accept petitions",
-		}
+		return nil, ErrOnlyOwnerCanAccept
 	}
 
 	// Verify booking is in PENDING state
 	if booking.BookingStatus != db.BookingStatusPending {
-		return nil, fmt.Errorf("can only accept pending petitions")
+		return nil, ErrCanOnlyAcceptPending
 	}
 
 	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), petitionID, db.BookingStatusAccepted)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 
 	return nil, nil
@@ -146,44 +143,41 @@ func (a *API) HandleAcceptPetition(r *Request) (interface{}, error) {
 // HandleDenyPetition handles POST /bookings/petitions/{petitionId}/deny
 func (a *API) HandleDenyPetition(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	petitionID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "petitionId"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid petition ID")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), petitionID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 	if booking == nil {
-		return nil, fmt.Errorf("booking not found")
+		return nil, ErrBookingNotFound
 	}
 
 	// Verify user is the tool owner
 	if booking.ToUserID != user.ID {
-		return nil, &HTTPError{
-			Code:    403,
-			Message: "only tool owner can deny petitions",
-		}
+		return nil, ErrOnlyOwnerCanDeny
 	}
 
 	// Verify booking is in PENDING state
 	if booking.BookingStatus != db.BookingStatusPending {
-		return nil, fmt.Errorf("can only deny pending petitions")
+		return nil, ErrCanOnlyDenyPending
 	}
 
 	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), petitionID, db.BookingStatusRejected)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 
 	return nil, nil
@@ -192,44 +186,41 @@ func (a *API) HandleDenyPetition(r *Request) (interface{}, error) {
 // HandleCancelRequest handles POST /bookings/request/{petitionId}/cancel
 func (a *API) HandleCancelRequest(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	petitionID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "petitionId"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid petition ID")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), petitionID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 	if booking == nil {
-		return nil, fmt.Errorf("booking not found")
+		return nil, ErrBookingNotFound
 	}
 
 	// Verify user is the requester
 	if booking.FromUserID != user.ID {
-		return nil, &HTTPError{
-			Code:    403,
-			Message: "only requester can cancel their requests",
-		}
+		return nil, ErrOnlyRequesterCanCancel
 	}
 
 	// Verify booking is in PENDING state
 	if booking.BookingStatus != db.BookingStatusPending {
-		return nil, fmt.Errorf("can only cancel pending requests")
+		return nil, ErrCanOnlyCancelPending
 	}
 
 	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), petitionID, db.BookingStatusCancelled)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 
 	return nil, nil
@@ -238,39 +229,36 @@ func (a *API) HandleCancelRequest(r *Request) (interface{}, error) {
 // HandleReturnBooking handles POST /bookings/{bookingId}/return
 func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
 	if err != nil {
-		return nil, fmt.Errorf("invalid booking ID")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 	if booking == nil {
-		return nil, fmt.Errorf("booking not found")
+		return nil, ErrBookingNotFound
 	}
 
 	// Verify user is the tool owner
 	if booking.ToUserID != user.ID {
-		return nil, &HTTPError{
-			Code:    403,
-			Message: "only tool owner can mark as returned",
-		}
+		return nil, ErrOnlyOwnerCanReturn
 	}
 
 	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusReturned)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 
 	return nil, nil
@@ -279,18 +267,18 @@ func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 // HandleGetPendingRatings handles GET /bookings/rates
 func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	bookings, err := a.database.BookingService.GetPendingRatings(r.Context.Request.Context(), user.ID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 
 	response := make([]BookingResponse, len(bookings))
@@ -310,37 +298,37 @@ type RateRequest struct {
 // HandleCreateBooking handles POST /bookings
 func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	fromUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	var req CreateBookingRequest
 	if err := json.Unmarshal(r.Data, &req); err != nil {
-		return nil, fmt.Errorf("invalid request body")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	toolID, err := strconv.ParseInt(req.ToolID, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("invalid tool ID")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	// Get tool to verify it exists and get owner ID
 	tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 	if tool == nil {
-		return nil, fmt.Errorf("tool not found")
+		return nil, ErrToolNotFound
 	}
 
 	toUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), tool.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid tool owner ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	// Create booking request
@@ -354,7 +342,10 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 
 	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ID, toUser.ID)
 	if err != nil {
-		return nil, err
+		if err.Error() == "booking dates conflict with existing booking" {
+			return nil, ErrBookingDatesConflict
+		}
+		return nil, ErrInternalServerError
 	}
 
 	return convertBookingToResponse(booking), nil
@@ -363,36 +354,41 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 // HandleRateBooking handles POST /bookings/rates
 func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, fmt.Errorf("unauthorized")
+		return nil, ErrUnauthorized
 	}
 
 	// Get user from database
 	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid user ID: %w", err)
+		return nil, ErrUserNotFound
 	}
 
 	var rateReq RateRequest
 	if err := json.Unmarshal(r.Data, &rateReq); err != nil {
-		return nil, fmt.Errorf("invalid request body")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	bookingID, err := primitive.ObjectIDFromHex(rateReq.BookingID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid booking ID")
+		return nil, ErrInvalidRequestBodyData
 	}
 
 	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError
 	}
 	if booking == nil {
-		return nil, fmt.Errorf("booking not found")
+		return nil, ErrBookingNotFound
 	}
 
 	// Verify user is involved in the booking
 	if booking.FromUserID != user.ID && booking.ToUserID != user.ID {
-		return nil, fmt.Errorf("user not involved in booking")
+		return nil, ErrUserNotInvolved
+	}
+
+	// Verify rating value
+	if rateReq.Rating < 1 || rateReq.Rating > 5 {
+		return nil, ErrInvalidRating
 	}
 
 	// TODO: Implement rating logic once rating schema is defined

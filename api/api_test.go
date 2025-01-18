@@ -153,7 +153,7 @@ func TestBookingDateConflicts(t *testing.T) {
 		Comments:  "Test booking 3",
 	}
 	_, err = a.database.BookingService.Create(context.Background(), booking3, user2.ID, user1.ID)
-	qt.Assert(t, err, qt.ErrorMatches, "booking dates conflict with existing booking")
+	qt.Assert(t, err, qt.ErrorMatches, db.ErrBookingDatesConflict)
 
 	// Verify the second booking can still be accepted or rejected
 	err = a.database.BookingService.UpdateStatus(context.Background(), createdBooking2.ID, db.BookingStatusRejected)

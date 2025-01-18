@@ -141,11 +141,6 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			statusCode := http.StatusBadRequest
 			if httpErr, ok := err.(*HTTPError); ok {
 				statusCode = httpErr.Code
-			} else {
-				// Check if the error message indicates a forbidden action
-				if err.Error() == "only tool owner can mark as returned" {
-					statusCode = http.StatusForbidden
-				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(statusCode)
