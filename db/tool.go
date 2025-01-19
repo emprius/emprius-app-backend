@@ -53,7 +53,7 @@ type Tool struct {
 
 // SanitizeString removes all non-alphanumeric characters from a string, except for commas, dots, minus signs, and underscores.
 func SanitizeString(s string) string {
-	reg := regexp.MustCompile("[^a-zA-Z0-9,._\\s-]+")
+	reg := regexp.MustCompile(`[^a-zA-Z0-9,._\s-]+`)
 	sanitized := reg.ReplaceAllString(s, "")
 	return sanitized
 }

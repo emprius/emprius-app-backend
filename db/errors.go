@@ -1,8 +1,10 @@
 package db
 
+import "errors"
+
 // Database-specific errors
-const (
-	ErrBookingDatesConflict = "booking dates conflict with existing booking"
-	ErrBookingNotFound      = "booking not found"
-	ErrInvalidBookingDates  = "invalid booking dates"
+var (
+	ErrBookingDatesConflict = errors.New("booking dates conflict with existing booking")
+	ErrBookingNotFound      = errors.New("booking not found")
+	ErrInvalidBookingDates  = errors.New("invalid booking dates")
 )
