@@ -21,6 +21,8 @@ tags:
 servers:
   - url: http://localhost:8080
     description: Local development server
+  - url: https://app-api.emprius.app
+    description: Production server
 
 components:
   securitySchemes:
