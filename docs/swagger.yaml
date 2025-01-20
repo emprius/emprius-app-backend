@@ -112,6 +112,10 @@ components:
     UserProfile:
       type: object
       properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the user
         name:
           type: string
         community:
@@ -175,7 +179,9 @@ components:
         - endDate
       properties:
         toolId:
-          type: string
+          type: integer
+          format: int64
+          description: ID of the tool to book
         startDate:
           type: integer
           format: int64
@@ -192,12 +198,20 @@ components:
       properties:
         id:
           type: string
+          format: objectid
+          description: MongoDB ObjectID of the booking
         toolId:
-          type: string
+          type: integer
+          format: int64
+          description: ID of the booked tool
         fromUserId:
           type: string
+          format: objectid
+          description: MongoDB ObjectID of the user making the booking
         toUserId:
           type: string
+          format: objectid
+          description: MongoDB ObjectID of the tool owner
         startDate:
           type: integer
           format: int64
@@ -210,6 +224,7 @@ components:
           type: string
         bookingStatus:
           type: string
+          enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, RETURNED]
         createdAt:
           type: string
           format: date-time
@@ -326,6 +341,7 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/UserProfile'
+
   /users/{id}:
     get:
       tags:
@@ -339,6 +355,8 @@ paths:
           required: true
           schema:
             type: string
+            format: objectid
+            description: MongoDB ObjectID of the user
       responses:
         '200':
           description: User profile
@@ -410,6 +428,8 @@ paths:
           required: true
           schema:
             type: string
+            format: objectid
+            description: MongoDB ObjectID of the user
       responses:
         '200':
           description: List of tools
@@ -670,6 +690,8 @@ paths:
           required: true
           schema:
             type: string
+            format: objectid
+            description: MongoDB ObjectID of the booking
       responses:
         '200':
           description: Booking details
@@ -692,6 +714,8 @@ paths:
           required: true
           schema:
             type: string
+            format: objectid
+            description: MongoDB ObjectID of the booking petition
       responses:
         '200':
           description: Petition accepted successfully
@@ -716,6 +740,8 @@ paths:
           required: true
           schema:
             type: string
+            format: objectid
+            description: MongoDB ObjectID of the booking petition
       responses:
         '200':
           description: Petition denied successfully
@@ -740,6 +766,8 @@ paths:
           required: true
           schema:
             type: string
+            format: objectid
+            description: MongoDB ObjectID of the booking petition
       responses:
         '200':
           description: Request cancelled successfully
@@ -763,6 +791,8 @@ paths:
           required: true
           schema:
             type: string
+            format: objectid
+            description: MongoDB ObjectID of the booking
       responses:
         '200':
           description: Booking returned successfully
@@ -795,7 +825,8 @@ paths:
               properties:
                 bookingId:
                   type: string
-                  description: ID of the booking to rate
+                  format: objectid
+                  description: MongoDB ObjectID of the booking to rate
                 rating:
                   type: integer
                   minimum: 1
