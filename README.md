@@ -55,6 +55,126 @@ The complete API documentation is available in OpenAPI (Swagger) format:
 - Online documentation: [https://emprius.github.io/emprius-app-backend](https://emprius.github.io/emprius-app-backend)
 - Local file: [docs/swagger.yaml](docs/swagger.yaml)
 
+## API Examples
+
+Here are some basic curl examples to get started with the API. Replace `localhost:3333` with your server's address.
+
+### Authentication
+
+1. Register a new user:
+```bash
+curl -X POST http://localhost:3333/register -H 'Content-Type: application/json' -d '{
+  "email": "user@example.com",
+  "name": "Test User",
+  "password": "userpass123",
+  "invitationToken": "comunals"
+}'
+```
+
+2. Login and get JWT token:
+```bash
+curl -X POST http://localhost:3333/login -H 'Content-Type: application/json' -d '{
+  "email": "user@example.com",
+  "password": "userpass123"
+}'
+```
+
+Save the JWT token for subsequent requests:
+```bash
+export TOKEN="your_jwt_token_here"
+```
+
+### User Profile
+
+1. Get user profile:
+```bash
+curl http://localhost:3333/profile -H "Authorization: BEARER $TOKEN"
+```
+
+2. Update profile:
+```bash
+curl -X POST http://localhost:3333/profile \
+  -H "Authorization: BEARER $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "location": {
+      "latitude": 42202259,
+      "longitude": 1815044
+    },
+    "community": "Example Community"
+  }'
+```
+
+### Tools
+
+1. Add a new tool:
+```bash
+curl -X POST http://localhost:3333/tools \
+  -H "Authorization: BEARER $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "title": "Hammer",
+    "description": "A useful tool",
+    "mayBeFree": true,
+    "askWithFee": false,
+    "cost": 10,
+    "transportOptions": [1, 2],
+    "category": 1,
+    "location": {
+      "latitude": 42202259,
+      "longitude": 1815044
+    },
+    "estimatedValue": 20,
+    "height": 30,
+    "weight": 40
+  }'
+```
+
+2. Search for tools:
+```bash
+curl "http://localhost:3333/tools/search?categories=1,2&maxCost=100&distance=20000&mayBeFree=true" \
+  -H "Authorization: BEARER $TOKEN"
+```
+
+### Bookings
+
+1. Create a booking request:
+```bash
+curl -X POST http://localhost:3333/bookings \
+  -H "Authorization: BEARER $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "toolId": "123456",
+    "startDate": '$(date -d "+1 day" +%s)',
+    "endDate": '$(date -d "+2 days" +%s)',
+    "contact": "user@example.com",
+    "comments": "I need this tool for a project"
+  }'
+```
+
+2. Accept a booking request (tool owner only):
+```bash
+curl -X POST http://localhost:3333/bookings/petitions/{bookingId}/accept \
+  -H "Authorization: BEARER $TOKEN"
+```
+
+3. Mark a booking as returned:
+```bash
+curl -X POST http://localhost:3333/bookings/{bookingId}/return \
+  -H "Authorization: BEARER $TOKEN"
+```
+
+4. Rate a booking:
+```bash
+curl -X POST http://localhost:3333/bookings/rates \
+  -H "Authorization: BEARER $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "bookingId": "booking_id_here",
+    "rating": 5
+  }'
+```
+
 ## Prerequisites
 
 - Go 1.x
