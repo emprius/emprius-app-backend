@@ -32,7 +32,7 @@ func (a *API) toolCategories() []db.ToolCategory {
 	return result
 }
 
-func (a *API) addTool(t *Tool, userID string) (int64, error) {
+func (a *API) addTool(t *Tool, userEmail string) (int64, error) {
 	// check if images are in database
 	images, err := a.imageListFromSlice(t.Images)
 	if err != nil {
@@ -61,7 +61,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	if t.Cost == nil {
 		return 0, ErrCostRequired
 	}
-	user, err := a.userByEmail(userID)
+	user, err := a.userByEmail(userEmail)
 	if err != nil {
 		return 0, ErrUserNotFound
 	}
@@ -92,8 +92,8 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	}
 
 	dbTool := db.Tool{
-		ID:               toolID(userID, t.Title),
-		UserID:           userID,
+		ID:               toolID(userEmail, t.Title),
+		UserID:           user.ID,
 		Title:            db.SanitizeString(t.Title),
 		Description:      t.Description,
 		IsAvailable:      true,
@@ -109,7 +109,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		Location:         t.Location,
 		TransportOptions: transportOptions,
 	}
-	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
+	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userEmail, dbTool.ID)
 
 	_, err = a.database.ToolService.InsertTool(context.Background(), &dbTool)
 	if err != nil {
@@ -138,8 +138,12 @@ func (a *API) tool(id int64) (*db.Tool, error) {
 	return tool, nil
 }
 
-func (a *API) toolsByUerID(id string) ([]db.Tool, error) {
-	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), id)
+func (a *API) toolsByUerID(userEmail string) ([]db.Tool, error) {
+	user, err := a.userByEmail(userEmail)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ID)
 	if err != nil {
 		return nil, ErrInternalServerError
 	}
@@ -437,7 +441,11 @@ func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tool.UserID != r.UserID {
+	user, err := a.userByEmail(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+	if tool.UserID != user.ID {
 		return nil, ErrToolNotOwnedByUser
 	}
 	if err := a.deleteTool(id); err != nil {
@@ -461,7 +469,11 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	if tool.UserID != r.UserID {
+	user, err := a.userByEmail(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound
+	}
+	if tool.UserID != user.ID {
 		return nil, ErrToolNotOwnedByUser
 	}
 	t := Tool{}

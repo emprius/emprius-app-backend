@@ -148,7 +148,7 @@ func (a *API) router() http.Handler {
 				return nil, fmt.Errorf("invalid user ID: %w", err)
 			}
 
-			toUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), tool.UserID)
+			toUser, err := a.database.UserService.GetUserByID(r.Context.Request.Context(), tool.UserID)
 			if err != nil {
 				return nil, fmt.Errorf("invalid tool owner ID: %w", err)
 			}

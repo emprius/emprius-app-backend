@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -32,23 +33,23 @@ type DateRange struct {
 
 // Tool represents the schema for the "tools" collection.
 type Tool struct {
-	ID               int64       `bson:"_id" json:"id"`
-	Title            string      `bson:"title" json:"title"`
-	Description      string      `bson:"description" json:"description"`
-	IsAvailable      bool        `bson:"isAvailable" json:"isAvailable"`
-	MayBeFree        bool        `bson:"mayBeFree" json:"mayBeFree"`
-	AskWithFee       bool        `bson:"askWithFee" json:"askWithFee"`
-	Cost             uint64      `bson:"cost" json:"cost"`
-	UserID           string      `bson:"userId" json:"userId"`
-	Images           []Image     `bson:"images" json:"images"`
-	TransportOptions []Transport `bson:"transportOptions" json:"transportOptions"`
-	ToolCategory     int         `bson:"toolCategory" json:"toolCategory"`
-	Location         Location    `bson:"location" json:"location"`
-	Rating           int32       `bson:"rating" json:"rating"`
-	EstimatedValue   uint64      `bson:"estimatedValue" json:"estimatedValue"`
-	Height           uint32      `bson:"height" json:"height"`
-	Weight           uint32      `bson:"weight" json:"weight"`
-	ReservedDates    []DateRange `bson:"reservedDates" json:"reservedDates"`
+	ID               int64              `bson:"_id" json:"id"`
+	Title            string             `bson:"title" json:"title"`
+	Description      string             `bson:"description" json:"description"`
+	IsAvailable      bool               `bson:"isAvailable" json:"isAvailable"`
+	MayBeFree        bool               `bson:"mayBeFree" json:"mayBeFree"`
+	AskWithFee       bool               `bson:"askWithFee" json:"askWithFee"`
+	Cost             uint64             `bson:"cost" json:"cost"`
+	UserID           primitive.ObjectID `bson:"userId" json:"userId"`
+	Images           []Image            `bson:"images" json:"images"`
+	TransportOptions []Transport        `bson:"transportOptions" json:"transportOptions"`
+	ToolCategory     int                `bson:"toolCategory" json:"toolCategory"`
+	Location         Location           `bson:"location" json:"location"`
+	Rating           int32              `bson:"rating" json:"rating"`
+	EstimatedValue   uint64             `bson:"estimatedValue" json:"estimatedValue"`
+	Height           uint32             `bson:"height" json:"height"`
+	Weight           uint32             `bson:"weight" json:"weight"`
+	ReservedDates    []DateRange        `bson:"reservedDates" json:"reservedDates"`
 }
 
 // SanitizeString removes all non-alphanumeric characters from a string, except for commas, dots, minus signs, and underscores.
@@ -141,7 +142,7 @@ func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
 }
 
 // GetToolsByUserID retrieves all tools owned by a specific user.
-func (s *ToolService) GetToolsByUserID(ctx context.Context, userID string) ([]*Tool, error) {
+func (s *ToolService) GetToolsByUserID(ctx context.Context, userID primitive.ObjectID) ([]*Tool, error) {
 	cursor, err := s.Collection.Find(ctx, bson.M{"userId": userID})
 	if err != nil {
 		return nil, err

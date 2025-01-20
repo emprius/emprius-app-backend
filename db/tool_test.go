@@ -10,9 +10,16 @@ import (
 
 	qt "github.com/frankban/quicktest"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// Helper function to create ObjectID for testing
+func createTestObjectID(id string) primitive.ObjectID {
+	objectID, _ := primitive.ObjectIDFromHex(fmt.Sprintf("%024s", id))
+	return objectID
+}
 
 // toolID generates a unique int64 ID for a tool based on owner ID and title
 func toolID(ownerID string, title string) int64 {
@@ -59,7 +66,7 @@ func TestToolService(t *testing.T) {
 			MayBeFree:   true,
 			AskWithFee:  false,
 			Cost:        1000,
-			UserID:      "testuser123",
+			UserID:      createTestObjectID("123"),
 			Images: []Image{
 				{
 					Hash:    []byte("testhash"),
@@ -104,7 +111,7 @@ func TestToolService(t *testing.T) {
 			Description: "A tool to update",
 			IsAvailable: true,
 			Cost:        2000,
-			UserID:      "updateuser123",
+			UserID:      createTestObjectID("456"),
 			Location:    Location{Latitude: 111222, Longitude: 333444},
 		}
 
@@ -139,19 +146,19 @@ func TestToolService(t *testing.T) {
 			{
 				ID:       toolID("user1", "Nearby Tool 1"),
 				Title:    "Nearby Tool 1",
-				UserID:   "user1",
+				UserID:   createTestObjectID("001"),
 				Location: Location{Latitude: 100000, Longitude: 100000},
 			},
 			{
 				ID:       toolID("user2", "Nearby Tool 2"),
 				Title:    "Nearby Tool 2",
-				UserID:   "user2",
+				UserID:   createTestObjectID("002"),
 				Location: Location{Latitude: 100100, Longitude: 100100},
 			},
 			{
 				ID:       toolID("user3", "Far Tool"),
 				Title:    "Far Tool",
-				UserID:   "user3",
+				UserID:   createTestObjectID("003"),
 				Location: Location{Latitude: 200000, Longitude: 200000},
 			},
 		}
@@ -183,14 +190,14 @@ func TestToolService(t *testing.T) {
 				ID:          toolID("user4", "List Tool 1"),
 				Title:       "List Tool 1",
 				Description: "First tool for listing",
-				UserID:      "user4",
+				UserID:      createTestObjectID("004"),
 				IsAvailable: true,
 			},
 			{
 				ID:          toolID("user5", "List Tool 2"),
 				Title:       "List Tool 2",
 				Description: "Second tool for listing",
-				UserID:      "user5",
+				UserID:      createTestObjectID("005"),
 				IsAvailable: true,
 			},
 		}

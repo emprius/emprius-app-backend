@@ -22,6 +22,8 @@ echo "=> jwt is $jwt"
 
 echo "=> profile for $NAME"
 curl -s $HOST/profile -H "$jwt" | jq .
+# Store user's ObjectID for later use
+user_id=$(curl -s $HOST/profile -H "$jwt" | jq -r .data.id)
 
 echo "=> info"
 curl -s $HOST/info | jq .
@@ -68,7 +70,10 @@ curl -s $HOST/tools -X POST -H "$jwt" -H 'Content-Type: application/json' -d '{
 
 echo "=> get tools owned by the user"
 curl -s $HOST/tools -H "$jwt" | jq .
-tool_id=$(curl -s $HOST/tools -H "$jwt" | jq ".data.tools[].id")
+tool_id=$(curl -s $HOST/tools -H "$jwt" | jq -r ".data.tools[].id")
+
+echo "=> get tools by user ID"
+curl -s $HOST/tools/user/$user_id -H "$jwt" | jq .
 
 echo "=> modify a tool"
 curl -s $HOST/tools/$tool_id -X PUT -H "$jwt" -H 'Content-Type: application/json' -d '{
@@ -105,6 +110,9 @@ booking_id=$(curl -s $HOST/bookings/petitions -H "$jwt" | jq -r '.data[0].id')
 
 echo "=> get specific booking details"
 curl -s $HOST/bookings/$booking_id -H "$jwt" | jq .
+
+echo "=> accept a booking petition"
+curl -s $HOST/bookings/petitions/$booking_id/accept -X POST -H "$jwt" | jq .
 
 echo "=> mark booking as returned"
 curl -s $HOST/bookings/$booking_id/return -X POST -H "$jwt" | jq .

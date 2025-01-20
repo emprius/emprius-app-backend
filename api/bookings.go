@@ -326,7 +326,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrToolNotFound
 	}
 
-	toUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), tool.UserID)
+	toUser, err := a.database.UserService.GetUserByID(r.Context.Request.Context(), tool.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound
 	}

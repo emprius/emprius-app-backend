@@ -77,6 +77,8 @@ components:
           format: uint64
         userId:
           type: string
+          format: objectid
+          description: MongoDB ObjectID of the tool owner
         images:
           type: array
           items:
