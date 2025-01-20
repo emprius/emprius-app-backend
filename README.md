@@ -1,86 +1,100 @@
 # Emprius App Backend
 
-A RESTful API backend service for the Emprius tool sharing platform. This service provides endpoints for user management, tool sharing, and image handling.
+Backend service for the Emprius tool sharing platform. This service provides a RESTful API that enables communities to share tools among their members in a managed and organized way.
 
-[Previous content remains the same until the tool response example...]
+## Overview
 
-Response:
-```json
-{
-  "header": {
-    "success": true
-  },
-  "data": {
-    "tools": [
-      {
-        "id": 123456,
-        "title": "Tool Name",
-        "description": "Tool Description",
-        "mayBeFree": true,
-        "askWithFee": false,
-        "cost": 10,
-        "userId": "507f1f77bcf86cd799439011",
-        "images": [],
-        "transportOptions": [1, 2],
-        "category": 1,
-        "location": {
-          "latitude": 42202259,
-          "longitude": 1815044
-        },
-        "estimatedValue": 20,
-        "height": 30,
-        "weight": 40
-      }
-    ]
-  }
-}
+Emprius is a platform that facilitates tool sharing within communities. It allows users to:
+- List their tools for others to borrow
+- Search for available tools in their area
+- Manage tool bookings and returns
+- Rate borrowing experiences
+- Organize tools by categories and transport options
+
+## Key Features
+
+### User Management
+- Community-based user organization
+- User profiles with location information
+- Avatar image support
+- JWT-based authentication
+- Invitation-based registration system
+
+### Tool Management
+- List tools with detailed information:
+  - Title and description
+  - Cost and availability options (free/paid)
+  - Physical properties (height, weight)
+  - Location
+  - Transport options
+  - Multiple images
+- Categorize tools by type
+- Search tools by:
+  - Location/distance
+  - Categories
+  - Cost range
+  - Transport options
+  - Availability
+
+### Booking System
+- Request tool bookings with specific dates
+- Multiple pending requests support
+- Booking workflow:
+  - Request → Accept/Deny → Return → Rate
+- Conflict prevention for overlapping dates
+- Rating system for borrowing experiences
+
+### Image Management
+- Upload and store tool images
+- Avatar image support for user profiles
+- Hash-based image retrieval
+
+## API Documentation
+
+The complete API documentation is available in OpenAPI (Swagger) format:
+- Online documentation: [https://emprius.github.io/emprius-app-backend](https://emprius.github.io/emprius-app-backend)
+- Local file: [docs/swagger.yaml](docs/swagger.yaml)
+
+## Prerequisites
+
+- Go 1.x
+- MongoDB
+- Docker (optional)
+
+## Development Setup
+
+1. Clone the repository
+2. Install dependencies:
+```bash
+go mod download
 ```
 
-[Previous content remains the same until the booking response example...]
+3. Set up environment variables:
+- `REGISTER_TOKEN`: Token required for user registration
+- `JWT_SECRET`: Secret key for JWT token generation
 
-Response:
-```json
-{
-  "header": {
-    "success": true
-  },
-  "data": {
-    "id": "6773e44f06307bedd602fbd2",
-    "toolId": "123456",
-    "fromUserId": "507f1f77bcf86cd799439011",
-    "toUserId": "507f1f77bcf86cd799439012",
-    "startDate": 1735734735,
-    "endDate": 1735821135,
-    "contact": "test@example.com",
-    "comments": "I need this tool for a weekend project",
-    "bookingStatus": "pending",
-    "createdAt": "2024-01-01T00:00:00Z",
-    "updatedAt": "2024-01-01T00:00:00Z"
-  }
-}
+4. Run the server:
+```bash
+go run main.go
 ```
 
-[Previous content remains the same until the ratings response example...]
-
-Response:
-```json
-{
-  "header": {
-    "success": true
-  },
-  "data": {
-    "ratings": [
-      {
-        "id": "6773e44f06307bedd602fbd2",
-        "bookingId": "6773e44f06307bedd602fbd2",
-        "fromUserId": "507f1f77bcf86cd799439011",
-        "toUserId": "507f1f77bcf86cd799439012",
-        "isPending": true,
-        "ratingType": "tool"
-      }
-    ]
-  }
-}
+Or using Docker:
+```bash
+docker-compose up -d
 ```
 
-[Rest of the content remains exactly the same...]
+## Testing
+
+Run the test suite:
+```bash
+go test -v ./...
+```
+
+Run linting:
+```bash
+golangci-lint run
+```
+
+## License
+
+This project is licensed under the terms of the LICENSE file included in the repository.
