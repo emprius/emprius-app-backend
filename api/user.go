@@ -125,14 +125,22 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 	return user, nil
 }
 
-func (a *API) getUserByID(userID string) (*db.User, error) {
-	objID, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid user id format: %w", err)
+// validateObjectID checks if a string is a valid MongoDB ObjectID
+func validateObjectID(id string) error {
+	if _, err := primitive.ObjectIDFromHex(id); err != nil {
+		return ErrInvalidUserID.WithErr(err)
 	}
+	return nil
+}
+
+func (a *API) getUserByID(userID string) (*db.User, error) {
+	if err := validateObjectID(userID); err != nil {
+		return nil, err
+	}
+	objID, _ := primitive.ObjectIDFromHex(userID) // Safe to ignore error as we already validated
 	user, err := a.database.UserService.GetUserByID(context.Background(), objID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query user: %w", err)
+		return nil, ErrUserNotFound.WithErr(err)
 	}
 	return user, nil
 }

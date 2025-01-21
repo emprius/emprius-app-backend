@@ -93,6 +93,10 @@ var (
 		Code:    http.StatusNotFound,
 		Message: "user not found",
 	}
+	ErrInvalidUserID = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid user id format",
+	}
 )
 
 // Permission errors

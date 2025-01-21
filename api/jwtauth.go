@@ -17,12 +17,13 @@ import (
 func (a *API) authenticator(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, claims, err := jwtauth.FromContext(r.Context())
-		if err != nil {
-			http.Error(w, ErrUnauthorized.WithErr(err).Error(), http.StatusUnauthorized)
+		if err != nil || token == nil {
+			http.Error(w, ErrUnauthorized.Error(), http.StatusUnauthorized)
 			return
 		}
-		if token == nil || jwt.Validate(token, jwt.WithRequiredClaim("userId")) != nil {
-			http.Error(w, ErrUnauthorized.WithErr(fmt.Errorf("missing required claim: userId")).Error(), http.StatusUnauthorized)
+
+		if err := jwt.Validate(token, jwt.WithRequiredClaim("userId")); err != nil {
+			http.Error(w, ErrUnauthorized.Error(), http.StatusUnauthorized)
 			return
 		}
 		// Retrieve the `userId` from the claims and add it to the HTTP header
