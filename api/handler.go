@@ -30,9 +30,15 @@ type HTTPContext struct {
 	Request *http.Request
 }
 
-// URLParam is a wrapper around go-chi to get a URL parameter (specified in the path pattern as {key})
+// URLParam gets a URL parameter. For path parameters (specified in the path pattern as {key}),
+// it uses chi.URLParam. For query parameters (?key=value), it uses URL.Query().Get().
 func (h *HTTPContext) URLParam(key string) string {
-	return chi.URLParam(h.Request, key)
+	// First try path parameter
+	if param := chi.URLParam(h.Request, key); param != "" {
+		return param
+	}
+	// Then try query parameter
+	return h.Request.URL.Query().Get(key)
 }
 
 // Send replies the request with the provided message.
@@ -135,10 +141,18 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			if e, ok := err.(*HTTPError); ok {
 				httpErr = e
 			} else {
-				httpErr = ErrInternalServerError.WithErr(err)
+				// Check if it's a known error type
+				switch err.Error() {
+				case "invalid credentials":
+					httpErr = ErrWrongLogin
+				case "booking dates conflict with existing booking":
+					httpErr = ErrBookingDatesConflict
+				default:
+					httpErr = ErrInternalServerError.WithErr(err)
+				}
 			}
 
-			resp.Header.Message = httpErr.Message
+			resp.Header.Message = httpErr.Error()
 			msg, marshalErr := json.Marshal(resp)
 			if marshalErr != nil {
 				log.Error().Err(marshalErr).Msg("failed to marshal response")

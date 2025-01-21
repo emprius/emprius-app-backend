@@ -157,17 +157,29 @@ func (a *API) toolsByUserID(userID string) ([]db.Tool, error) {
 	return result, nil
 }
 
-func (a *API) editTool(id int64, newTool *Tool) error {
+func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 	tool, err := a.tool(id)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if tool == nil {
-		return ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
+		return 0, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
 	}
 
 	if newTool.Title != "" {
-		tool.Title = newTool.Title
+		// If title changes, we need to update the ID since it's derived from the title
+		oldID := tool.ID
+		tool.Title = db.SanitizeString(newTool.Title)
+		tool.ID = toolID(userID, tool.Title)
+		// Delete the old tool and insert the new one with updated ID
+		if err := a.deleteTool(oldID); err != nil {
+			return 0, err
+		}
+		_, err = a.database.ToolService.InsertTool(context.Background(), tool)
+		if err != nil {
+			return 0, ErrInternalServerError.WithErr(err)
+		}
+		return tool.ID, nil
 	}
 	if newTool.Description != "" {
 		tool.Description = newTool.Description
@@ -192,7 +204,7 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 	}
 	if newTool.Category != 0 {
 		if newTool.Category < 0 || newTool.Category >= len(a.toolCategories()) {
-			return ErrInvalidToolCategory.WithErr(fmt.Errorf("category %d is not valid", newTool.Category))
+			return 0, ErrInvalidToolCategory.WithErr(fmt.Errorf("category %d is not valid", newTool.Category))
 		}
 		tool.ToolCategory = newTool.Category
 	}
@@ -205,7 +217,7 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 	if len(newTool.Images) > 0 {
 		images, err := a.imageListFromSlice(newTool.Images)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		dbImages := []db.Image{}
 		for _, i := range images {
@@ -220,7 +232,7 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		// Validate and convert transport options
 		transports, err := a.database.TransportService.GetAllTransports(context.Background())
 		if err != nil {
-			return ErrInternalServerError.WithErr(err)
+			return 0, ErrInternalServerError.WithErr(err)
 		}
 		validTransportIDs := make(map[int64]bool)
 		for _, t := range transports {
@@ -230,7 +242,7 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 		transportOptions := make([]db.Transport, len(newTool.TransportOptions))
 		for i, id := range newTool.TransportOptions {
 			if !validTransportIDs[int64(id)] {
-				return ErrInvalidTransportOption.WithErr(fmt.Errorf("transport option %d is not valid", id))
+				return 0, ErrInvalidTransportOption.WithErr(fmt.Errorf("transport option %d is not valid", id))
 			}
 			transportOptions[i] = db.Transport{ID: int64(id)}
 		}
@@ -253,13 +265,14 @@ func (a *API) editTool(id int64, newTool *Tool) error {
 	}
 	err = a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 	if err != nil {
-		return ErrInternalServerError.WithErr(err)
+		return 0, ErrInternalServerError.WithErr(err)
 	}
-	return nil
+	return id, nil
 }
 
 func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Tool, error) {
 	opts := db.SearchToolsOptions{
+		SearchTerm:       query.SearchTerm,
 		Categories:       query.Categories,
 		MayBeFree:        query.MayBeFree,
 		MaxCost:          query.MaxCost,
@@ -330,7 +343,32 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
 
+	log.Debug().
+		Str("url", r.Context.Request.URL.String()).
+		Str("query", r.Context.Request.URL.RawQuery).
+		Msg("received search request")
+
 	searchTerm := r.Context.URLParam("searchTerm")
+	log.Debug().
+		Str("rawSearchTerm", searchTerm).
+		Msg("parsed search term")
+
+	searchTerm = db.SanitizeString(searchTerm)
+	log.Debug().
+		Str("sanitizedSearchTerm", searchTerm).
+		Msg("sanitized search term")
+
+	// Get distance parameter
+	distanceStr := r.Context.URLParam("distance")
+	var distance int
+	if distanceStr != "" {
+		var err error
+		distance, err = strconv.Atoi(distanceStr)
+		if err != nil {
+			return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid distance value: %s", distanceStr))
+		}
+	}
+
 	maxCostStr := r.Context.URLParam("maxCost")
 	mayBeFreeStr := r.Context.URLParam("maybeFree")
 	availableFromStr := r.Context.URLParam("availableFrom")
@@ -394,11 +432,12 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	}
 
 	query := ToolSearch{
-		Term:             searchTerm,
+		SearchTerm:       searchTerm,
 		Categories:       categories,
 		MaxCost:          maxCost,
 		MayBeFree:        mayBeFree,
 		AvailableFrom:    availableFrom,
+		Distance:         distance,
 		TransportOptions: transportOptions,
 	}
 	user, err := a.getUserByID(r.UserID)
@@ -483,8 +522,9 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &t); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
-	if err := a.editTool(id, &t); err != nil {
+	newID, err := a.editTool(id, &t, r.UserID)
+	if err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return &ToolID{ID: newID}, nil
 }

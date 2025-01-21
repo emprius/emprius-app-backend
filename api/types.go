@@ -75,7 +75,7 @@ type ToolsWrapper struct {
 
 // ToolSearch is the type of the tool search
 type ToolSearch struct {
-	Term             string  `json:"term"`
+	SearchTerm       string  `json:"searchTerm"`
 	Categories       []int   `json:"categories"`
 	Distance         int     `json:"distance"`
 	MaxCost          *uint64 `json:"maxCost"`

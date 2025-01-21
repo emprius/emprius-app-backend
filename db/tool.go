@@ -168,12 +168,25 @@ func (s *ToolService) GetToolsByUserID(ctx context.Context, userID primitive.Obj
 func (s *ToolService) UpdateToolFields(ctx context.Context, id int64, updates map[string]interface{}) error {
 	filter := bson.M{"_id": id}
 	update := bson.M{"$set": updates}
-	_, err := s.Collection.UpdateOne(ctx, filter, update)
-	return err
+	log.Debug().
+		Int64("id", id).
+		Interface("updates", updates).
+		Msg("updating tool fields")
+	result, err := s.Collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		return err
+	}
+	log.Debug().
+		Int64("id", id).
+		Int64("matchedCount", result.MatchedCount).
+		Int64("modifiedCount", result.ModifiedCount).
+		Msg("tool update result")
+	return nil
 }
 
 // SearchToolsOptions represents the search criteria for tools.
 type SearchToolsOptions struct {
+	SearchTerm       string
 	Categories       []int
 	MayBeFree        *bool
 	MaxCost          *uint64
@@ -184,69 +197,82 @@ type SearchToolsOptions struct {
 
 // SearchTools searches for tools based on various criteria.
 func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) ([]*Tool, error) {
-	// Start with all tools
-	tools, err := s.GetAllTools(ctx)
+	// Build the filter
+	filter := bson.M{}
+
+	// Add title search if search term is provided
+	if opts.SearchTerm != "" {
+		sanitizedTerm := SanitizeString(opts.SearchTerm)
+		log.Debug().
+			Str("searchTerm", opts.SearchTerm).
+			Str("sanitizedTerm", sanitizedTerm).
+			Msg("building search filter")
+
+		// Simple substring match
+		filter["title"] = bson.M{
+			"$regex": sanitizedTerm,
+		}
+		log.Debug().
+			Interface("filter", filter).
+			Msg("built search filter")
+	}
+
+	// Add category filter
+	if len(opts.Categories) > 0 {
+		filter["toolCategory"] = bson.M{"$in": opts.Categories}
+	}
+
+	// Add mayBeFree filter
+	if opts.MayBeFree != nil {
+		filter["mayBeFree"] = *opts.MayBeFree
+	}
+
+	// Add maxCost filter (only if greater than 0)
+	if opts.MaxCost != nil && *opts.MaxCost > 0 {
+		filter["cost"] = bson.M{"$lte": *opts.MaxCost}
+	}
+
+	// Add transport options filter
+	if len(opts.TransportOptions) > 0 {
+		filter["transportOptions.id"] = bson.M{"$in": opts.TransportOptions}
+	}
+
+	// Execute the query
+	log.Debug().Interface("filter", filter).Msg("executing search with filter")
+	cursor, err := s.Collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-
-	// Filter tools based on criteria
-	var filteredTools []*Tool
-	for _, tool := range tools {
-		// Check categories
-		if len(opts.Categories) > 0 {
-			found := false
-			for _, category := range opts.Categories {
-				if tool.ToolCategory == category {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Warn().Msg("could not close db cursor")
 		}
+	}()
 
-		// Check mayBeFree
-		if opts.MayBeFree != nil && tool.MayBeFree != *opts.MayBeFree {
-			continue
+	// Decode results
+	var tools []*Tool
+	for cursor.Next(ctx) {
+		var tool Tool
+		if err := cursor.Decode(&tool); err != nil {
+			return nil, err
 		}
+		log.Debug().
+			Int64("id", tool.ID).
+			Str("title", tool.Title).
+			Msg("found matching tool")
 
-		// Check maxCost
-		if opts.MaxCost != nil && tool.Cost > *opts.MaxCost {
-			continue
-		}
-
-		// Check distance
+		// Check distance if required (this can't be done in MongoDB query)
 		if opts.Distance > 0 && opts.Location != nil {
 			if !WithinCircumference(tool.Location, *opts.Location, opts.Distance) {
 				continue
 			}
 		}
 
-		// Check transport options
-		if len(opts.TransportOptions) > 0 {
-			found := false
-			for _, reqTransport := range opts.TransportOptions {
-				for _, toolTransport := range tool.TransportOptions {
-					if toolTransport.ID == int64(reqTransport) {
-						found = true
-						break
-					}
-				}
-				if found {
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-		}
-
-		filteredTools = append(filteredTools, tool)
+		tools = append(tools, &tool)
 	}
 
-	return filteredTools, nil
+	log.Debug().Int("total_tools", len(tools)).Msg("search completed")
+	return tools, nil
 }
 
 // CountTools returns the total number of tools.

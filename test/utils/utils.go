@@ -20,77 +20,6 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
-// RegisterAndLogin registers a new user and returns the JWT token
-func (s *TestService) RegisterAndLogin(email, name, password string) string {
-	// Register
-	_, code := s.Request(http.MethodPost, "",
-		&api.Register{
-			UserEmail:         email,
-			RegisterAuthToken: RegisterToken,
-			UserProfile: api.UserProfile{
-				Name:      name,
-				Community: "testCommunity",
-				Password:  password,
-				Location: &db.Location{
-					Latitude:  41695384000, // 41.695384 degrees in microdegrees
-					Longitude: 2492793000,  // 2.492793 degrees in microdegrees
-				},
-			},
-		},
-		"register",
-	)
-	qt.Assert(s.t, code, qt.Equals, 200)
-
-	// Login
-	resp, code := s.Request(http.MethodPost, "",
-		&api.Login{
-			Email:    email,
-			Password: password,
-		},
-		"login",
-	)
-	qt.Assert(s.t, code, qt.Equals, 200)
-
-	var response struct {
-		Data api.LoginResponse `json:"data"`
-	}
-	err := json.Unmarshal(resp, &response)
-	qt.Assert(s.t, err, qt.IsNil)
-	return response.Data.Token
-}
-
-// CreateTool creates a new tool and returns its ID
-func (s *TestService) CreateTool(jwt string, title string) int64 {
-	resp, code := s.Request(http.MethodPost, jwt,
-		map[string]interface{}{
-			"title":          title,
-			"description":    "Test tool",
-			"mayBeFree":      true,
-			"askWithFee":     false,
-			"cost":           10,
-			"category":       1,
-			"estimatedValue": 20,
-			"height":         30,
-			"weight":         40,
-			"location": map[string]int64{
-				"latitude":  41695384000, // 41.695384 degrees in microdegrees
-				"longitude": 2492793000,  // 2.492793 degrees in microdegrees
-			},
-		},
-		"tools",
-	)
-	qt.Assert(s.t, code, qt.Equals, 200)
-
-	var response struct {
-		Data struct {
-			ID int64 `json:"id"`
-		} `json:"data"`
-	}
-	err := json.Unmarshal(resp, &response)
-	qt.Assert(s.t, err, qt.IsNil)
-	return response.Data.ID
-}
-
 const (
 	jwtSecret = "secret"
 	// RegisterToken is the test register token for authentication.
@@ -169,4 +98,75 @@ func (s *TestService) Request(method, jwt string, jsonBody any, urlPath ...strin
 		s.t.Logf("read error: %v", err)
 	}
 	return data, resp.StatusCode
+}
+
+// RegisterAndLogin registers a new user and returns the JWT token
+func (s *TestService) RegisterAndLogin(email, name, password string) string {
+	// Register
+	_, code := s.Request(http.MethodPost, "",
+		&api.Register{
+			UserEmail:         email,
+			RegisterAuthToken: RegisterToken,
+			UserProfile: api.UserProfile{
+				Name:      name,
+				Community: "testCommunity",
+				Password:  password,
+				Location: &db.Location{
+					Latitude:  41695384000, // 41.695384 degrees in microdegrees
+					Longitude: 2492793000,  // 2.492793 degrees in microdegrees
+				},
+			},
+		},
+		"register",
+	)
+	qt.Assert(s.t, code, qt.Equals, 200)
+
+	// Login
+	resp, code := s.Request(http.MethodPost, "",
+		&api.Login{
+			Email:    email,
+			Password: password,
+		},
+		"login",
+	)
+	qt.Assert(s.t, code, qt.Equals, 200)
+
+	var response struct {
+		Data api.LoginResponse `json:"data"`
+	}
+	err := json.Unmarshal(resp, &response)
+	qt.Assert(s.t, err, qt.IsNil)
+	return response.Data.Token
+}
+
+// CreateTool creates a new tool and returns its ID
+func (s *TestService) CreateTool(jwt string, title string) int64 {
+	resp, code := s.Request(http.MethodPost, jwt,
+		map[string]interface{}{
+			"title":          title,
+			"description":    "Test tool",
+			"mayBeFree":      true,
+			"askWithFee":     false,
+			"cost":           10,
+			"category":       1,
+			"estimatedValue": 20,
+			"height":         30,
+			"weight":         40,
+			"location": map[string]int64{
+				"latitude":  41695384000, // 41.695384 degrees in microdegrees
+				"longitude": 2492793000,  // 2.492793 degrees in microdegrees
+			},
+		},
+		"tools",
+	)
+	qt.Assert(s.t, code, qt.Equals, 200)
+
+	var response struct {
+		Data struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(resp, &response)
+	qt.Assert(s.t, err, qt.IsNil)
+	return response.Data.ID
 }

@@ -43,7 +43,7 @@ var (
 	}
 	ErrWrongLogin = &HTTPError{
 		Code:    http.StatusBadRequest,
-		Message: "invalid email or password",
+		Message: "invalid credentials",
 	}
 )
 
@@ -130,27 +130,27 @@ var (
 // Conflict errors
 var (
 	ErrBookingDatesConflict = &HTTPError{
-		Code:    http.StatusConflict,
+		Code:    http.StatusBadRequest,
 		Message: "booking dates conflict with existing booking",
 	}
 	ErrBookingAlreadyReturned = &HTTPError{
-		Code:    http.StatusConflict,
+		Code:    http.StatusBadRequest,
 		Message: "booking already marked as returned",
 	}
 	ErrBookingAlreadyRated = &HTTPError{
-		Code:    http.StatusConflict,
+		Code:    http.StatusBadRequest,
 		Message: "booking already rated",
 	}
 	ErrCanOnlyAcceptPending = &HTTPError{
-		Code:    http.StatusConflict,
+		Code:    http.StatusBadRequest,
 		Message: "can only accept pending petitions",
 	}
 	ErrCanOnlyDenyPending = &HTTPError{
-		Code:    http.StatusConflict,
+		Code:    http.StatusBadRequest,
 		Message: "can only deny pending petitions",
 	}
 	ErrCanOnlyCancelPending = &HTTPError{
-		Code:    http.StatusConflict,
+		Code:    http.StatusBadRequest,
 		Message: "can only cancel pending requests",
 	}
 )
