@@ -1,6 +1,9 @@
 package api
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 // HTTPError represents an error with an HTTP status code
 type HTTPError struct {
@@ -10,6 +13,22 @@ type HTTPError struct {
 
 func (e *HTTPError) Error() string {
 	return e.Message
+}
+
+// IsErr checks if the HTTPError is the same as the given error.
+// It compares the error code and the base error message, without taking into account the additional error details
+// introduced by WithErr.
+func (e *HTTPError) IsErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Split(e.Error(), ":")[0] == strings.Split(err.Error(), ":")[0]
+}
+
+// WithErr appends an error message to the HTTPError message.
+func (e *HTTPError) WithErr(err error) *HTTPError {
+	e.Message += ": " + err.Error()
+	return e
 }
 
 // Authentication errors

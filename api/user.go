@@ -16,10 +16,10 @@ import (
 func (a *API) registerHandler(r *Request) (interface{}, error) {
 	userInfo := Register{}
 	if err := json.Unmarshal(r.Data, &userInfo); err != nil {
-		return nil, ErrInvalidRequestBodyData
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 	if userInfo.RegisterAuthToken != a.registerAuthToken {
-		return nil, ErrInvalidRegisterAuthToken
+		return nil, ErrInvalidRegisterAuthToken.WithErr(fmt.Errorf("invalid registration token provided"))
 	}
 	user := db.User{
 		Email:    userInfo.UserEmail,
@@ -67,11 +67,11 @@ func (a *API) loginHandler(r *Request) (interface{}, error) {
 	// Get the user name from the request body
 	loginInfo := Login{}
 	if err := json.Unmarshal(r.Data, &loginInfo); err != nil {
-		return nil, ErrInvalidRequestBodyData
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 	user, err := a.database.UserService.GetUserByEmail(context.Background(), loginInfo.Email)
 	if err != nil {
-		return nil, ErrWrongLogin
+		return nil, ErrWrongLogin.WithErr(err)
 	}
 	if !bytes.Equal(user.Password, hashPassword(loginInfo.Password)) {
 		return nil, fmt.Errorf("invalid credentials")
@@ -114,18 +114,12 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 func (a *API) getUserHandler(r *Request) (interface{}, error) {
 	userID, err := primitive.ObjectIDFromHex(r.Context.URLParam("id"))
 	if err != nil {
-		return nil, &HTTPError{
-			Code:    404,
-			Message: "user not found",
-		}
+		return nil, ErrUserNotFound.WithErr(fmt.Errorf("invalid user id format: %s", r.Context.URLParam("id")))
 	}
 
 	user, err := a.database.UserService.GetUserByID(context.Background(), userID)
 	if err != nil {
-		return nil, &HTTPError{
-			Code:    404,
-			Message: "user not found",
-		}
+		return nil, ErrUserNotFound.WithErr(err)
 	}
 
 	return user, nil
@@ -146,7 +140,7 @@ func (a *API) userProfileHandler(r *Request) (interface{}, error) {
 func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	newUserInfo := UserProfile{}
 	if err := json.Unmarshal(r.Data, &newUserInfo); err != nil {
-		return nil, ErrInvalidRequestBodyData
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 	user, err := a.database.UserService.GetUserByEmail(context.Background(), r.UserID)
 	if err != nil {
@@ -185,7 +179,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	}
 	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
 	if err != nil {
-		return nil, fmt.Errorf(ErrCouldNotInsertToDatabase.Error()+": %w", err)
+		return nil, ErrCouldNotInsertToDatabase.WithErr(err)
 	}
 	return &user, nil
 }

@@ -120,18 +120,18 @@ func (a *API) router() http.Handler {
 		log.Info().Msg("register route POST /bookings")
 		r.Post("/bookings", a.routerHandler(func(r *Request) (interface{}, error) {
 			if r.UserID == "" {
-				return nil, fmt.Errorf("unauthorized")
+				return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 			}
 
 			var req CreateBookingRequest
 			if err := json.Unmarshal(r.Data, &req); err != nil {
-				return nil, fmt.Errorf("invalid request body")
+				return nil, ErrInvalidRequestBodyData.WithErr(err)
 			}
 
 			// Get tool to verify it exists and get owner ID
 			toolID, err := strconv.ParseInt(req.ToolID, 10, 64)
 			if err != nil {
-				return nil, fmt.Errorf("invalid tool ID")
+				return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID format: %s", req.ToolID))
 			}
 
 			tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
@@ -139,18 +139,18 @@ func (a *API) router() http.Handler {
 				return nil, err
 			}
 			if tool == nil {
-				return nil, fmt.Errorf("tool not found")
+				return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
 			}
 
 			// Get user IDs from database
 			fromUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
 			if err != nil {
-				return nil, fmt.Errorf("invalid user ID: %w", err)
+				return nil, ErrUserNotFound.WithErr(err)
 			}
 
 			toUser, err := a.database.UserService.GetUserByID(r.Context.Request.Context(), tool.UserID)
 			if err != nil {
-				return nil, fmt.Errorf("invalid tool owner ID: %w", err)
+				return nil, ErrUserNotFound.WithErr(fmt.Errorf("tool owner not found: %w", err))
 			}
 
 			// Convert tool ID to string
@@ -228,19 +228,19 @@ func (a *API) infoHandler(r *Request) (interface{}, error) {
 	// Get user count
 	userCount, err := a.database.UserService.CountUsers(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count users: %w", err)
+		return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to count users: %w", err))
 	}
 
 	// Get tool count
 	toolCount, err := a.database.ToolService.CountTools(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to count tools: %w", err)
+		return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to count tools: %w", err))
 	}
 
 	// Get all transports
 	transports, err := a.database.TransportService.GetAllTransports(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get transports: %w", err)
+		return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to get transports: %w", err))
 	}
 
 	// Convert *Transport slice to Transport slice

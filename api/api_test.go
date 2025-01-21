@@ -257,6 +257,39 @@ func TestBookingStatusTransitions(t *testing.T) {
 	qt.Assert(t, updatedBooking3.BookingStatus, qt.Equals, db.BookingStatusCancelled)
 }
 
+func TestHTTPErrorWithErr(t *testing.T) {
+	c := qt.New(t)
+
+	baseErr := &HTTPError{
+		Code:    400,
+		Message: "base error",
+	}
+
+	specificErr := fmt.Errorf("specific error details")
+
+	resultErr := baseErr.WithErr(specificErr)
+
+	c.Assert(resultErr.Message, qt.Equals, "base error: specific error details")
+	c.Assert(resultErr.Code, qt.Equals, 400)
+}
+
+func TestImageErrors(t *testing.T) {
+	c := qt.New(t)
+	a := testAPI(t)
+
+	// Test empty image data
+	_, err := a.addImage("empty", []byte{})
+	c.Assert(ErrInvalidImageFormat.IsErr(err), qt.IsTrue)
+
+	// Test invalid image data
+	_, err = a.addImage("invalid", []byte("not an image"))
+	c.Assert(ErrInvalidImageFormat.IsErr(err), qt.IsTrue)
+
+	// Test invalid image hash
+	_, err = a.image([]byte("invalid hash"))
+	c.Assert(ErrImageNotFound.IsErr(err), qt.IsTrue)
+}
+
 func TestImage(t *testing.T) {
 	a := testAPI(t)
 

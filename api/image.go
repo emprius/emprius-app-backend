@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"image"
 	_ "image/gif"  // Import image decoders for supported formats
 	_ "image/jpeg" // JPEG support
@@ -20,7 +21,7 @@ import (
 // checkIfDataIsAnImage checks if the given data is an image.
 func checkIfDataIsAnImage(data []byte) error {
 	if len(data) == 0 {
-		return ErrInvalidImageFormat
+		return ErrInvalidImageFormat.WithErr(fmt.Errorf("empty image data"))
 	}
 
 	// Create a reader from the byte slice
@@ -29,12 +30,12 @@ func checkIfDataIsAnImage(data []byte) error {
 	// Decode the image
 	_, format, err := image.Decode(reader)
 	if err != nil {
-		return ErrInvalidImageFormat
+		return ErrInvalidImageFormat.WithErr(err)
 	}
 
 	// Ensure the format is not empty
 	if format == "" {
-		return ErrInvalidImageFormat
+		return ErrInvalidImageFormat.WithErr(fmt.Errorf("unknown image format"))
 	}
 
 	return nil
@@ -58,13 +59,13 @@ func (a *API) addImage(name string, data []byte) (*db.Image, error) {
 		}
 		_, err := a.database.ImageService.InsertImage(context.Background(), image)
 		if err != nil {
-			return nil, ErrCouldNotInsertToDatabase
+			return nil, ErrCouldNotInsertToDatabase.WithErr(err)
 		}
 		log.Debug().Msgf("added image %s", image.Hash.String())
 		return image, nil
 	}
 	if err != nil {
-		return nil, ErrInternalServerError
+		return nil, ErrInternalServerError.WithErr(err)
 	}
 	return image, nil
 }
@@ -73,9 +74,9 @@ func (a *API) image(hash []byte) (*db.Image, error) {
 	image, err := a.database.ImageService.GetImage(context.Background(), hash)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return nil, ErrImageNotFound
+			return nil, ErrImageNotFound.WithErr(fmt.Errorf("image with hash %x not found", hash))
 		}
-		return nil, ErrInternalServerError
+		return nil, ErrInternalServerError.WithErr(err)
 	}
 	return image, nil
 }
@@ -87,9 +88,9 @@ func (a *API) imageListFromSlice(hashes []types.HexBytes) ([]db.Image, error) {
 		image, err := a.database.ImageService.GetImage(ctx, hash)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
-				return nil, ErrImageNotFound
+				return nil, ErrImageNotFound.WithErr(fmt.Errorf("image with hash %x not found", hash))
 			}
-			return nil, ErrInternalServerError
+			return nil, ErrInternalServerError.WithErr(err)
 		}
 		images = append(images, *image)
 	}
@@ -99,16 +100,16 @@ func (a *API) imageListFromSlice(hashes []types.HexBytes) ([]db.Image, error) {
 // POST /image uploads an image to the server.
 func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, ErrUnauthorized
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
 
 	image := db.Image{}
 	if err := json.Unmarshal(r.Data, &image); err != nil {
-		return nil, ErrInvalidJSON
+		return nil, ErrInvalidJSON.WithErr(err)
 	}
 
 	if len(image.Content) == 0 {
-		return nil, ErrInvalidImageFormat
+		return nil, ErrInvalidImageFormat.WithErr(fmt.Errorf("empty image content"))
 	}
 
 	dbImage, err := a.addImage(image.Name, image.Content)
@@ -122,13 +123,13 @@ func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 // GET /image/:hash returns the image with the given hash.
 func (a *API) imageHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, ErrUnauthorized
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
 
 	hash := r.Context.URLParam("hash")
 	hashBytes, err := hex.DecodeString(hash)
 	if err != nil {
-		return nil, ErrInvalidHash
+		return nil, ErrInvalidHash.WithErr(err)
 	}
 
 	image, err := a.image(hashBytes)

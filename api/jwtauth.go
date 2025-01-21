@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -17,11 +18,11 @@ func (a *API) authenticator(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, claims, err := jwtauth.FromContext(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+			http.Error(w, ErrUnauthorized.WithErr(err).Error(), http.StatusUnauthorized)
 			return
 		}
 		if token == nil || jwt.Validate(token, jwt.WithRequiredClaim("userId")) != nil {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			http.Error(w, ErrUnauthorized.WithErr(fmt.Errorf("missing required claim: userId")).Error(), http.StatusUnauthorized)
 			return
 		}
 		// Retrieve the `userId` from the claims and add it to the HTTP header
@@ -37,16 +38,16 @@ func (a *API) authenticator(next http.Handler) http.Handler {
 func (a *API) makeToken(id string) (*LoginResponse, error) {
 	j := jwt.New()
 	if err := j.Set("userId", id); err != nil {
-		return nil, err
+		return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to set userId claim: %w", err))
 	}
 	if err := j.Set(jwt.ExpirationKey, time.Now().Add(jwtExpiration).Unix()); err != nil {
-		return nil, err
+		return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to set expiration claim: %w", err))
 	}
 	lr := LoginResponse{}
 	lr.Expirity = time.Now().Add(jwtExpiration)
 	jmap, err := j.AsMap(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to convert token to map: %w", err))
 	}
 	_, lr.Token, _ = a.auth.Encode(jmap)
 	return &lr, nil
