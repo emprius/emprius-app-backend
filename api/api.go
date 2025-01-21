@@ -143,7 +143,7 @@ func (a *API) router() http.Handler {
 			}
 
 			// Get user IDs from database
-			fromUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+			fromUser, err := a.getUserByID(r.UserID)
 			if err != nil {
 				return nil, ErrUserNotFound.WithErr(err)
 			}

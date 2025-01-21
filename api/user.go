@@ -44,8 +44,8 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		return nil, fmt.Errorf("could not add user: %w", err)
 	}
 
-	// Generate a new token with the user name as the subject
-	token, err := a.makeToken(user.Email)
+	// Generate a new token with the user's ObjectID
+	token, err := a.makeToken(user.ID.Hex())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -77,8 +77,8 @@ func (a *API) loginHandler(r *Request) (interface{}, error) {
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
-	// Generate a new token with the user name as the subject
-	token, err := a.makeToken(user.Email)
+	// Generate a new token with the user's ObjectID
+	token, err := a.makeToken(user.ID.Hex())
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -125,8 +125,12 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 	return user, nil
 }
 
-func (a *API) userByEmail(userID string) (*db.User, error) {
-	user, err := a.database.UserService.GetUserByEmail(context.Background(), userID)
+func (a *API) getUserByID(userID string) (*db.User, error) {
+	objID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id format: %w", err)
+	}
+	user, err := a.database.UserService.GetUserByID(context.Background(), objID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user: %w", err)
 	}
@@ -134,7 +138,7 @@ func (a *API) userByEmail(userID string) (*db.User, error) {
 }
 
 func (a *API) userProfileHandler(r *Request) (interface{}, error) {
-	return a.userByEmail(r.UserID)
+	return a.getUserByID(r.UserID)
 }
 
 func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
@@ -142,7 +146,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &newUserInfo); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
-	user, err := a.database.UserService.GetUserByEmail(context.Background(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user profile: %w", err)
 	}

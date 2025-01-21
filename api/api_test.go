@@ -98,22 +98,21 @@ func testAPI(t *testing.T) *API {
 func TestBookingDateConflicts(t *testing.T) {
 	a := testAPI(t)
 
-	// Create users
+	// Create users and get their IDs
 	err := a.addUser(&testUser1) // Tool owner
 	qt.Assert(t, err, qt.IsNil)
-	err = a.addUser(&testUser2) // Tool requester
-	qt.Assert(t, err, qt.IsNil)
-
-	// Create a tool
-	toolID, err := a.addTool(&testTool1, testUser1.Email)
-	qt.Assert(t, err, qt.IsNil)
-	toolIDStr := fmt.Sprintf("%d", toolID)
-
-	// Get user IDs
 	user1, err := a.database.UserService.GetUserByEmail(context.Background(), testUser1.Email)
+	qt.Assert(t, err, qt.IsNil)
+
+	err = a.addUser(&testUser2) // Tool requester
 	qt.Assert(t, err, qt.IsNil)
 	user2, err := a.database.UserService.GetUserByEmail(context.Background(), testUser2.Email)
 	qt.Assert(t, err, qt.IsNil)
+
+	// Create a tool
+	toolID, err := a.addTool(&testTool1, user1.ID.Hex())
+	qt.Assert(t, err, qt.IsNil)
+	toolIDStr := fmt.Sprintf("%d", toolID)
 
 	startDate := time.Now().Add(24 * time.Hour)
 	endDate := time.Now().Add(48 * time.Hour)
@@ -163,14 +162,19 @@ func TestBookingDateConflicts(t *testing.T) {
 func TestBookingStatusTransitions(t *testing.T) {
 	a := testAPI(t)
 
-	// Create users
+	// Create users and get their IDs
 	err := a.addUser(&testUser1) // Tool owner
 	qt.Assert(t, err, qt.IsNil)
+	user1, err := a.database.UserService.GetUserByEmail(context.Background(), testUser1.Email)
+	qt.Assert(t, err, qt.IsNil)
+
 	err = a.addUser(&testUser2) // Tool requester
+	qt.Assert(t, err, qt.IsNil)
+	user2, err := a.database.UserService.GetUserByEmail(context.Background(), testUser2.Email)
 	qt.Assert(t, err, qt.IsNil)
 
 	// Create a tool
-	toolID, err := a.addTool(&testTool1, testUser1.Email)
+	toolID, err := a.addTool(&testTool1, user1.ID.Hex())
 	qt.Assert(t, err, qt.IsNil)
 	toolIDStr := fmt.Sprintf("%d", toolID)
 
@@ -182,12 +186,6 @@ func TestBookingStatusTransitions(t *testing.T) {
 		Contact:   "test@test.com",
 		Comments:  "Test booking",
 	}
-
-	// Get user IDs
-	user1, err := a.database.UserService.GetUserByEmail(context.Background(), testUser1.Email)
-	qt.Assert(t, err, qt.IsNil)
-	user2, err := a.database.UserService.GetUserByEmail(context.Background(), testUser2.Email)
-	qt.Assert(t, err, qt.IsNil)
 
 	// Create booking
 	createdBooking, err := a.database.BookingService.Create(context.Background(), booking, user2.ID, user1.ID)

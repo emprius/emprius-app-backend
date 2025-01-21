@@ -36,7 +36,7 @@ func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
@@ -61,7 +61,7 @@ func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
@@ -104,7 +104,7 @@ func (a *API) HandleAcceptPetition(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
@@ -147,7 +147,7 @@ func (a *API) HandleDenyPetition(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
@@ -190,7 +190,7 @@ func (a *API) HandleCancelRequest(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
@@ -233,7 +233,7 @@ func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
@@ -271,7 +271,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
@@ -302,7 +302,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	fromUser, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	fromUser, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
@@ -358,7 +358,7 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	}
 
 	// Get user from database
-	user, err := a.database.UserService.GetUserByEmail(r.Context.Request.Context(), r.UserID)
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}

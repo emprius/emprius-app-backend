@@ -116,13 +116,15 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 				}())
 			}
 		}
-		handlerResp, err := handlerFunc(
-			&Request{
-				Data:    body,
-				Context: hc,
-				Path:    strings.Split(req.URL.Path, "/")[1:],
-				UserID:  req.Header.Get("X-User-ID"),
-			})
+		// Create request object with user ID from JWT
+		request := &Request{
+			Data:    body,
+			Context: hc,
+			Path:    strings.Split(req.URL.Path, "/")[1:],
+			UserID:  req.Header.Get("X-User-ID"),
+		}
+
+		handlerResp, err := handlerFunc(request)
 		resp := new(Response)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed request")
