@@ -129,7 +129,16 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 		if err != nil {
 			log.Warn().Err(err).Msg("failed request")
 			resp.Header.Success = false
-			resp.Header.Message = err.Error()
+
+			// Convert error to HTTPError if it isn't one already
+			var httpErr *HTTPError
+			if e, ok := err.(*HTTPError); ok {
+				httpErr = e
+			} else {
+				httpErr = ErrInternalServerError.WithErr(err)
+			}
+
+			resp.Header.Message = httpErr.Message
 			msg, marshalErr := json.Marshal(resp)
 			if marshalErr != nil {
 				log.Error().Err(marshalErr).Msg("failed to marshal response")
@@ -140,12 +149,9 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 				}
 				return
 			}
-			statusCode := http.StatusBadRequest
-			if httpErr, ok := err.(*HTTPError); ok {
-				statusCode = httpErr.Code
-			}
+
 			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(statusCode)
+			w.WriteHeader(httpErr.Code)
 			if _, err := w.Write(msg); err != nil {
 				log.Error().Err(err).Msg("failed to write response")
 			}

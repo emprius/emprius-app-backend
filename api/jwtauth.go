@@ -22,12 +22,21 @@ func (a *API) authenticator(next http.Handler) http.Handler {
 			return
 		}
 
-		if err := jwt.Validate(token, jwt.WithRequiredClaim("userId")); err != nil {
+		// Get userId from claims
+		userId, ok := claims["userId"].(string)
+		if !ok {
 			http.Error(w, ErrUnauthorized.Error(), http.StatusUnauthorized)
 			return
 		}
-		// Retrieve the `userId` from the claims and add it to the HTTP header
-		r.Header.Add("X-User-Id", claims["userId"].(string))
+
+		// Validate userId format
+		if err := validateObjectID(userId); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Add validated userId to header
+		r.Header.Add("X-User-Id", userId)
 		// Token is authenticated, pass it through
 		next.ServeHTTP(w, r)
 	})
