@@ -26,9 +26,12 @@ func (e *HTTPError) IsErr(err error) bool {
 }
 
 // WithErr appends an error message to the HTTPError message.
+// Returns a copy of the HTTPError with the appended error message.
 func (e *HTTPError) WithErr(err error) *HTTPError {
-	e.Message += ": " + err.Error()
-	return e
+	return &HTTPError{
+		Code:    e.Code,
+		Message: e.Message + ": " + err.Error(),
+	}
 }
 
 // Authentication errors
