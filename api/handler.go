@@ -141,15 +141,7 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			if e, ok := err.(*HTTPError); ok {
 				httpErr = e
 			} else {
-				// Check if it's a known error type
-				switch err.Error() {
-				case "invalid credentials":
-					httpErr = ErrWrongLogin
-				case "booking dates conflict with existing booking":
-					httpErr = ErrBookingDatesConflict
-				default:
-					httpErr = ErrInternalServerError.WithErr(err)
-				}
+				httpErr = ErrInternalServerError.WithErr(err)
 			}
 
 			resp.Header.Message = httpErr.Error()
