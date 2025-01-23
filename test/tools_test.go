@@ -204,12 +204,15 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, err, qt.IsNil)
 			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 0)
 
-			// Search with multiple categories and transports
+			// Search with array-style categories and transports
 			resp, code = c.Request(
 				http.MethodGet,
 				userJWT,
 				nil,
-				"tools/search?categories=1,2,3,4,5&distance=50&maxCost=1000&mayBeFree=false&transports=1,2,3",
+				"tools/search?term=&"+
+					"categories[]=1&categories[]=2&categories[]=3&categories[]=4&categories[]=5&"+
+					"distance=50&maxCost=1000&mayBeFree=false&"+
+					"transports[]=1&transports[]=2&transports[]=3",
 			)
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &searchResp)

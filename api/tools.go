@@ -402,8 +402,19 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	}
 
 	var categories []int
-	if categoriesStr != "" {
-		// Parse comma-separated list of categories
+	// Check for array-style categories[] parameters
+	categoryParams := r.Context.Request.URL.Query()["categories[]"]
+	if len(categoryParams) > 0 {
+		categories = make([]int, len(categoryParams))
+		for i, cat := range categoryParams {
+			val, err := strconv.Atoi(cat)
+			if err != nil {
+				return nil, ErrInvalidRequestBodyData.WithErr(err)
+			}
+			categories[i] = val
+		}
+	} else if categoriesStr != "" {
+		// Fallback to comma-separated list
 		catStrings := strings.Split(categoriesStr, ",")
 		categories = make([]int, len(catStrings))
 		for i, cat := range catStrings {
@@ -416,18 +427,30 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	}
 
 	// Parse transport options
-	transportOptionsStr := r.Context.URLParam("transportOptions")
 	var transportOptions []int
-	if transportOptionsStr != "" {
-		// Parse comma-separated list of transport options
-		transportStrings := strings.Split(transportOptionsStr, ",")
-		transportOptions = make([]int, len(transportStrings))
-		for i, t := range transportStrings {
+	transportParams := r.Context.Request.URL.Query()["transports[]"]
+	if len(transportParams) > 0 {
+		transportOptions = make([]int, len(transportParams))
+		for i, t := range transportParams {
 			val, err := strconv.Atoi(t)
 			if err != nil {
 				return nil, ErrInvalidRequestBodyData.WithErr(err)
 			}
 			transportOptions[i] = val
+		}
+	} else {
+		transportOptionsStr := r.Context.URLParam("transportOptions")
+		if transportOptionsStr != "" {
+			// Fallback to comma-separated list
+			transportStrings := strings.Split(transportOptionsStr, ",")
+			transportOptions = make([]int, len(transportStrings))
+			for i, t := range transportStrings {
+				val, err := strconv.Atoi(t)
+				if err != nil {
+					return nil, ErrInvalidRequestBodyData.WithErr(err)
+				}
+				transportOptions[i] = val
+			}
 		}
 	}
 
