@@ -203,6 +203,42 @@ func TestTools(t *testing.T) {
 			err = json.Unmarshal(resp, &searchResp)
 			qt.Assert(t, err, qt.IsNil)
 			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 0)
+
+			// Search with multiple categories and transports
+			resp, code = c.Request(
+				http.MethodGet,
+				userJWT,
+				nil,
+				"tools/search?categories=1,2,3,4,5&distance=50&maxCost=1000&mayBeFree=false&transports=1,2,3",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &searchResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(searchResp.Data.Tools) >= 0, qt.Equals, true)
+
+			// Search with only distance, maxCost and mayBeFree
+			resp, code = c.Request(
+				http.MethodGet,
+				userJWT,
+				nil,
+				"tools/search?distance=50&maxCost=1000&mayBeFree=false",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &searchResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(searchResp.Data.Tools) >= 0, qt.Equals, true)
+
+			// Search with term, distance, maxCost and mayBeFree
+			resp, code = c.Request(
+				http.MethodGet,
+				userJWT,
+				nil,
+				"tools/search?searchTerm=hal&distance=50&maxCost=1000&mayBeFree=false",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &searchResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(searchResp.Data.Tools) >= 0, qt.Equals, true)
 		})
 
 		// Delete tool

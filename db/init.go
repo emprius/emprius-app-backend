@@ -136,6 +136,27 @@ func createUniqueIndexes(db *Database, ctx context.Context) error {
 			Keys:    bson.D{{Key: "title", Value: "text"}},
 			Options: options.Index().SetDefaultLanguage("none").SetLanguageOverride("none"),
 		},
+		{
+			Keys: bson.D{
+				{Key: "toolCategory", Value: 1},
+				{Key: "cost", Value: 1},
+				{Key: "mayBeFree", Value: 1},
+			},
+			Options: options.Index(),
+		},
+		{
+			Keys: bson.D{
+				{Key: "transportOptions.id", Value: 1},
+			},
+			Options: options.Index(),
+		},
+		{
+			Keys: bson.D{
+				{Key: "location.latitude", Value: 1},
+				{Key: "location.longitude", Value: 1},
+			},
+			Options: options.Index(),
+		},
 	})
 	if err != nil {
 		log.Printf("Error creating tool indexes: %v\n", err)
