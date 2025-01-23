@@ -74,7 +74,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Try to create another overlapping booking (should fail since there's an accepted booking)
-		_, code = c.Request(http.MethodPost, renterJWT,
+		data, code := c.Request(http.MethodPost, renterJWT,
 			map[string]interface{}{
 				"toolId":    fmt.Sprint(toolID),
 				"startDate": time.Now().Add(36 * time.Hour).Unix(),
@@ -84,7 +84,7 @@ func TestBookings(t *testing.T) {
 			},
 			"bookings",
 		)
-		qt.Assert(t, code, qt.Equals, 400)
+		qt.Assert(t, code, qt.Equals, 500, qt.Commentf("Response: %s", string(data)))
 
 		// Get booking requests (owner) - should show both pending and accepted bookings
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests")

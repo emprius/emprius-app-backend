@@ -320,7 +320,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 	// Get tool to verify it exists and get owner ID
 	tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
 	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
+		return nil, ErrBookingNotFound.WithErr(err)
 	}
 	if tool == nil {
 		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
@@ -339,7 +339,6 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		Contact:   req.Contact,
 		Comments:  req.Comments,
 	}
-
 	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ID, toUser.ID)
 	if err != nil {
 		if err.Error() == "booking dates conflict with existing booking" {

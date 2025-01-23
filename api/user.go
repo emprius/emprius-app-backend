@@ -19,7 +19,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 	if userInfo.RegisterAuthToken != a.registerAuthToken {
-		return nil, ErrInvalidRegisterAuthToken.WithErr(fmt.Errorf("invalid registration token provided"))
+		return nil, ErrInvalidRegisterAuthToken
 	}
 	user := db.User{
 		Email:    userInfo.UserEmail,
@@ -32,7 +32,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	if userInfo.Avatar != nil {
 		image, err := a.addImage(userInfo.Name+"_avatar", userInfo.Avatar)
 		if err != nil {
-			return nil, fmt.Errorf("could not add image: %w", err)
+			return nil, ErrInvalidImageFormat.WithErr(err)
 		}
 		user.AvatarHash = image.Hash
 	}
@@ -40,26 +40,27 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		user.Location = *userInfo.Location
 	}
 
-	if err := a.addUser(&user); err != nil {
-		return nil, fmt.Errorf("could not add user: %w", err)
+	id, err := a.addUser(&user)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	// Generate a new token with the user's ObjectID
-	token, err := a.makeToken(user.ID.Hex())
+	token, err := a.makeToken(id.Hex())
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
+		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	return &token, nil
 }
 
-func (a *API) addUser(u *db.User) error {
+func (a *API) addUser(u *db.User) (primitive.ObjectID, error) {
 	log.Debug().Msgf("adding user %q", u.Email)
-	_, err := a.database.UserService.InsertUser(context.Background(), u)
+	r, err := a.database.UserService.InsertUser(context.Background(), u)
 	if err != nil {
-		return fmt.Errorf("could not insert user to database: %w", err)
+		return [12]byte{}, fmt.Errorf("could not insert user to database: %w", err)
 	}
-	return nil
+	return r.InsertedID.(primitive.ObjectID), nil
 }
 
 // login handles the login request. It returns a JWT token if the login is successful.
@@ -71,16 +72,16 @@ func (a *API) loginHandler(r *Request) (interface{}, error) {
 	}
 	user, err := a.database.UserService.GetUserByEmail(context.Background(), loginInfo.Email)
 	if err != nil {
-		return nil, ErrWrongLogin.WithErr(err)
+		return nil, ErrWrongLogin
 	}
 	if !bytes.Equal(user.Password, hashPassword(loginInfo.Password)) {
-		return nil, fmt.Errorf("invalid credentials")
+		return nil, ErrWrongLogin
 	}
 
 	// Generate a new token with the user's ObjectID
 	token, err := a.makeToken(user.ID.Hex())
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
+		return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to generate token: %w", err))
 	}
 
 	return &token, nil
@@ -91,7 +92,7 @@ func (a *API) refreshHandler(r *Request) (interface{}, error) {
 	// Generate a new token with the user name as the subject
 	token, err := a.makeToken(r.UserID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
+		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	return &token, nil
@@ -101,7 +102,7 @@ func (a *API) refreshHandler(r *Request) (interface{}, error) {
 func (a *API) usersHandler(r *Request) (interface{}, error) {
 	users, err := a.database.UserService.GetAllUsers(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("failed to query users: %w", err)
+		return nil, ErrInternalServerError.WithErr(err)
 	}
 	userList := make([]db.User, len(users))
 	for i, u := range users {

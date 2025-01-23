@@ -99,12 +99,12 @@ func TestBookingDateConflicts(t *testing.T) {
 	a := testAPI(t)
 
 	// Create users and get their IDs
-	err := a.addUser(&testUser1) // Tool owner
+	_, err := a.addUser(&testUser1) // Tool owner
 	qt.Assert(t, err, qt.IsNil)
 	user1, err := a.database.UserService.GetUserByEmail(context.Background(), testUser1.Email)
 	qt.Assert(t, err, qt.IsNil)
 
-	err = a.addUser(&testUser2) // Tool requester
+	_, err = a.addUser(&testUser2) // Tool requester
 	qt.Assert(t, err, qt.IsNil)
 	user2, err := a.database.UserService.GetUserByEmail(context.Background(), testUser2.Email)
 	qt.Assert(t, err, qt.IsNil)
@@ -163,12 +163,15 @@ func TestBookingStatusTransitions(t *testing.T) {
 	a := testAPI(t)
 
 	// Create users and get their IDs
-	err := a.addUser(&testUser1) // Tool owner
+	id1, err := a.addUser(&testUser1) // Tool owner
 	qt.Assert(t, err, qt.IsNil)
 	user1, err := a.database.UserService.GetUserByEmail(context.Background(), testUser1.Email)
 	qt.Assert(t, err, qt.IsNil)
 
-	err = a.addUser(&testUser2) // Tool requester
+	// Verify user ID is set correctly
+	qt.Assert(t, user1.ID.Hex(), qt.Equals, id1.Hex())
+
+	_, err = a.addUser(&testUser2) // Tool requester
 	qt.Assert(t, err, qt.IsNil)
 	user2, err := a.database.UserService.GetUserByEmail(context.Background(), testUser2.Email)
 	qt.Assert(t, err, qt.IsNil)
