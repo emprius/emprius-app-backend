@@ -363,7 +363,6 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	distanceStr := r.Context.URLParam("distance")
 	maxCostStr := r.Context.URLParam("maxCost")
 	mayBeFreeStr := r.Context.URLParam("maybeFree")
-	availableFromStr := r.Context.URLParam("availableFrom")
 	categoriesStr := r.Context.URLParam("categories")
 	transportsStr := r.Context.URLParam("transports")
 
@@ -403,16 +402,6 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		mayBeFree = &free
 	}
 
-	// Par available from
-	var availableFrom int
-	if availableFromStr != nil {
-		from, err := strconv.Atoi(availableFromStr[0])
-		if err != nil {
-			return nil, ErrInvalidRequestBodyData.WithErr(err)
-		}
-		availableFrom = from
-	}
-
 	// Parse categories
 	var categories []int
 	for _, cat := range categoriesStr {
@@ -438,7 +427,6 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		Categories:       categories,
 		MaxCost:          maxCost,
 		MayBeFree:        mayBeFree,
-		AvailableFrom:    availableFrom,
 		Distance:         distance,
 		TransportOptions: transportOptions,
 	}
