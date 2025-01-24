@@ -31,14 +31,24 @@ type HTTPContext struct {
 }
 
 // URLParam gets a URL parameter. For path parameters (specified in the path pattern as {key}),
-// it uses chi.URLParam. For query parameters (?key=value), it uses URL.Query().Get().
-func (h *HTTPContext) URLParam(key string) string {
+// it uses chi.URLParam. For query parameters (?key=value and ?key[]=value), it uses URL.Query().
+// If the key is not found, it returns nil. Else it returns a slice of values with at least one element.
+// If the key is repeated in the query string, it will return all values.
+func (h *HTTPContext) URLParam(key string) []string {
 	// First try path parameter
 	if param := chi.URLParam(h.Request, key); param != "" {
-		return param
+		return []string{param}
 	}
 	// Then try query parameter
-	return h.Request.URL.Query().Get(key)
+	keys := h.Request.URL.Query()
+	if k, ok := keys[key]; ok {
+		return k
+	}
+	// Try query parameter with [] suffix
+	if k, ok := keys[key+"[]"]; ok {
+		return k
+	}
+	return nil
 }
 
 // Send replies the request with the provided message.

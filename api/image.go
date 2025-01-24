@@ -127,7 +127,10 @@ func (a *API) imageHandler(r *Request) (interface{}, error) {
 	}
 
 	hash := r.Context.URLParam("hash")
-	hashBytes, err := hex.DecodeString(hash)
+	if hash == nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing hash"))
+	}
+	hashBytes, err := hex.DecodeString(hash[0])
 	if err != nil {
 		return nil, ErrInvalidHash.WithErr(err)
 	}

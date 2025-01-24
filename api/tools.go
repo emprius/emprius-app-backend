@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
+	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/rs/zerolog/log"
@@ -280,7 +280,9 @@ func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Too
 		Location:         userLocation,
 		TransportOptions: query.TransportOptions,
 	}
-	tools, err := a.database.ToolService.SearchTools(context.Background(), opts)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+	tools, err := a.database.ToolService.SearchTools(ctx, opts)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -314,7 +316,11 @@ func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 
 // GET /tools/:id returns a tool by id
 func (a *API) toolHandler(r *Request) (interface{}, error) {
-	id, err := strconv.ParseInt(r.Context.URLParam("id"), 10, 64)
+	idParam := r.Context.URLParam("id")
+	if idParam == nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
+	}
+	id, err := strconv.ParseInt(idParam[0], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
@@ -330,7 +336,13 @@ func (a *API) userToolsHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
-	tools, err := a.toolsByUserID(r.Context.URLParam("id"))
+
+	id := r.Context.URLParam("id")
+	if id == nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing user id"))
+	}
+
+	tools, err := a.toolsByUserID(id[0])
 	if err != nil {
 		return nil, err
 	}
@@ -340,118 +352,85 @@ func (a *API) userToolsHandler(r *Request) (interface{}, error) {
 // GET /tools/search filters tools
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+		return nil, ErrUnauthorized
 	}
 
 	log.Debug().
-		Str("url", r.Context.Request.URL.String()).
 		Str("query", r.Context.Request.URL.RawQuery).
 		Msg("received search request")
 
-	searchTerm := r.Context.URLParam("searchTerm")
-	log.Debug().
-		Str("rawSearchTerm", searchTerm).
-		Msg("parsed search term")
-
-	searchTerm = db.SanitizeString(searchTerm)
-	log.Debug().
-		Str("sanitizedSearchTerm", searchTerm).
-		Msg("sanitized search term")
-
-	// Get distance parameter
+	searchTermStr := r.Context.URLParam("searchTerm")
 	distanceStr := r.Context.URLParam("distance")
+	maxCostStr := r.Context.URLParam("maxCost")
+	mayBeFreeStr := r.Context.URLParam("maybeFree")
+	availableFromStr := r.Context.URLParam("availableFrom")
+	categoriesStr := r.Context.URLParam("categories")
+	transportsStr := r.Context.URLParam("transports")
+
+	// Parse search term
+	searchTerm := ""
+	if searchTermStr != nil {
+		searchTerm = db.SanitizeString(searchTermStr[0])
+	}
+
+	// Parse distance parameter
 	var distance int
-	if distanceStr != "" {
+	if distanceStr != nil {
 		var err error
-		distance, err = strconv.Atoi(distanceStr)
+		distance, err = strconv.Atoi(distanceStr[0])
 		if err != nil {
 			return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid distance value: %s", distanceStr))
 		}
 	}
 
-	maxCostStr := r.Context.URLParam("maxCost")
-	mayBeFreeStr := r.Context.URLParam("maybeFree")
-	availableFromStr := r.Context.URLParam("availableFrom")
-	categoriesStr := r.Context.URLParam("categories")
-
+	// Parse maxCost parameter
 	var maxCost *uint64
-	if maxCostStr != "" {
-		cost, err := strconv.ParseUint(maxCostStr, 10, 64)
+	if maxCostStr != nil {
+		cost, err := strconv.ParseUint(maxCostStr[0], 10, 64)
 		if err != nil {
 			return nil, ErrInvalidRequestBodyData.WithErr(err)
 		}
 		maxCost = &cost
 	}
 
+	// Parse mayBeFree parameter
 	var mayBeFree *bool
-	if mayBeFreeStr != "" {
-		free, err := strconv.ParseBool(mayBeFreeStr)
+	if mayBeFreeStr != nil {
+		free, err := strconv.ParseBool(mayBeFreeStr[0])
 		if err != nil {
 			return nil, ErrInvalidRequestBodyData.WithErr(err)
 		}
 		mayBeFree = &free
 	}
 
+	// Par available from
 	var availableFrom int
-	if availableFromStr != "" {
-		from, err := strconv.Atoi(availableFromStr)
+	if availableFromStr != nil {
+		from, err := strconv.Atoi(availableFromStr[0])
 		if err != nil {
 			return nil, ErrInvalidRequestBodyData.WithErr(err)
 		}
 		availableFrom = from
 	}
 
+	// Parse categories
 	var categories []int
-	// Check for array-style categories[] parameters
-	categoryParams := r.Context.Request.URL.Query()["categories[]"]
-	if len(categoryParams) > 0 {
-		categories = make([]int, len(categoryParams))
-		for i, cat := range categoryParams {
-			val, err := strconv.Atoi(cat)
-			if err != nil {
-				return nil, ErrInvalidRequestBodyData.WithErr(err)
-			}
-			categories[i] = val
+	for _, cat := range categoriesStr {
+		val, err := strconv.Atoi(cat)
+		if err != nil {
+			return nil, ErrInvalidRequestBodyData.WithErr(err)
 		}
-	} else if categoriesStr != "" {
-		// Fallback to comma-separated list
-		catStrings := strings.Split(categoriesStr, ",")
-		categories = make([]int, len(catStrings))
-		for i, cat := range catStrings {
-			val, err := strconv.Atoi(cat)
-			if err != nil {
-				return nil, ErrInvalidRequestBodyData.WithErr(err)
-			}
-			categories[i] = val
-		}
+		categories = append(categories, val)
 	}
 
 	// Parse transport options
 	var transportOptions []int
-	transportParams := r.Context.Request.URL.Query()["transports[]"]
-	if len(transportParams) > 0 {
-		transportOptions = make([]int, len(transportParams))
-		for i, t := range transportParams {
-			val, err := strconv.Atoi(t)
-			if err != nil {
-				return nil, ErrInvalidRequestBodyData.WithErr(err)
-			}
-			transportOptions[i] = val
+	for _, t := range transportsStr {
+		val, err := strconv.Atoi(t)
+		if err != nil {
+			return nil, ErrInvalidRequestBodyData.WithErr(err)
 		}
-	} else {
-		transportOptionsStr := r.Context.URLParam("transportOptions")
-		if transportOptionsStr != "" {
-			// Fallback to comma-separated list
-			transportStrings := strings.Split(transportOptionsStr, ",")
-			transportOptions = make([]int, len(transportStrings))
-			for i, t := range transportStrings {
-				val, err := strconv.Atoi(t)
-				if err != nil {
-					return nil, ErrInvalidRequestBodyData.WithErr(err)
-				}
-				transportOptions[i] = val
-			}
-		}
+		transportOptions = append(transportOptions, val)
 	}
 
 	query := ToolSearch{
@@ -496,8 +475,12 @@ func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
+	idParam := r.Context.URLParam("id")
+	if idParam == nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
+	}
 
-	id, err := strconv.ParseInt(r.Context.URLParam("id"), 10, 64)
+	id, err := strconv.ParseInt(idParam[0], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
@@ -524,8 +507,11 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
-
-	id, err := strconv.ParseInt(r.Context.URLParam("id"), 10, 64)
+	idParam := r.Context.URLParam("id")
+	if idParam == nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
+	}
+	id, err := strconv.ParseInt(idParam[0], 10, 64)
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}

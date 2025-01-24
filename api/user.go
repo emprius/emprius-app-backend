@@ -113,7 +113,11 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 
 // getUserHandler handles GET /users/{id}
 func (a *API) getUserHandler(r *Request) (interface{}, error) {
-	userID, err := primitive.ObjectIDFromHex(r.Context.URLParam("id"))
+	idParam := r.Context.URLParam("id")
+	if idParam == nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing id"))
+	}
+	userID, err := primitive.ObjectIDFromHex(idParam[0])
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(fmt.Errorf("invalid user id format: %s", r.Context.URLParam("id")))
 	}
