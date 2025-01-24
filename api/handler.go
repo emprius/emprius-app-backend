@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -28,6 +29,23 @@ type Request struct {
 type HTTPContext struct {
 	Writer  http.ResponseWriter
 	Request *http.Request
+}
+
+// GetPage returns the page number from the query parameters.
+// If the page parameter is not present, it returns 0 (first page).
+// If the page parameter is invalid or less than 0, it returns an error.
+func (h *HTTPContext) GetPage() (int, error) {
+	if pageParam := h.URLParam("page"); pageParam != nil {
+		page, err := strconv.Atoi(pageParam[0])
+		if err != nil {
+			return 0, fmt.Errorf("invalid page number")
+		}
+		if page < 0 {
+			return 0, fmt.Errorf("page number cannot be negative")
+		}
+		return page, nil
+	}
+	return 0, nil
 }
 
 // URLParam gets a URL parameter. For path parameters (specified in the path pattern as {key}),

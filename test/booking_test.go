@@ -172,7 +172,7 @@ func TestBookings(t *testing.T) {
 		// Test paginated user bookings
 		t.Run("Get User Bookings", func(t *testing.T) {
 			// Get first page of bookings
-			resp, code := c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=1")
+			resp, code := c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=0")
 			qt.Assert(t, code, qt.Equals, 200)
 			var pageResp struct {
 				Data []api.BookingResponse `json:"data"`
@@ -189,7 +189,7 @@ func TestBookings(t *testing.T) {
 			}
 
 			// Test invalid page number
-			_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=0")
+			_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=-1")
 			qt.Assert(t, code, qt.Equals, 400)
 
 			// Test with non-existent user ID

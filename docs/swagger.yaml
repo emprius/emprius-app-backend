@@ -331,9 +331,17 @@ paths:
     get:
       tags:
         - Users
-      summary: Get all users
+      summary: Get paginated list of users
       security:
         - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+            description: Page number for pagination (0-based, 16 items per page)
       responses:
         '200':
           description: List of users
@@ -819,9 +827,9 @@ paths:
           in: query
           schema:
             type: integer
-            minimum: 1
-            default: 1
-            description: Page number for pagination (16 items per page)
+            minimum: 0
+            default: 0
+            description: Page number for pagination (0-based, 16 items per page)
       responses:
         '200':
           description: List of bookings

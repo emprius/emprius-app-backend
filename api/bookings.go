@@ -85,18 +85,14 @@ func (a *API) HandleGetUserBookings(r *Request) (interface{}, error) {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
 
-	// Get page parameter, default to 1 if not provided
-	page := 1
-	if pageParam := r.Context.URLParam("page"); pageParam != nil {
-		var err error
-		page, err = strconv.Atoi(pageParam[0])
-		if err != nil || page < 1 {
-			return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid page number"))
-		}
-	}
-
 	// Get user ID from URL
 	userID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "id"))
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get page number
+	page, err := r.Context.GetPage()
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}

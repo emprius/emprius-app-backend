@@ -14,9 +14,34 @@ import (
 func TestUser(t *testing.T) {
 	c := utils.NewTestService(t)
 
-	// Create two users
+	// Create multiple users for pagination testing
 	user1JWT := c.RegisterAndLogin("user1@test.com", "user1", "user1pass")
 	user2JWT := c.RegisterAndLogin("user2@test.com", "user2", "user2pass")
+	c.RegisterAndLogin("user3@test.com", "user3", "user3pass")
+	c.RegisterAndLogin("user4@test.com", "user4", "user4pass")
+	c.RegisterAndLogin("user5@test.com", "user5", "user5pass")
+
+	t.Run("Paginated Users List", func(t *testing.T) {
+		// Test first page
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users")
+		qt.Assert(t, code, qt.Equals, 200)
+		var usersResp struct {
+			Data struct {
+				Users []db.User `json:"users"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 5) // All users since we have less than page size
+
+		// Test invalid page number
+		_, code = c.Request(http.MethodGet, user1JWT, nil, "users?page=-1")
+		qt.Assert(t, code, qt.Equals, 400)
+
+		// Test unauthorized access
+		_, code = c.Request(http.MethodGet, "", nil, "users")
+		qt.Assert(t, code, qt.Equals, 401)
+	})
 
 	t.Run("User Profile Operations", func(t *testing.T) {
 		// Get own profile

@@ -98,9 +98,13 @@ func (a *API) refreshHandler(r *Request) (interface{}, error) {
 	return &token, nil
 }
 
-// usersHandler list the existing users.
+// usersHandler list the existing users with pagination.
 func (a *API) usersHandler(r *Request) (interface{}, error) {
-	users, err := a.database.UserService.GetAllUsers(context.Background())
+	page, err := r.Context.GetPage()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+	users, err := a.database.UserService.GetAllUsers(r.Context.Request.Context(), page)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
