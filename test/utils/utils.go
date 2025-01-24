@@ -102,6 +102,12 @@ func (s *TestService) Request(method, jwt string, jsonBody any, urlPath ...strin
 
 // RegisterAndLogin registers a new user and returns the JWT token
 func (s *TestService) RegisterAndLogin(email, name, password string) string {
+	jwt, _ := s.RegisterAndLoginWithID(email, name, password)
+	return jwt
+}
+
+// RegisterAndLoginWithID registers a new user and returns the JWT token and user ID
+func (s *TestService) RegisterAndLoginWithID(email, name, password string) (string, string) {
 	// Register
 	_, code := s.Request(http.MethodPost, "",
 		&api.Register{
@@ -131,12 +137,26 @@ func (s *TestService) RegisterAndLogin(email, name, password string) string {
 	)
 	qt.Assert(s.t, code, qt.Equals, 200)
 
-	var response struct {
+	var loginResponse struct {
 		Data api.LoginResponse `json:"data"`
 	}
-	err := json.Unmarshal(resp, &response)
+	err := json.Unmarshal(resp, &loginResponse)
 	qt.Assert(s.t, err, qt.IsNil)
-	return response.Data.Token
+	jwt := loginResponse.Data.Token
+
+	// Get profile to get user ID
+	resp, code = s.Request(http.MethodGet, jwt, nil, "profile")
+	qt.Assert(s.t, code, qt.Equals, 200)
+
+	var profileResponse struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(resp, &profileResponse)
+	qt.Assert(s.t, err, qt.IsNil)
+
+	return jwt, profileResponse.Data.ID
 }
 
 // CreateTool creates a new tool and returns its ID

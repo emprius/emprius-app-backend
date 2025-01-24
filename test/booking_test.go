@@ -17,7 +17,7 @@ func TestBookings(t *testing.T) {
 
 	// Create two users: tool owner and renter
 	ownerJWT := c.RegisterAndLogin("owner@test.com", "owner", "ownerpass")
-	renterJWT := c.RegisterAndLogin("renter@test.com", "renter", "renterpass")
+	renterJWT, renterID := c.RegisterAndLoginWithID("renter@test.com", "renter", "renterpass")
 
 	// Owner creates a tool
 	toolID := c.CreateTool(ownerJWT, "Test Tool")
@@ -168,5 +168,37 @@ func TestBookings(t *testing.T) {
 			"bookings", "rates",
 		)
 		qt.Assert(t, code, qt.Equals, 200)
+
+		// Test paginated user bookings
+		t.Run("Get User Bookings", func(t *testing.T) {
+			// Get first page of bookings
+			resp, code := c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=1")
+			qt.Assert(t, code, qt.Equals, 200)
+			var pageResp struct {
+				Data []api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp, &pageResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(pageResp.Data), qt.Equals, 2) // Should show both bookings
+
+			// Verify bookings are ordered by date (newest first)
+			if len(pageResp.Data) > 1 {
+				for i := 1; i < len(pageResp.Data); i++ {
+					qt.Assert(t, pageResp.Data[i-1].CreatedAt.After(pageResp.Data[i].CreatedAt), qt.IsTrue)
+				}
+			}
+
+			// Test invalid page number
+			_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=0")
+			qt.Assert(t, code, qt.Equals, 400)
+
+			// Test with non-existent user ID
+			_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", "invalid-id")
+			qt.Assert(t, code, qt.Equals, 400)
+
+			// Test without authentication
+			_, code = c.Request(http.MethodGet, "", nil, "bookings", "user", renterID)
+			qt.Assert(t, code, qt.Equals, 401)
+		})
 	})
 }

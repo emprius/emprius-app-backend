@@ -799,6 +799,43 @@ paths:
         '200':
           description: Booking returned successfully
 
+  /bookings/user/{id}:
+    get:
+      tags:
+        - Bookings
+      summary: Get paginated bookings for a user
+      description: Returns both requests and petitions for a user, ordered by date (newest first)
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the user
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+            description: Page number for pagination (16 items per page)
+      responses:
+        '200':
+          description: List of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookingResponse'
+        '400':
+          description: Invalid page number or user ID
+        '401':
+          description: Unauthorized
+
   /bookings/rates:
     get:
       tags:

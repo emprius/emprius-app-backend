@@ -60,11 +60,13 @@ func NewBookingService(db *mongo.Database) *BookingService {
 		{
 			Keys: bson.D{
 				{Key: "fromUserId", Value: 1},
+				{Key: "createdAt", Value: -1}, // For efficient sorting by date
 			},
 		},
 		{
 			Keys: bson.D{
 				{Key: "toUserId", Value: 1},
+				{Key: "createdAt", Value: -1}, // For efficient sorting by date
 			},
 		},
 	}
@@ -137,6 +139,47 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 		return nil, ErrBookingNotFound
 	}
 	return &booking, err
+}
+
+const (
+	defaultPageSize = 16
+)
+
+// GetUserBookings gets paginated bookings for a user (both requests and petitions)
+func (s *BookingService) GetUserBookings(ctx context.Context, userID primitive.ObjectID, page int) ([]*Booking, error) {
+	if page < 1 {
+		page = 1
+	}
+
+	skip := (page - 1) * defaultPageSize
+
+	// Find bookings where user is either the requester or owner
+	cursor, err := s.collection.Find(ctx,
+		bson.M{
+			"$or": []bson.M{
+				{"fromUserId": userID},
+				{"toUserId": userID},
+			},
+		},
+		options.Find().
+			SetSort(bson.D{{Key: "createdAt", Value: -1}}). // Sort by date, newest first
+			SetSkip(int64(skip)).
+			SetLimit(int64(defaultPageSize)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var bookings []*Booking
+	if err = cursor.All(ctx, &bookings); err != nil {
+		return nil, err
+	}
+	return bookings, nil
 }
 
 // GetUserRequests gets all booking requests for tools owned by the user

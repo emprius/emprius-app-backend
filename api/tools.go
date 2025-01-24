@@ -402,7 +402,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		mayBeFree = &free
 	}
 
-	// Parse categories
+	// Parse categories from array-style parameters
 	var categories []int
 	for _, cat := range categoriesStr {
 		val, err := strconv.Atoi(cat)
@@ -412,7 +412,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		categories = append(categories, val)
 	}
 
-	// Parse transport options
+	// Parse transport options from array-style parameters
 	var transportOptions []int
 	for _, t := range transportsStr {
 		val, err := strconv.Atoi(t)
