@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // User represents the schema for the "users" collection.
@@ -74,9 +75,20 @@ func (s *UserService) UpdateUser(ctx context.Context, id primitive.ObjectID, upd
 	return s.Collection.UpdateOne(ctx, filter, bson.M{"$set": update})
 }
 
-// GetAllUsers retrieves all User documents.
-func (s *UserService) GetAllUsers(ctx context.Context) ([]*User, error) {
-	cursor, err := s.Collection.Find(ctx, bson.M{})
+// GetAllUsers retrieves paginated User documents.
+func (s *UserService) GetAllUsers(ctx context.Context, page int) ([]*User, error) {
+	if page < 0 {
+		page = 0
+	}
+
+	skip := page * defaultPageSize
+
+	opts := options.Find().
+		SetSort(bson.D{{Key: "_id", Value: 1}}). // Sort by ID for consistent pagination
+		SetSkip(int64(skip)).
+		SetLimit(int64(defaultPageSize))
+
+	cursor, err := s.Collection.Find(ctx, bson.M{}, opts)
 	if err != nil {
 		return nil, err
 	}

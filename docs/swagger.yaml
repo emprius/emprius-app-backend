@@ -129,8 +129,6 @@ components:
         avatar:
           type: string
           format: byte
-        password:
-          type: string
 
     LoginRequest:
       type: object

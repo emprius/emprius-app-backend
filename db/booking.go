@@ -141,17 +141,13 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 	return &booking, err
 }
 
-const (
-	defaultPageSize = 16
-)
-
 // GetUserBookings gets paginated bookings for a user (both requests and petitions)
 func (s *BookingService) GetUserBookings(ctx context.Context, userID primitive.ObjectID, page int) ([]*Booking, error) {
-	if page < 1 {
-		page = 1
+	if page < 0 {
+		page = 0
 	}
 
-	skip := (page - 1) * defaultPageSize
+	skip := page * defaultPageSize
 
 	// Find bookings where user is either the requester or owner
 	cursor, err := s.collection.Find(ctx,

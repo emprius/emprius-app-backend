@@ -128,10 +128,15 @@ func TestUserService(t *testing.T) {
 			c.Assert(err, qt.IsNil, qt.Commentf("Failed to insert test user"))
 		}
 
-		// Retrieve all users
-		allUsers, err := userService.GetAllUsers(ctx)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to retrieve all users"))
-		c.Assert(len(allUsers) >= 3, qt.Equals, true, qt.Commentf("Expected at least 3 users in database"))
+		// Retrieve first page of users
+		allUsers, err := userService.GetAllUsers(ctx, 0)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to retrieve users"))
+		c.Assert(len(allUsers) >= 3, qt.Equals, true, qt.Commentf("Expected at least 3 users in first page"))
+
+		// Test invalid page number
+		invalidUsers, err := userService.GetAllUsers(ctx, -1)
+		c.Assert(err, qt.IsNil, qt.Commentf("Expected success with invalid page number"))
+		c.Assert(len(invalidUsers) >= 3, qt.Equals, true, qt.Commentf("Expected first page results for invalid page number"))
 	})
 
 	c.Run("Delete User", func(c *qt.C) {
