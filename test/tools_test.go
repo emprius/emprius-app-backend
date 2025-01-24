@@ -153,7 +153,7 @@ func TestTools(t *testing.T) {
 		// Test various search scenarios
 		t.Run("Search Tools", func(t *testing.T) {
 			// Search by term
-			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?searchTerm=Updated")
+			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?term=Updated")
 			qt.Assert(t, code, qt.Equals, 200)
 			var searchResp struct {
 				Data struct {
@@ -172,7 +172,7 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 2)
 
 			// Search with term and distance
-			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?searchTerm=Another&distance=10")
+			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?term=Another&distance=10")
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &searchResp)
 			qt.Assert(t, err, qt.IsNil)
@@ -186,7 +186,7 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 1)
 
 			// Search with multiple parameters
-			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?searchTerm=&distance=10&maxCost=0&mayBeFree=false")
+			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?term=&distance=10&maxCost=0&mayBeFree=false")
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &searchResp)
 			qt.Assert(t, err, qt.IsNil)
@@ -197,7 +197,7 @@ func TestTools(t *testing.T) {
 				http.MethodGet,
 				userJWT,
 				nil,
-				"tools/search?searchTerm=nonexistent&distance=10&maxCost=0&mayBeFree=false",
+				"tools/search?term=nonexistent&distance=10&maxCost=0&mayBeFree=false",
 			)
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &searchResp)
@@ -236,7 +236,7 @@ func TestTools(t *testing.T) {
 				http.MethodGet,
 				userJWT,
 				nil,
-				"tools/search?searchTerm=hal&distance=50&maxCost=1000&mayBeFree=false",
+				"tools/search?term=hal&distance=50&maxCost=1000&mayBeFree=false",
 			)
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &searchResp)

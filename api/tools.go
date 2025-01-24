@@ -359,7 +359,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		Str("query", r.Context.Request.URL.RawQuery).
 		Msg("received search request")
 
-	searchTermStr := r.Context.URLParam("searchTerm")
+	searchTermStr := r.Context.URLParam("term")
 	distanceStr := r.Context.URLParam("distance")
 	maxCostStr := r.Context.URLParam("maxCost")
 	mayBeFreeStr := r.Context.URLParam("maybeFree")
