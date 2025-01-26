@@ -41,7 +41,7 @@ func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), user.ID)
+	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), user.ObjectID())
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -66,7 +66,7 @@ func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	bookings, err := a.database.BookingService.GetUserPetitions(r.Context.Request.Context(), user.ID)
+	bookings, err := a.database.BookingService.GetUserPetitions(r.Context.Request.Context(), user.ObjectID())
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -156,8 +156,8 @@ func (a *API) HandleAcceptPetition(r *Request) (interface{}, error) {
 	}
 
 	// Verify user is the tool owner
-	if booking.ToUserID != user.ID {
-		return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the owner", user.ID.Hex()))
+	if booking.ToUserID != user.ObjectID() {
+		return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 	}
 
 	// Verify booking is in PENDING state
@@ -199,8 +199,8 @@ func (a *API) HandleDenyPetition(r *Request) (interface{}, error) {
 	}
 
 	// Verify user is the tool owner
-	if booking.ToUserID != user.ID {
-		return nil, ErrOnlyOwnerCanDeny.WithErr(fmt.Errorf("user %s is not the owner", user.ID.Hex()))
+	if booking.ToUserID != user.ObjectID() {
+		return nil, ErrOnlyOwnerCanDeny.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 	}
 
 	// Verify booking is in PENDING state
@@ -242,8 +242,8 @@ func (a *API) HandleCancelRequest(r *Request) (interface{}, error) {
 	}
 
 	// Verify user is the requester
-	if booking.FromUserID != user.ID {
-		return nil, ErrOnlyRequesterCanCancel.WithErr(fmt.Errorf("user %s is not the requester", user.ID.Hex()))
+	if booking.FromUserID != user.ObjectID() {
+		return nil, ErrOnlyRequesterCanCancel.WithErr(fmt.Errorf("user %s is not the requester", user.ID))
 	}
 
 	// Verify booking is in PENDING state
@@ -285,8 +285,8 @@ func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 	}
 
 	// Verify user is the tool owner
-	if booking.ToUserID != user.ID {
-		return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID.Hex()))
+	if booking.ToUserID != user.ObjectID() {
+		return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 	}
 
 	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusReturned)
@@ -309,7 +309,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	bookings, err := a.database.BookingService.GetPendingRatings(r.Context.Request.Context(), user.ID)
+	bookings, err := a.database.BookingService.GetPendingRatings(r.Context.Request.Context(), user.ObjectID())
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -372,7 +372,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		Contact:   req.Contact,
 		Comments:  req.Comments,
 	}
-	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ID, toUser.ID)
+	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ObjectID(), toUser.ID)
 	if err != nil {
 		if err.Error() == "booking dates conflict with existing booking" {
 			return nil, ErrBookingDatesConflict.WithErr(err)
@@ -414,8 +414,8 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	}
 
 	// Verify user is involved in the booking
-	if booking.FromUserID != user.ID && booking.ToUserID != user.ID {
-		return nil, ErrUserNotInvolved.WithErr(fmt.Errorf("user %s is neither the requester nor the owner", user.ID.Hex()))
+	if booking.FromUserID != user.ObjectID() && booking.ToUserID != user.ObjectID() {
+		return nil, ErrUserNotInvolved.WithErr(fmt.Errorf("user %s is neither the requester nor the owner", user.ID))
 	}
 
 	// Verify rating value

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/emprius/emprius-app-backend/api"
-	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/test/utils"
 	qt "github.com/frankban/quicktest"
 )
@@ -27,7 +26,7 @@ func TestUser(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 		var usersResp struct {
 			Data struct {
-				Users []db.User `json:"users"`
+				Users []*api.User `json:"users"`
 			} `json:"data"`
 		}
 		err := json.Unmarshal(resp, &usersResp)
@@ -48,7 +47,7 @@ func TestUser(t *testing.T) {
 		resp, code := c.Request(http.MethodGet, user1JWT, nil, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
 		var profileResp struct {
-			Data db.User `json:"data"`
+			Data *api.User `json:"data"`
 		}
 		err := json.Unmarshal(resp, &profileResp)
 		qt.Assert(t, err, qt.IsNil)
@@ -87,17 +86,17 @@ func TestUser(t *testing.T) {
 			resp, code := c.Request(http.MethodGet, user1JWT, nil, "profile")
 			qt.Assert(t, code, qt.Equals, 200)
 			var profileResp struct {
-				Data db.User `json:"data"`
+				Data *api.User `json:"data"`
 			}
 			err := json.Unmarshal(resp, &profileResp)
 			qt.Assert(t, err, qt.IsNil)
-			user1ID = profileResp.Data.ID.Hex()
+			user1ID = profileResp.Data.ID
 		}
 
 		resp, code = c.Request(http.MethodGet, user2JWT, nil, "users", user1ID)
 		qt.Assert(t, code, qt.Equals, 200)
 		var otherUserResp struct {
-			Data db.User `json:"data"`
+			Data *api.User `json:"data"`
 		}
 		err = json.Unmarshal(resp, &otherUserResp)
 		qt.Assert(t, err, qt.IsNil)
@@ -111,7 +110,7 @@ func TestUser(t *testing.T) {
 		resp, code = c.Request(http.MethodGet, user1JWT, nil, "refresh")
 		qt.Assert(t, code, qt.Equals, 200)
 		var refreshResp struct {
-			Data api.LoginResponse `json:"data"`
+			Data *api.LoginResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &refreshResp)
 		qt.Assert(t, err, qt.IsNil)

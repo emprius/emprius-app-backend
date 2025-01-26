@@ -165,7 +165,7 @@ func (a *API) router() http.Handler {
 				Comments:  req.Comments,
 			}
 
-			booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ID, toUser.ID)
+			booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ObjectID(), toUser.ID)
 			if err != nil {
 				return nil, err
 			}

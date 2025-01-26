@@ -5,6 +5,7 @@ import (
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // Response is the default response of the API
@@ -70,8 +71,47 @@ type UserProfile struct {
 	Password  string    `json:"password,omitempty"`
 }
 
+// User represents the user type
+type User struct {
+	ID         string   `json:"id"`
+	Email      string   `json:"email"`
+	Name       string   `json:"name"`
+	Community  string   `json:"community"`
+	Tokens     uint64   `json:"tokens"`
+	Active     bool     `json:"active"`
+	Rating     int      `json:"rating"`
+	AvatarHash []byte   `json:"avatarHash"`
+	Location   Location `json:"location"`
+	Verified   bool     `json:"verified"`
+}
+
+// FromDBUser converts a DB User to an API User
+func (u *User) FromDBUser(dbu *db.User) *User {
+	u.ID = dbu.ID.Hex()
+	u.Email = dbu.Email
+	u.Name = dbu.Name
+	u.Community = dbu.Community
+	u.Tokens = dbu.Tokens
+	u.Active = dbu.Active
+	u.Rating = int(dbu.Rating)
+	u.AvatarHash = dbu.AvatarHash
+	u.Location.FromDBLocation(dbu.Location)
+	u.Verified = dbu.Verified
+	return u
+}
+
+// ObjectID returns the ObjectID of the user, or a nil ObjectID if the ID is not a valid ObjectID.
+// This is useful for converting the ID to an ObjectID for use in database queries.
+func (u *User) ObjectID() primitive.ObjectID {
+	id, err := primitive.ObjectIDFromHex(u.ID)
+	if err != nil {
+		return primitive.NilObjectID
+	}
+	return id
+}
+
 type UsersWrapper struct {
-	Users []db.User `json:"users"`
+	Users []*User `json:"users"`
 }
 
 // Tool is the type of the tool

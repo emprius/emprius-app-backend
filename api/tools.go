@@ -85,7 +85,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 
 	dbTool := db.Tool{
 		ID:               toolID(userID, t.Title),
-		UserID:           user.ID,
+		UserID:           user.ObjectID(),
 		Title:            db.SanitizeString(t.Title),
 		Description:      t.Description,
 		IsAvailable:      true,
@@ -135,7 +135,7 @@ func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ID)
+	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ObjectID())
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -442,7 +442,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	tools, err := a.toolSearch(&query, new(Location).FromDBLocation(user.Location))
+	tools, err := a.toolSearch(&query, &user.Location)
 	if err != nil {
 		return nil, err
 	}
@@ -487,8 +487,8 @@ func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	if tool.UserID != user.ID {
-		return nil, ErrToolNotOwnedByUser.WithErr(fmt.Errorf("tool with id %d is not owned by user %s", id, user.ID.Hex()))
+	if tool.UserID != user.ObjectID() {
+		return nil, ErrToolNotOwnedByUser.WithErr(fmt.Errorf("tool with id %d is not owned by user %s", id, user.ID))
 	}
 	if err := a.deleteTool(id); err != nil {
 		return nil, err
@@ -517,8 +517,8 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	if tool.UserID != user.ID {
-		return nil, ErrToolNotOwnedByUser.WithErr(fmt.Errorf("tool with id %d is not owned by user %s", id, user.ID.Hex()))
+	if tool.UserID != user.ObjectID() {
+		return nil, ErrToolNotOwnedByUser.WithErr(fmt.Errorf("tool with id %d is not owned by user %s", id, user.ID))
 	}
 	t := Tool{}
 	if err := json.Unmarshal(r.Data, &t); err != nil {

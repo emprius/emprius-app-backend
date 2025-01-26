@@ -44,7 +44,6 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
-
 	// Generate a new token with the user's ObjectID
 	token, err := a.makeToken(id.Hex())
 	if err != nil {
@@ -55,7 +54,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 }
 
 func (a *API) addUser(u *db.User) (primitive.ObjectID, error) {
-	log.Debug().Msgf("adding user %q", u.Email)
+	log.Debug().Msgf("adding user %q with location %v", u.Email, u.Location)
 	r, err := a.database.UserService.InsertUser(context.Background(), u)
 	if err != nil {
 		return [12]byte{}, fmt.Errorf("could not insert user to database: %w", err)
@@ -108,9 +107,9 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
-	userList := make([]db.User, len(users))
-	for i, u := range users {
-		userList[i] = *u
+	userList := []*User{}
+	for _, u := range users {
+		userList = append(userList, new(User).FromDBUser(u))
 	}
 	return &UsersWrapper{Users: userList}, nil
 }
@@ -131,7 +130,7 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	return user, nil
+	return new(User).FromDBUser(user), nil
 }
 
 // validateObjectID checks if a string is a valid MongoDB ObjectID
@@ -142,7 +141,19 @@ func validateObjectID(id string) error {
 	return nil
 }
 
-func (a *API) getUserByID(userID string) (*db.User, error) {
+func (a *API) getUserByID(userID string) (*User, error) {
+	if err := validateObjectID(userID); err != nil {
+		return nil, err
+	}
+	objID, _ := primitive.ObjectIDFromHex(userID) // Safe to ignore error as we already validated
+	user, err := a.database.UserService.GetUserByID(context.Background(), objID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+	return new(User).FromDBUser(user), nil
+}
+
+func (a *API) getDBUserByID(userID string) (*db.User, error) {
 	if err := validateObjectID(userID); err != nil {
 		return nil, err
 	}
@@ -163,7 +174,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &newUserInfo); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
-	user, err := a.getUserByID(r.UserID)
+	user, err := a.getDBUserByID(r.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user profile: %w", err)
 	}
