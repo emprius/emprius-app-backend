@@ -117,9 +117,12 @@ func (s *TestService) RegisterAndLoginWithID(email, name, password string) (stri
 				Name:      name,
 				Community: "testCommunity",
 				Password:  password,
-				Location: &db.Location{
-					Latitude:  41695384000, // 41.695384 degrees in microdegrees
-					Longitude: 2492793000,  // 2.492793 degrees in microdegrees
+				Location: &api.Location{
+					Type: "Point",
+					Coordinates: []float64{
+						2.492793,  // longitude
+						41.695384, // latitude
+					},
 				},
 			},
 		},
@@ -172,9 +175,12 @@ func (s *TestService) CreateTool(jwt string, title string) int64 {
 			"estimatedValue": 20,
 			"height":         30,
 			"weight":         40,
-			"location": map[string]int64{
-				"latitude":  41695384000, // 41.695384 degrees in microdegrees
-				"longitude": 2492793000,  // 2.492793 degrees in microdegrees
+			"location": map[string]interface{}{
+				"type": "Point",
+				"coordinates": []float64{
+					2.492793,  // longitude
+					41.695384, // latitude
+				},
 			},
 		},
 		"tools",

@@ -50,8 +50,14 @@ func TestUserService(t *testing.T) {
 			Active:     true,
 			Rating:     80,
 			AvatarHash: []byte("avatarhash"),
-			Location:   Location{Latitude: 123456, Longitude: 654321},
-			Verified:   true,
+			Location: Location{
+				Type: "Point",
+				Coordinates: []float64{
+					2.492793,  // longitude
+					41.695384, // latitude
+				},
+			},
+			Verified: true,
 		}
 
 		// Insert User
@@ -77,8 +83,14 @@ func TestUserService(t *testing.T) {
 			Tokens:    50,
 			Active:    true,
 			Rating:    70,
-			Location:  Location{Latitude: 111222, Longitude: 333444},
-			Verified:  false,
+			Location: Location{
+				Type: "Point",
+				Coordinates: []float64{
+					2.492793,  // longitude
+					41.695384, // latitude
+				},
+			},
+			Verified: false,
 		}
 
 		insertResult, err := userService.InsertUser(ctx, user)

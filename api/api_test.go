@@ -14,16 +14,20 @@ import (
 )
 
 var testLatitudeA = db.Location{
-	Latitude:  41688407,
-	Longitude: 2491027,
+	Type: "Point",
+	Coordinates: []float64{
+		2.491027,  // longitude
+		41.688407, // latitude
+	},
 }
 
-var (
-	// testLatitudeA10km is a location 10km north and 10km east from LatitudeA
-	testLatitudeA10km = db.NewLocation(testLatitudeA, 10, 0)
-	// testLatitudeA200km is a location 200km north and 200km east from LatitudeA
-	testLatitudeA200km = db.NewLocation(testLatitudeA, 200, 0)
-)
+var testLatitudeA200km = db.Location{
+	Type: "Point",
+	Coordinates: []float64{
+		2.491027,  // longitude
+		43.488407, // latitude (~200km north)
+	},
+}
 
 var testUser1 = db.User{
 	Name:      "bob",
@@ -62,14 +66,20 @@ func uint64Ptr(i uint64) *uint64 {
 }
 
 var testTool1 = Tool{
-	Title:            "tool1",
-	Description:      "tool1 description",
-	MayBeFree:        boolPtr(true),
-	AskWithFee:       boolPtr(false),
-	EstimatedValue:   10000,
-	Cost:             uint64Ptr(10),
-	Images:           []types.HexBytes{},
-	Location:         testLatitudeA10km,
+	Title:          "tool1",
+	Description:    "tool1 description",
+	MayBeFree:      boolPtr(true),
+	AskWithFee:     boolPtr(false),
+	EstimatedValue: 10000,
+	Cost:           uint64Ptr(10),
+	Images:         []types.HexBytes{},
+	Location: Location{
+		Type: "Point",
+		Coordinates: []float64{
+			2.491027,  // longitude
+			41.778407, // latitude (~10km north)
+		},
+	},
 	Category:         1,
 	TransportOptions: []int{1, 2},
 }

@@ -37,7 +37,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		user.AvatarHash = image.Hash
 	}
 	if userInfo.Location != nil {
-		user.Location = *userInfo.Location
+		user.Location = userInfo.Location.ToDBLocation()
 	}
 
 	id, err := a.addUser(&user)
@@ -182,7 +182,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		user.AvatarHash = avatar.Hash
 	}
 	if newUserInfo.Location != nil {
-		user.Location = *newUserInfo.Location
+		user.Location = newUserInfo.Location.ToDBLocation()
 	}
 	if newUserInfo.Active != nil {
 		user.Active = *newUserInfo.Active

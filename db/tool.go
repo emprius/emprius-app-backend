@@ -9,23 +9,45 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 const (
-	// earthRadius is the radius of the earth in kilometers.
+	// earthRadius is the approximate radius of the Earth in kilometers.
 	earthRadius           = 6371
 	microdegreesInDegree  = 1e6
 	degreesInMicrodegrees = 1 / microdegreesInDegree
-	kilometersInDegree    = 111.0 // Approximate conversion factor
+	kilometersInDegree    = 111.0 // approximate
+	distanceMargin        = 1.01  // 1% margin to account for floating-point imprecision
 )
 
-// Location represents a geographical location in microdegrees.
+// Location represents a geographical location in GeoJSON format.
 type Location struct {
-	Latitude  int64 `bson:"latitude" json:"latitude"`
-	Longitude int64 `bson:"longitude" json:"longitude"`
+	Type        string    `bson:"type" json:"type"`
+	Coordinates []float64 `bson:"coordinates" json:"coordinates"`
 }
 
-// DateRange represents a range of dates using UNIX time format.
+// NewLocation creates a new GeoJSON Point location from microdegrees.
+func NewLocation(latitudeMicro, longitudeMicro int64) Location {
+	return Location{
+		Type: "Point",
+		Coordinates: []float64{
+			float64(longitudeMicro) / microdegreesInDegree, // GeoJSON: [longitude, latitude]
+			float64(latitudeMicro) / microdegreesInDegree,
+		},
+	}
+}
+
+// GetCoordinates returns the latitude and longitude in microdegrees.
+func (l Location) GetCoordinates() (latitudeMicro, longitudeMicro int64) {
+	if len(l.Coordinates) == 2 {
+		return int64(l.Coordinates[1] * microdegreesInDegree),
+			int64(l.Coordinates[0] * microdegreesInDegree)
+	}
+	return 0, 0
+}
+
+// DateRange represents a range of dates in UNIX timestamp format.
 type DateRange struct {
 	From uint32 `bson:"from" json:"from"`
 	To   uint32 `bson:"to" json:"to"`
@@ -52,11 +74,11 @@ type Tool struct {
 	ReservedDates    []DateRange        `bson:"reservedDates" json:"reservedDates"`
 }
 
-// SanitizeString removes all non-alphanumeric characters from a string, except for commas, dots, minus signs, and underscores.
+// SanitizeString removes all non-alphanumeric characters from a string,
+// except commas, dots, minus signs, underscores, and whitespace.
 func SanitizeString(s string) string {
 	reg := regexp.MustCompile(`[^a-zA-Z0-9,._\s-]+`)
-	sanitized := reg.ReplaceAllString(s, "")
-	return sanitized
+	return reg.ReplaceAllString(s, "")
 }
 
 // ToolService provides methods to interact with the "tools" collection.
@@ -71,16 +93,22 @@ func NewToolService(db *Database) *ToolService {
 	}
 }
 
-// InsertTool inserts a new Tool document.
+// InsertTool inserts a new Tool document, ensuring a 2dsphere index.
 func (s *ToolService) InsertTool(ctx context.Context, tool *Tool) (*mongo.InsertOneResult, error) {
+	_, err := s.Collection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "location", Value: "2dsphere"}},
+		Options: options.Index(),
+	})
+	if err != nil {
+		return nil, err
+	}
 	return s.Collection.InsertOne(ctx, tool)
 }
 
 // GetToolByID retrieves a Tool by its ID.
 func (s *ToolService) GetToolByID(ctx context.Context, id int64) (*Tool, error) {
 	var tool Tool
-	filter := bson.M{"_id": id}
-	err := s.Collection.FindOne(ctx, filter).Decode(&tool)
+	err := s.Collection.FindOne(ctx, bson.M{"_id": id}).Decode(&tool)
 	if err != nil {
 		return nil, err
 	}
@@ -93,9 +121,19 @@ func (s *ToolService) UpdateTool(ctx context.Context, id int64, update bson.M) (
 	return s.Collection.UpdateOne(ctx, filter, bson.M{"$set": update})
 }
 
-// SearchToolsByLocation retrieves tools within a specified radius (in meters) from a given location.
+// SearchToolsByLocation finds tools within a given radius (in meters) from a Location.
 func (s *ToolService) SearchToolsByLocation(ctx context.Context, location Location, radiusMeters int) ([]*Tool, error) {
-	cursor, err := s.Collection.Find(ctx, bson.M{})
+	pipeline := []bson.D{{
+		{Key: "$geoNear", Value: bson.D{
+			{Key: "near", Value: location},
+			{Key: "distanceField", Value: "distance"},
+			{Key: "maxDistance", Value: radiusMeters},
+			{Key: "spherical", Value: true},
+			{Key: "distanceMultiplier", Value: 0.001}, // meters => kilometers
+		}},
+	}}
+
+	cursor, err := s.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
@@ -106,14 +144,8 @@ func (s *ToolService) SearchToolsByLocation(ctx context.Context, location Locati
 	}()
 
 	var tools []*Tool
-	for cursor.Next(ctx) {
-		var tool Tool
-		if err := cursor.Decode(&tool); err != nil {
-			return nil, err
-		}
-		if WithinCircumference(tool.Location, location, radiusMeters) {
-			tools = append(tools, &tool)
-		}
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, err
 	}
 	return tools, nil
 }
@@ -125,41 +157,33 @@ func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
 		return nil, err
 	}
 	defer func() {
-		if err := cursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing cursor")
+		if closeErr := cursor.Close(ctx); closeErr != nil {
+			log.Error().Err(closeErr).Msg("Error closing cursor")
 		}
 	}()
 
 	var tools []*Tool
-	for cursor.Next(ctx) {
-		var tool Tool
-		if err := cursor.Decode(&tool); err != nil {
-			return nil, err
-		}
-		tools = append(tools, &tool)
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, err
 	}
 	return tools, nil
 }
 
-// GetToolsByUserID retrieves all tools owned by a specific user.
+// GetToolsByUserID retrieves all tools owned by a given user.
 func (s *ToolService) GetToolsByUserID(ctx context.Context, userID primitive.ObjectID) ([]*Tool, error) {
 	cursor, err := s.Collection.Find(ctx, bson.M{"userId": userID})
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		if err := cursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing cursor")
+		if closeErr := cursor.Close(ctx); closeErr != nil {
+			log.Error().Err(closeErr).Msg("Error closing cursor")
 		}
 	}()
 
 	var tools []*Tool
-	for cursor.Next(ctx) {
-		var tool Tool
-		if err := cursor.Decode(&tool); err != nil {
-			return nil, err
-		}
-		tools = append(tools, &tool)
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, err
 	}
 	return tools, nil
 }
@@ -168,23 +192,27 @@ func (s *ToolService) GetToolsByUserID(ctx context.Context, userID primitive.Obj
 func (s *ToolService) UpdateToolFields(ctx context.Context, id int64, updates map[string]interface{}) error {
 	filter := bson.M{"_id": id}
 	update := bson.M{"$set": updates}
+
 	log.Debug().
 		Int64("id", id).
 		Interface("updates", updates).
 		Msg("updating tool fields")
+
 	result, err := s.Collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
 	}
+
 	log.Debug().
 		Int64("id", id).
 		Int64("matchedCount", result.MatchedCount).
 		Int64("modifiedCount", result.ModifiedCount).
 		Msg("tool update result")
+
 	return nil
 }
 
-// SearchToolsOptions represents the search criteria for tools.
+// SearchToolsOptions represents the criteria for searching tools.
 type SearchToolsOptions struct {
 	SearchTerm       string
 	Categories       []int
@@ -195,126 +223,136 @@ type SearchToolsOptions struct {
 	TransportOptions []int
 }
 
-// SearchTools searches for tools based on various criteria.
+// SearchTools finds tools by title, categories, cost, distance, etc.
 func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) ([]*Tool, error) {
-	// Build the filter
 	filter := bson.M{}
 
-	// Add title search if search term is provided
+	// Title search
 	if opts.SearchTerm != "" {
 		sanitizedTerm := SanitizeString(opts.SearchTerm)
-		log.Debug().
-			Str("searchTerm", opts.SearchTerm).
-			Str("sanitizedTerm", sanitizedTerm).
-			Msg("building search filter")
-
-		// Simple substring match
-		filter["title"] = bson.M{
-			"$regex": sanitizedTerm,
-		}
-		log.Debug().
-			Interface("filter", filter).
-			Msg("built search filter")
+		filter["title"] = bson.M{"$regex": sanitizedTerm}
 	}
 
-	// Add category filter
+	// Category filter
 	if len(opts.Categories) > 0 {
 		filter["toolCategory"] = bson.M{"$in": opts.Categories}
 	}
 
-	// Add mayBeFree filter
+	// mayBeFree filter
 	if opts.MayBeFree != nil {
 		filter["mayBeFree"] = *opts.MayBeFree
 	}
 
-	// Add maxCost filter (only if greater than 0)
+	// maxCost filter
 	if opts.MaxCost != nil && *opts.MaxCost > 0 {
 		filter["cost"] = bson.M{"$lte": *opts.MaxCost}
 	}
 
-	// Add transport options filter
+	// transportOptions filter
 	if len(opts.TransportOptions) > 0 {
 		filter["transportOptions.id"] = bson.M{"$in": opts.TransportOptions}
 	}
 
-	// Execute the query
+	// Only show available tools
+	filter["isAvailable"] = true
+
+	// If distance + location => use $geoNear
+	if opts.Distance > 0 && opts.Location != nil {
+		pipeline := []bson.D{{
+			{Key: "$geoNear", Value: bson.D{
+				{Key: "near", Value: opts.Location},
+				{Key: "distanceField", Value: "distance"},
+				{Key: "maxDistance", Value: float64(opts.Distance)}, // meters
+				{Key: "spherical", Value: true},
+				{Key: "distanceMultiplier", Value: 0.001}, // meters => km in output
+				{Key: "query", Value: filter},
+			}},
+		}}
+
+		log.Debug().Interface("pipeline", pipeline).Msg("executing geoNear pipeline")
+
+		cursor, err := s.Collection.Aggregate(ctx, pipeline)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if closeErr := cursor.Close(ctx); closeErr != nil {
+				log.Warn().Err(closeErr).Msg("could not close db cursor")
+			}
+		}()
+
+		var tools []*Tool
+		if err := cursor.All(ctx, &tools); err != nil {
+			return nil, err
+		}
+		log.Debug().Int("total_tools", len(tools)).Msg("search completed")
+		return tools, nil
+	}
+
+	// Otherwise, do a normal Find
 	log.Debug().Interface("filter", filter).Msg("executing search with filter")
+
 	cursor, err := s.Collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
-		if err := cursor.Close(ctx); err != nil {
-			log.Warn().Msg("could not close db cursor")
+		if closeErr := cursor.Close(ctx); closeErr != nil {
+			log.Warn().Err(closeErr).Msg("could not close db cursor")
 		}
 	}()
 
-	// Decode results
 	var tools []*Tool
-	for cursor.Next(ctx) {
-		var tool Tool
-		if err := cursor.Decode(&tool); err != nil {
-			return nil, err
-		}
-		log.Debug().
-			Int64("id", tool.ID).
-			Str("title", tool.Title).
-			Msg("found matching tool")
-
-		// Check distance if required (this can't be done in MongoDB query)
-		if opts.Distance > 0 && opts.Location != nil {
-			if !WithinCircumference(tool.Location, *opts.Location, opts.Distance) {
-				continue
-			}
-		}
-
-		tools = append(tools, &tool)
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, err
 	}
-
 	log.Debug().Int("total_tools", len(tools)).Msg("search completed")
 	return tools, nil
 }
 
-// CountTools returns the total number of tools.
+// CountTools returns the total number of tool documents.
 func (s *ToolService) CountTools(ctx context.Context) (int64, error) {
 	return s.Collection.CountDocuments(ctx, bson.M{})
 }
 
-// WithinCircumference calculates if two Location points are within the same geographic circumference
-// of diameter equal to the specified distance.
-// The function takes in three arguments:
-// - location1: a Location struct with latitude and longitude in microdegrees (1e-6 degrees)
-// - location2: a Location struct with latitude and longitude in microdegrees (1e-6 degrees)
-// - distance: an integer representing the diameter of the circumference in meters
-// The function returns a boolean value indicating whether the two Location points are within the same
-// circumference of diameter equal to the distance.
+// WithinCircumference checks if two GeoJSON points are within a given radius (meters).
+// This uses the Haversine formula and a small distanceMargin to account for rounding.
 func WithinCircumference(point1, point2 Location, distance int) bool {
-	// Convert the latitude and longitude of both points to radians
-	lat1 := float64(point1.Latitude) / microdegreesInDegree * (math.Pi / 180)
-	long1 := float64(point1.Longitude) / microdegreesInDegree * (math.Pi / 180)
-	lat2 := float64(point2.Latitude) / microdegreesInDegree * (math.Pi / 180)
-	long2 := float64(point2.Longitude) / microdegreesInDegree * (math.Pi / 180)
-
-	// Calculate the distance between the two points using the Haversine formula
-	a := math.Sin((lat2-lat1)/2)*math.Sin((lat2-lat1)/2) +
-		math.Cos(lat1)*math.Cos(lat2)*
-			math.Sin((long2-long1)/2)*math.Sin((long2-long1)/2)
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-	d := earthRadius * c * 1000 // distance in meters
-
-	// Check if the distance between the two points is within the given circumference
-	return d <= float64(distance)
-}
-
-// NewLocation creates a new location that is a certain distance (in kilometers)
-// north and east from a starting location.
-// The distance is approximated using a simple flat Earth model, which is reasonably
-// accurate for small distances (up to a few hundred kilometers).
-func NewLocation(start Location, distanceNorthKm, distanceEastKm float64) Location {
-	latitudeChange := distanceNorthKm / kilometersInDegree
-	longitudeChange := distanceEastKm / (kilometersInDegree * math.Cos(float64(start.Latitude)*degreesInMicrodegrees))
-	return Location{
-		Latitude:  start.Latitude + int64(latitudeChange*microdegreesInDegree),
-		Longitude: start.Longitude + int64(longitudeChange*microdegreesInDegree),
+	if len(point1.Coordinates) != 2 || len(point2.Coordinates) != 2 {
+		return false
 	}
+
+	// GeoJSON: [longitude, latitude]
+	long1, lat1 := point1.Coordinates[0], point1.Coordinates[1]
+	long2, lat2 := point2.Coordinates[0], point2.Coordinates[1]
+
+	// Convert degrees to radians
+	lat1Rad := lat1 * (math.Pi / 180)
+	long1Rad := long1 * (math.Pi / 180)
+	lat2Rad := lat2 * (math.Pi / 180)
+	long2Rad := long2 * (math.Pi / 180)
+
+	// Haversine formula
+	dLat := lat2Rad - lat1Rad
+	dLong := long2Rad - long1Rad
+
+	a := math.Sin(dLat/2)*math.Sin(dLat/2) +
+		math.Cos(lat1Rad)*math.Cos(lat2Rad)*
+			math.Sin(dLong/2)*math.Sin(dLong/2)
+
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	distanceMeters := earthRadius * c * 1000
+
+	within := distanceMeters <= float64(distance)*distanceMargin
+	log.Debug().
+		Float64("lat1", lat1).
+		Float64("long1", long1).
+		Float64("lat2", lat2).
+		Float64("long2", long2).
+		Float64("distance_meters", distanceMeters).
+		Int("radius_meters", distance).
+		Bool("within_radius", within).
+		Msg("distance calculation")
+
+	return within
 }

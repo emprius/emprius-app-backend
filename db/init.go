@@ -151,10 +151,7 @@ func createUniqueIndexes(db *Database, ctx context.Context) error {
 			Options: options.Index(),
 		},
 		{
-			Keys: bson.D{
-				{Key: "location.latitude", Value: 1},
-				{Key: "location.longitude", Value: 1},
-			},
+			Keys:    bson.D{{Key: "location", Value: "2dsphere"}},
 			Options: options.Index(),
 		},
 	})

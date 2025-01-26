@@ -16,10 +16,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-const (
-	maxAllowedToolDistance = 200000 // m
-)
-
 func (a *API) toolCategories() []db.ToolCategory {
 	categories, err := a.database.ToolCategoryService.GetAllToolCategories(context.Background())
 	if err != nil {
@@ -65,13 +61,6 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	if err != nil {
 		return 0, ErrUserNotFound.WithErr(err)
 	}
-	if !db.WithinCircumference(user.Location, t.Location, maxAllowedToolDistance) {
-		return 0, ErrToolLocationTooFar.WithErr(fmt.Errorf(
-			"tool location is more than %d meters away from user location",
-			maxAllowedToolDistance,
-		))
-	}
-
 	if t.Category < 0 || t.Category >= len(a.toolCategories()) {
 		return 0, ErrInvalidToolCategory.WithErr(fmt.Errorf("category %d is not valid", t.Category))
 	}
@@ -109,7 +98,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		Height:           t.Height,
 		Weight:           t.Weight,
 		Images:           dbImages,
-		Location:         t.Location,
+		Location:         t.Location.ToDBLocation(),
 		TransportOptions: transportOptions,
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
@@ -166,20 +155,14 @@ func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 		return 0, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
 	}
 
+	// Create a copy of the tool for potential restoration
+	oldTool := *tool
+
+	// Update all provided fields
 	if newTool.Title != "" {
-		// If title changes, we need to update the ID since it's derived from the title
-		oldID := tool.ID
 		tool.Title = db.SanitizeString(newTool.Title)
+		// Calculate new ID based on new title
 		tool.ID = toolID(userID, tool.Title)
-		// Delete the old tool and insert the new one with updated ID
-		if err := a.deleteTool(oldID); err != nil {
-			return 0, err
-		}
-		_, err = a.database.ToolService.InsertTool(context.Background(), tool)
-		if err != nil {
-			return 0, ErrInternalServerError.WithErr(err)
-		}
-		return tool.ID, nil
 	}
 	if newTool.Description != "" {
 		tool.Description = newTool.Description
@@ -208,8 +191,8 @@ func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 		}
 		tool.ToolCategory = newTool.Category
 	}
-	if newTool.Location.Latitude != 0 && newTool.Location.Longitude != 0 {
-		tool.Location = newTool.Location
+	if len(newTool.Location.Coordinates) == 2 && (newTool.Location.Coordinates[0] != 0 || newTool.Location.Coordinates[1] != 0) {
+		tool.Location = newTool.Location.ToDBLocation()
 	}
 	if newTool.IsAvailable != nil {
 		tool.IsAvailable = *newTool.IsAvailable
@@ -248,6 +231,29 @@ func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 		}
 		tool.TransportOptions = transportOptions
 	}
+
+	// If title changed, we need to handle the tool replacement
+	if newTool.Title != "" {
+		// Delete the old tool first
+		if err := a.deleteTool(oldTool.ID); err != nil {
+			return 0, err
+		}
+
+		// Insert the new tool
+		_, err = a.database.ToolService.InsertTool(context.Background(), tool)
+		if err != nil {
+			// If insertion fails, try to restore the old tool
+			_, restoreErr := a.database.ToolService.InsertTool(context.Background(), &oldTool)
+			if restoreErr != nil {
+				// Log the restore error but return the original error
+				log.Error().Err(restoreErr).Msg("failed to restore old tool after update failure")
+			}
+			return 0, ErrInternalServerError.WithErr(err)
+		}
+		return tool.ID, nil
+	}
+
+	// For updates without title change, just update the fields
 	updates := map[string]interface{}{
 		"title":            tool.Title,
 		"description":      tool.Description,
@@ -295,14 +301,16 @@ func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Too
 
 func (a *API) deleteTool(id int64) error {
 	filter := bson.M{"_id": id}
-	_, err := a.database.ToolService.Collection.DeleteOne(context.Background(), filter)
+	result, err := a.database.ToolService.Collection.DeleteOne(context.Background(), filter)
 	if err != nil {
 		return ErrInternalServerError.WithErr(err)
+	}
+	if result.DeletedCount == 0 {
+		return ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
 	}
 	return nil
 }
 
-// GET /tools returns tools owned by the user
 func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -314,7 +322,6 @@ func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 	return &ToolsWrapper{Tools: tools}, nil
 }
 
-// GET /tools/:id returns a tool by id
 func (a *API) toolHandler(r *Request) (interface{}, error) {
 	idParam := r.Context.URLParam("id")
 	if idParam == nil {
@@ -331,7 +338,6 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 	return tool, nil
 }
 
-// GET /tools/user/:id returns tools owned by the user
 func (a *API) userToolsHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -349,7 +355,6 @@ func (a *API) userToolsHandler(r *Request) (interface{}, error) {
 	return &ToolsWrapper{Tools: tools}, nil
 }
 
-// GET /tools/search filters tools
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized
@@ -372,7 +377,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		searchTerm = db.SanitizeString(searchTermStr[0])
 	}
 
-	// Parse distance parameter
+	// Parse distance parameter (in meters)
 	var distance int
 	if distanceStr != nil {
 		var err error
@@ -441,7 +446,6 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	return &ToolsWrapper{Tools: tools}, nil
 }
 
-// POST /tools adds a new tool
 func (a *API) addToolHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -458,7 +462,6 @@ func (a *API) addToolHandler(r *Request) (interface{}, error) {
 	return &ToolID{ID: id}, nil
 }
 
-// DELETE /tools/:id deletes a tool
 func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -490,7 +493,6 @@ func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 	return nil, nil
 }
 
-// PUT /tools/:id edit a tool
 func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))

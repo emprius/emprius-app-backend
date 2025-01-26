@@ -19,6 +19,7 @@ type ResponseHeader struct {
 	Message   string `json:"message,omitempty"`
 	ErrorCode int    `json:"errorCode,omitempty"`
 }
+
 type Register struct {
 	UserEmail         string `json:"email"`
 	RegisterAuthToken string `json:"invitationToken"`
@@ -29,18 +30,47 @@ type Login struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
+
 type LoginResponse struct {
 	Token    string    `json:"token"`
 	Expirity time.Time `json:"expirity"`
 }
 
+// Location represents a GeoJSON Point
+type Location struct {
+	Type        string    `json:"type"`
+	Coordinates []float64 `json:"coordinates"`
+}
+
+// ToDBLocation converts an API Location to a DB Location
+func (l *Location) ToDBLocation() db.Location {
+	if l == nil {
+		return db.Location{
+			Type:        "Point",
+			Coordinates: []float64{0, 0},
+		}
+	}
+	return db.Location{
+		Type:        l.Type,
+		Coordinates: l.Coordinates,
+	}
+}
+
+// FromDBLocation converts a DB Location to an API Location
+func FromDBLocation(l db.Location) *Location {
+	return &Location{
+		Type:        l.Type,
+		Coordinates: l.Coordinates,
+	}
+}
+
 type UserProfile struct {
-	Name      string       `json:"name"`
-	Community string       `json:"community"`
-	Location  *db.Location `json:"location,omitempty"`
-	Active    *bool        `json:"active,omitempty"`
-	Avatar    []byte       `json:"avatar,omitempty"`
-	Password  string       `json:"password,omitempty"`
+	Name      string    `json:"name"`
+	Community string    `json:"community"`
+	Location  *Location `json:"location,omitempty"`
+	Active    *bool     `json:"active,omitempty"`
+	Avatar    []byte    `json:"avatar,omitempty"`
+	Password  string    `json:"password,omitempty"`
 }
 
 type UsersWrapper struct {
@@ -59,7 +89,7 @@ type Tool struct {
 	Images           []types.HexBytes `json:"images"`
 	TransportOptions []int            `json:"transportOptions"`
 	Category         int              `json:"category"`
-	Location         db.Location      `json:"location"`
+	Location         Location         `json:"location"`
 	EstimatedValue   uint64           `json:"estimatedValue"`
 	Height           uint32           `json:"height"`
 	Weight           uint32           `json:"weight"`
