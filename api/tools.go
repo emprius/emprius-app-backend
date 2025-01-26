@@ -130,7 +130,7 @@ func (a *API) tool(id int64) (*db.Tool, error) {
 	return tool, nil
 }
 
-func (a *API) toolsByUserID(userID string) ([]db.Tool, error) {
+func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
 	user, err := a.getUserByID(userID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
@@ -139,9 +139,9 @@ func (a *API) toolsByUserID(userID string) ([]db.Tool, error) {
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
-	result := make([]db.Tool, len(tools))
-	for i, t := range tools {
-		result[i] = *t
+	result := []*Tool{}
+	for _, t := range tools {
+		result = append(result, new(Tool).FromDBTool(t))
 	}
 	return result, nil
 }
@@ -191,7 +191,7 @@ func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 		}
 		tool.ToolCategory = newTool.Category
 	}
-	if len(newTool.Location.Coordinates) == 2 && (newTool.Location.Coordinates[0] != 0 || newTool.Location.Coordinates[1] != 0) {
+	if newTool.Location.Latitude != 0 || newTool.Location.Longitude != 0 {
 		tool.Location = newTool.Location.ToDBLocation()
 	}
 	if newTool.IsAvailable != nil {
@@ -276,14 +276,17 @@ func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 	return id, nil
 }
 
-func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Tool, error) {
+func (a *API) toolSearch(query *ToolSearch, userLocation *Location) ([]*Tool, error) {
+	// Convert user location to GeoJSON format for MongoDB
+	searchLocation := db.NewLocation(userLocation.Latitude, userLocation.Longitude)
+
 	opts := db.SearchToolsOptions{
 		SearchTerm:       query.SearchTerm,
 		Categories:       query.Categories,
 		MayBeFree:        query.MayBeFree,
 		MaxCost:          query.MaxCost,
 		Distance:         query.Distance,
-		Location:         userLocation,
+		Location:         &searchLocation,
 		TransportOptions: query.TransportOptions,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
@@ -292,9 +295,9 @@ func (a *API) toolSearch(query *ToolSearch, userLocation *db.Location) ([]db.Too
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
-	result := make([]db.Tool, len(tools))
-	for i, t := range tools {
-		result[i] = *t
+	result := []*Tool{}
+	for _, t := range tools {
+		result = append(result, new(Tool).FromDBTool(t))
 	}
 	return result, nil
 }
@@ -439,7 +442,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	tools, err := a.toolSearch(&query, &user.Location)
+	tools, err := a.toolSearch(&query, new(Location).FromDBLocation(user.Location))
 	if err != nil {
 		return nil, err
 	}

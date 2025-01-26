@@ -36,32 +36,29 @@ type LoginResponse struct {
 	Expirity time.Time `json:"expirity"`
 }
 
-// Location represents a GeoJSON Point
+// Location represents a geographical location
 type Location struct {
-	Type        string    `json:"type"`
-	Coordinates []float64 `json:"coordinates"`
+	Latitude  int64 `json:"latitude"`  // Latitude in microdegrees
+	Longitude int64 `json:"longitude"` // Longitude in microdegrees
 }
 
 // ToDBLocation converts an API Location to a DB Location
-func (l *Location) ToDBLocation() db.Location {
+func (l *Location) ToDBLocation() db.DBLocation {
 	if l == nil {
-		return db.Location{
+		return db.DBLocation{
 			Type:        "Point",
 			Coordinates: []float64{0, 0},
 		}
 	}
-	return db.Location{
-		Type:        l.Type,
-		Coordinates: l.Coordinates,
-	}
+	return db.NewLocation(l.Latitude, l.Longitude)
 }
 
 // FromDBLocation converts a DB Location to an API Location
-func FromDBLocation(l db.Location) *Location {
-	return &Location{
-		Type:        l.Type,
-		Coordinates: l.Coordinates,
-	}
+func (l *Location) FromDBLocation(dbloc db.DBLocation) *Location {
+	lat, long := dbloc.GetCoordinates()
+	l.Latitude = lat
+	l.Longitude = long
+	return l
 }
 
 type UserProfile struct {
@@ -95,12 +92,35 @@ type Tool struct {
 	Weight           uint32           `json:"weight"`
 }
 
+// FromDBTool converts a DB Tool to an API Tool.
+func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
+	t.ID = dbt.ID
+	t.Title = dbt.Title
+	t.Description = dbt.Description
+	t.IsAvailable = &dbt.IsAvailable
+	t.MayBeFree = &dbt.MayBeFree
+	t.AskWithFee = &dbt.AskWithFee
+	t.Cost = &dbt.Cost
+	for i := range dbt.Images {
+		t.Images = append(t.Images, dbt.Images[i].Hash)
+	}
+	for i := range dbt.TransportOptions {
+		t.TransportOptions = append(t.TransportOptions, int(dbt.TransportOptions[i].ID))
+	}
+	t.Category = dbt.ToolCategory
+	t.Location.FromDBLocation(dbt.Location)
+	t.EstimatedValue = dbt.EstimatedValue
+	t.Height = dbt.Height
+	t.Weight = dbt.Weight
+	return t
+}
+
 type ToolID struct {
 	ID int64 `json:"id"`
 }
 
 type ToolsWrapper struct {
-	Tools []db.Tool `json:"tools"`
+	Tools []*Tool `json:"tools"`
 }
 
 // ToolSearch is the type of the tool search

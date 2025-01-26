@@ -23,7 +23,7 @@ type User struct {
 	Active     bool               `bson:"active" json:"active" default:"true"`
 	Rating     int32              `bson:"rating" json:"rating" default:"50"`
 	AvatarHash types.HexBytes     `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
-	Location   Location           `bson:"location" json:"location"`
+	Location   DBLocation         `bson:"location" json:"location"`
 	Verified   bool               `bson:"verified" json:"verified" default:"false"`
 }
 

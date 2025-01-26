@@ -13,21 +13,15 @@ import (
 	"github.com/emprius/emprius-app-backend/types"
 )
 
-var testLatitudeA = db.Location{
-	Type: "Point",
-	Coordinates: []float64{
-		2.491027,  // longitude
-		41.688407, // latitude
-	},
-}
+var testLatitudeA = db.NewLocation(
+	41688407, // 41.688407 * 1e6
+	2491027,  // 2.491027 * 1e6
+)
 
-var testLatitudeA200km = db.Location{
-	Type: "Point",
-	Coordinates: []float64{
-		2.491027,  // longitude
-		43.488407, // latitude (~200km north)
-	},
-}
+var testLatitudeA200km = db.NewLocation(
+	43488407, // 43.488407 * 1e6 (~200km north)
+	2491027,  // 2.491027 * 1e6
+)
 
 var testUser1 = db.User{
 	Name:      "bob",
@@ -74,11 +68,8 @@ var testTool1 = Tool{
 	Cost:           uint64Ptr(10),
 	Images:         []types.HexBytes{},
 	Location: Location{
-		Type: "Point",
-		Coordinates: []float64{
-			2.491027,  // longitude
-			41.778407, // latitude (~10km north)
-		},
+		Latitude:  41778407, // 41.778407 * 1e6 (~10km north)
+		Longitude: 2491027,  // 2.491027 * 1e6
 	},
 	Category:         1,
 	TransportOptions: []int{1, 2},

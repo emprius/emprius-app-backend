@@ -21,15 +21,15 @@ const (
 	distanceMargin        = 1.01  // 1% margin to account for floating-point imprecision
 )
 
-// Location represents a geographical location in GeoJSON format.
-type Location struct {
-	Type        string    `bson:"type" json:"type"`
-	Coordinates []float64 `bson:"coordinates" json:"coordinates"`
+// DBLocation represents a geographical location in GeoJSON format.
+type DBLocation struct {
+	Type        string    `bson:"type" json:"-"`
+	Coordinates []float64 `bson:"coordinates" json:"-"`
 }
 
 // NewLocation creates a new GeoJSON Point location from microdegrees.
-func NewLocation(latitudeMicro, longitudeMicro int64) Location {
-	return Location{
+func NewLocation(latitudeMicro, longitudeMicro int64) DBLocation {
+	return DBLocation{
 		Type: "Point",
 		Coordinates: []float64{
 			float64(longitudeMicro) / microdegreesInDegree, // GeoJSON: [longitude, latitude]
@@ -39,7 +39,7 @@ func NewLocation(latitudeMicro, longitudeMicro int64) Location {
 }
 
 // GetCoordinates returns the latitude and longitude in microdegrees.
-func (l Location) GetCoordinates() (latitudeMicro, longitudeMicro int64) {
+func (l DBLocation) GetCoordinates() (latitudeMicro, longitudeMicro int64) {
 	if len(l.Coordinates) == 2 {
 		return int64(l.Coordinates[1] * microdegreesInDegree),
 			int64(l.Coordinates[0] * microdegreesInDegree)
@@ -66,7 +66,7 @@ type Tool struct {
 	Images           []Image            `bson:"images" json:"images"`
 	TransportOptions []Transport        `bson:"transportOptions" json:"transportOptions"`
 	ToolCategory     int                `bson:"toolCategory" json:"toolCategory"`
-	Location         Location           `bson:"location" json:"location"`
+	Location         DBLocation         `bson:"location" json:"-"`
 	Rating           int32              `bson:"rating" json:"rating"`
 	EstimatedValue   uint64             `bson:"estimatedValue" json:"estimatedValue"`
 	Height           uint32             `bson:"height" json:"height"`
@@ -122,7 +122,7 @@ func (s *ToolService) UpdateTool(ctx context.Context, id int64, update bson.M) (
 }
 
 // SearchToolsByLocation finds tools within a given radius (in meters) from a Location.
-func (s *ToolService) SearchToolsByLocation(ctx context.Context, location Location, radiusMeters int) ([]*Tool, error) {
+func (s *ToolService) SearchToolsByLocation(ctx context.Context, location DBLocation, radiusMeters int) ([]*Tool, error) {
 	pipeline := []bson.D{{
 		{Key: "$geoNear", Value: bson.D{
 			{Key: "near", Value: location},
@@ -219,7 +219,7 @@ type SearchToolsOptions struct {
 	MayBeFree        *bool
 	MaxCost          *uint64
 	Distance         int
-	Location         *Location
+	Location         *DBLocation
 	TransportOptions []int
 }
 
@@ -317,7 +317,7 @@ func (s *ToolService) CountTools(ctx context.Context) (int64, error) {
 
 // WithinCircumference checks if two GeoJSON points are within a given radius (meters).
 // This uses the Haversine formula and a small distanceMargin to account for rounding.
-func WithinCircumference(point1, point2 Location, distance int) bool {
+func WithinCircumference(point1, point2 DBLocation, distance int) bool {
 	if len(point1.Coordinates) != 2 || len(point2.Coordinates) != 2 {
 		return false
 	}

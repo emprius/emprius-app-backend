@@ -34,8 +34,8 @@ func TestTools(t *testing.T) {
 				"weight":         40,
 				"isAvailable":    true,
 				"location": map[string]interface{}{
-					"type":        "Point",
-					"coordinates": []float64{2.492793, 41.920384}, // ~25 km north
+					"latitude":  41920384, // 41.920384 * 1e6 (~25 km north)
+					"longitude": 2492793,  // 2.492793 * 1e6
 				},
 			},
 			"tools",
@@ -58,8 +58,8 @@ func TestTools(t *testing.T) {
 				"height":         30,
 				"weight":         40,
 				"location": map[string]interface{}{
-					"type":        "Point",
-					"coordinates": []float64{2.492793, 41.920384},
+					"latitude":  41920384, // 41.920384 * 1e6 (~25 km north)
+					"longitude": 2492793,  // 2.492793 * 1e6
 				},
 			},
 			"tools",
@@ -93,10 +93,8 @@ func TestTools(t *testing.T) {
 				"weight":         50,
 				"isAvailable":    true,
 				"location": map[string]interface{}{
-					"type": "Point",
-					// A latitude about 0.09 north from the final "updated" lat
-					// so it's ~9 km away from that point.
-					"coordinates": []float64{2.492793, 41.785384},
+					"latitude":  41785384, // 41.785384 * 1e6 (~9 km from updated location)
+					"longitude": 2492793,  // 2.492793 * 1e6
 				},
 			},
 			"tools",
@@ -134,8 +132,8 @@ func TestTools(t *testing.T) {
 				"weight":         50,
 				"isAvailable":    true,
 				"location": map[string]interface{}{
-					"type":        "Point",
-					"coordinates": []float64{2.492793, 41.695384}, // ~ "center"
+					"latitude":  41695384, // 41.695384 * 1e6 (center)
+					"longitude": 2492793,  // 2.492793 * 1e6
 				},
 			},
 			"tools", fmt.Sprint(toolID),
@@ -211,8 +209,8 @@ func TestTools(t *testing.T) {
 					"weight":         40,
 					"isAvailable":    true,
 					"location": map[string]interface{}{
-						"type":        "Point",
-						"coordinates": []float64{2.492793, 41.745384}, // ~5 km from 41.695384
+						"latitude":  41745384, // 41.745384 * 1e6 (~5 km from center)
+						"longitude": 2492793,  // 2.492793 * 1e6
 					},
 				},
 				"tools",
@@ -233,8 +231,8 @@ func TestTools(t *testing.T) {
 					"weight":         40,
 					"isAvailable":    true,
 					"location": map[string]interface{}{
-						"type":        "Point",
-						"coordinates": []float64{2.492793, 41.845384}, // ~15 km
+						"latitude":  41845384, // 41.845384 * 1e6 (~15 km from center)
+						"longitude": 2492793,  // 2.492793 * 1e6
 					},
 				},
 				"tools",
@@ -255,8 +253,8 @@ func TestTools(t *testing.T) {
 					"weight":         40,
 					"isAvailable":    true,
 					"location": map[string]interface{}{
-						"type":        "Point",
-						"coordinates": []float64{2.492793, 41.945384}, // ~25 km
+						"latitude":  41945384, // 41.945384 * 1e6 (~25 km from center)
+						"longitude": 2492793,  // 2.492793 * 1e6
 					},
 				},
 				"tools",

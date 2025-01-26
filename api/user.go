@@ -202,5 +202,9 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrCouldNotInsertToDatabase.WithErr(err)
 	}
-	return &user, nil
+	newUser, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user profile: %w", err)
+	}
+	return newUser, nil
 }

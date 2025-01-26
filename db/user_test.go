@@ -50,7 +50,7 @@ func TestUserService(t *testing.T) {
 			Active:     true,
 			Rating:     80,
 			AvatarHash: []byte("avatarhash"),
-			Location: Location{
+			Location: DBLocation{
 				Type: "Point",
 				Coordinates: []float64{
 					2.492793,  // longitude
@@ -83,7 +83,7 @@ func TestUserService(t *testing.T) {
 			Tokens:    50,
 			Active:    true,
 			Rating:    70,
-			Location: Location{
+			Location: DBLocation{
 				Type: "Point",
 				Coordinates: []float64{
 					2.492793,  // longitude

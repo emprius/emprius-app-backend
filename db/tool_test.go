@@ -13,7 +13,7 @@ import (
 func TestWithinCircumference(t *testing.T) {
 	t.Run("Distance Calculations", func(t *testing.T) {
 		// Base location (Barcelona area)
-		base := Location{
+		base := DBLocation{
 			Type: "Point",
 			Coordinates: []float64{
 				2.492793,  // longitude
@@ -24,13 +24,13 @@ func TestWithinCircumference(t *testing.T) {
 		// Test cases
 		tests := []struct {
 			name     string
-			loc      Location
+			loc      DBLocation
 			distance int
 			want     bool
 		}{
 			{
 				name: "Same point",
-				loc: Location{
+				loc: DBLocation{
 					Type: "Point",
 					Coordinates: []float64{
 						2.492793,  // longitude
@@ -42,7 +42,7 @@ func TestWithinCircumference(t *testing.T) {
 			},
 			{
 				name: "Point at exactly 5km north",
-				loc: Location{
+				loc: DBLocation{
 					Type: "Point",
 					Coordinates: []float64{
 						2.492793,  // longitude
@@ -54,7 +54,7 @@ func TestWithinCircumference(t *testing.T) {
 			},
 			{
 				name: "Point at 5.1km north (should fail for 5km radius)",
-				loc: Location{
+				loc: DBLocation{
 					Type: "Point",
 					Coordinates: []float64{
 						2.492793,  // longitude
@@ -66,7 +66,7 @@ func TestWithinCircumference(t *testing.T) {
 			},
 			{
 				name: "Point at diagonal ~7km (5km north, 5km east)",
-				loc: Location{
+				loc: DBLocation{
 					Type: "Point",
 					Coordinates: []float64{
 						2.557793,  // longitude (~5km east)
@@ -78,7 +78,7 @@ func TestWithinCircumference(t *testing.T) {
 			},
 			{
 				name: "Point at 10km north",
-				loc: Location{
+				loc: DBLocation{
 					Type: "Point",
 					Coordinates: []float64{
 						2.492793,  // longitude
@@ -90,7 +90,7 @@ func TestWithinCircumference(t *testing.T) {
 			},
 			{
 				name: "Point at 10.1km north (should fail for 10km radius)",
-				loc: Location{
+				loc: DBLocation{
 					Type: "Point",
 					Coordinates: []float64{
 						2.492793,  // longitude
@@ -133,7 +133,7 @@ func TestWithinCircumference(t *testing.T) {
 
 	t.Run("Verify 5km Test Case", func(t *testing.T) {
 		// Base location (Barcelona area)
-		base := Location{
+		base := DBLocation{
 			Type: "Point",
 			Coordinates: []float64{
 				2.492793,  // longitude
@@ -142,7 +142,7 @@ func TestWithinCircumference(t *testing.T) {
 		}
 
 		// Tool at 5km north
-		toolAt5km := Location{
+		toolAt5km := DBLocation{
 			Type: "Point",
 			Coordinates: []float64{
 				2.492793,  // longitude
@@ -214,7 +214,7 @@ func TestSearchToolsByLocation(t *testing.T) {
 	})
 
 	// Base location (Barcelona area)
-	baseLocation := Location{
+	baseLocation := DBLocation{
 		Type: "Point",
 		Coordinates: []float64{
 			2.492793,  // longitude
@@ -225,12 +225,12 @@ func TestSearchToolsByLocation(t *testing.T) {
 	// Create test tools at different distances
 	tools := []struct {
 		name     string
-		location Location
+		location DBLocation
 		distance float64 // Expected distance in meters
 	}{
 		{
 			name: "Tool at origin",
-			location: Location{
+			location: DBLocation{
 				Type: "Point",
 				Coordinates: []float64{
 					2.492793,  // longitude
@@ -241,7 +241,7 @@ func TestSearchToolsByLocation(t *testing.T) {
 		},
 		{
 			name: "Tool at 5km north",
-			location: Location{
+			location: DBLocation{
 				Type: "Point",
 				Coordinates: []float64{
 					2.492793,  // longitude
@@ -252,7 +252,7 @@ func TestSearchToolsByLocation(t *testing.T) {
 		},
 		{
 			name: "Tool at 15km north",
-			location: Location{
+			location: DBLocation{
 				Type: "Point",
 				Coordinates: []float64{
 					2.492793,  // longitude
@@ -263,7 +263,7 @@ func TestSearchToolsByLocation(t *testing.T) {
 		},
 		{
 			name: "Tool at 25km north",
-			location: Location{
+			location: DBLocation{
 				Type: "Point",
 				Coordinates: []float64{
 					2.492793,  // longitude
