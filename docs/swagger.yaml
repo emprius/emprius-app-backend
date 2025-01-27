@@ -852,6 +852,25 @@ paths:
       responses:
         '200':
           description: List of pending ratings
+
+  /bookings/pendings:
+    get:
+      tags:
+        - Bookings
+      summary: Get count of pending booking actions. Booking requests and pending ratings.
+      description: Returns the number of pending booking actions for the authenticated user
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: Count of pending actions
+          content:
+            application/json:
+              schema:
+                type: integer
+                description: Number of pending actions
+        '401':
+          description: Unauthorized
     post:
       tags:
         - Bookings

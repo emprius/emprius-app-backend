@@ -335,7 +335,10 @@ type CountPendingActionsResponse struct {
 }
 
 // CountPendingActions returns the count of pending ratings and booking requests for a user
-func (s *BookingService) CountPendingActions(ctx context.Context, userID primitive.ObjectID) (*CountPendingActionsResponse, error) {
+func (s *BookingService) CountPendingActions(
+	ctx context.Context,
+	userID primitive.ObjectID,
+) (*CountPendingActionsResponse, error) {
 	// Use aggregation to count pending ratings and booking requests in a single query
 	pipeline := mongo.Pipeline{
 		{
@@ -347,19 +350,24 @@ func (s *BookingService) CountPendingActions(ctx context.Context, userID primiti
 								{"fromUserId": userID},
 								{"toUserId": userID},
 							},
-							"bookingStatus": BookingStatusReturned,
+							"bookingStatus": bson.M{
+								"$in": []BookingStatus{
+									BookingStatusReturned,
+									BookingStatusAccepted,
+								},
+							},
 						}},
 					},
-					bson.D{{Key: "$count", Value: "count"}},
+					bson.D{{Key: "$count", Value: "count"}}, // Count the number of matching documents
 				}},
 				{Key: "pendingRequests", Value: bson.A{
 					bson.D{
 						{Key: "$match", Value: bson.M{
 							"toUserId":      userID,
-							"bookingStatus": BookingStatusPending,
+							"bookingStatus": BookingStatusPending, // Only count PENDING requests
 						}},
 					},
-					bson.D{{Key: "$count", Value: "count"}},
+					bson.D{{Key: "$count", Value: "count"}}, // Count the number of matching documents
 				}},
 			}},
 		},
@@ -375,7 +383,12 @@ func (s *BookingService) CountPendingActions(ctx context.Context, userID primiti
 	if err != nil {
 		return nil, fmt.Errorf("failed to aggregate pending actions: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		err := cursor.Close(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	// Parse the result
 	var result []CountPendingActionsResponse

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/emprius/emprius-app-backend/api"
+	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/test/utils"
 	qt "github.com/frankban/quicktest"
 )
@@ -289,6 +290,75 @@ func TestBookings(t *testing.T) {
 			// Test without authentication
 			_, code = c.Request(http.MethodGet, "", nil, "bookings", "user", renterID)
 			qt.Assert(t, code, qt.Equals, 401)
+		})
+
+		// Test count pending actions
+		t.Run("Count Pending Actions", func(t *testing.T) {
+			// Create two users: tool owner and renter
+			ownerJWT := c.RegisterAndLogin("owner2@test.com", "owner2", "ownerpass")
+			renterJWT := c.RegisterAndLogin("renter2@test.com", "renter2", "renterpass")
+
+			// Try to get count without auth
+			_, code := c.Request(http.MethodGet, "", nil, "bookings", "pendings")
+			qt.Assert(t, code, qt.Equals, 401)
+
+			// Create a tool for owner
+			toolID := c.CreateTool(ownerJWT, "Test Tool")
+
+			// Get count for owner (should have 0 pending booking)
+			resp, code := c.Request(http.MethodGet, ownerJWT, nil, "bookings", "pendings")
+			qt.Assert(t, code, qt.Equals, 200)
+			var countResp struct {
+				Data *db.CountPendingActionsResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp, &countResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, countResp.Data.PendingRequestsCount, qt.Equals, int64(0))
+			qt.Assert(t, countResp.Data.PendingRatingsCount, qt.Equals, int64(0))
+
+			// Create a pending booking from renter to owner
+			_, code = c.Request(http.MethodPost, renterJWT,
+				map[string]interface{}{
+					"toolId":    fmt.Sprint(toolID),
+					"startDate": time.Now().Add(168 * time.Hour).Unix(),
+					"endDate":   time.Now().Add(192 * time.Hour).Unix(),
+					"contact":   "test@example.com",
+					"comments":  "Another pending booking",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Verify owner now has 1 pending actions
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "pendings")
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &countResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, countResp.Data.PendingRequestsCount, qt.Equals, int64(1))
+			qt.Assert(t, countResp.Data.PendingRatingsCount, qt.Equals, int64(0))
+
+			// Get booking requests (owner)
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests")
+			qt.Assert(t, code, qt.Equals, 200)
+			var petitionsResp struct {
+				Data []api.BookingResponse `json:"data"`
+			}
+			err = json.Unmarshal(resp, &petitionsResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(petitionsResp.Data), qt.Equals, 1)
+
+			// Accept the booking request
+			bookingID := petitionsResp.Data[0].ID
+			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID, "accept")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Verify owner now has 0 pending request and 1 pending rating
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "pendings")
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &countResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, countResp.Data.PendingRequestsCount, qt.Equals, int64(0))
+			qt.Assert(t, countResp.Data.PendingRatingsCount, qt.Equals, int64(1))
 		})
 	})
 }
