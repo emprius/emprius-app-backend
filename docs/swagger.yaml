@@ -867,8 +867,19 @@ paths:
           content:
             application/json:
               schema:
-                type: integer
-                description: Number of pending actions
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      pendingRatingsCount:
+                        type: integer
+                        format: int64
+                        description: Number of pending ratings
+                      pendingRequestsCount:
+                        type: integer
+                        format: int64
+                        description: Number of pending booking requests
         '401':
           description: Unauthorized
     post:
