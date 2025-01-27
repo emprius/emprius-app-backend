@@ -119,7 +119,7 @@ func toolID(ownerID string, title string) int64 {
 	return int64(math.Abs(float64(int64(binary.BigEndian.Uint32(hash[:4])))))
 }
 
-func (a *API) tool(id int64) (*db.Tool, error) {
+func (a *API) toolFromDB(id int64) (*db.Tool, error) {
 	tool, err := a.database.ToolService.GetToolByID(context.Background(), id)
 	if err == mongo.ErrNoDocuments {
 		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
@@ -128,6 +128,14 @@ func (a *API) tool(id int64) (*db.Tool, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 	return tool, nil
+}
+
+func (a *API) tool(id int64) (*Tool, error) {
+	tool, err := a.toolFromDB(id)
+	if err != nil {
+		return nil, err
+	}
+	return new(Tool).FromDBTool(tool), nil
 }
 
 func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
@@ -147,7 +155,7 @@ func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
 }
 
 func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
-	tool, err := a.tool(id)
+	tool, err := a.toolFromDB(id)
 	if err != nil {
 		return 0, err
 	}
@@ -479,7 +487,7 @@ func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 	// check the tool is owned by the user
-	tool, err := a.tool(id)
+	tool, err := a.toolFromDB(id)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +517,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 	// check the tool is owned by the user
-	tool, err := a.tool(id)
+	tool, err := a.toolFromDB(id)
 	if err != nil {
 		return nil, err
 	}
