@@ -126,7 +126,7 @@ type Tool struct {
 	Cost             *uint64          `json:"cost"`
 	Images           []types.HexBytes `json:"images"`
 	TransportOptions []int            `json:"transportOptions"`
-	Category         int              `json:"category"`
+	Category         int              `json:"toolCategory"`
 	Location         Location         `json:"location"`
 	EstimatedValue   uint64           `json:"estimatedValue"`
 	Height           uint32           `json:"height"`
