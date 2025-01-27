@@ -178,6 +178,9 @@ func (a *API) router() http.Handler {
 		// GET /bookings/petitions
 		log.Info().Msg("register route GET /bookings/petitions")
 		r.Get("/bookings/petitions", a.routerHandler(a.HandleGetBookingPetitions))
+		// GET /bookings/pendings
+		log.Info().Msg("register route GET /bookings/pendings")
+		r.Get("/bookings/pendings", a.routerHandler(a.HandleCountPendingActions))
 		// GET /bookings/{bookingId}
 		log.Info().Msg("register route GET /bookings/{bookingId}")
 		r.Get("/bookings/{bookingId}", a.routerHandler(a.HandleGetBooking))

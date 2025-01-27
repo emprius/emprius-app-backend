@@ -423,7 +423,22 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRating.WithErr(fmt.Errorf("rating value %d is not between 1 and 5", rateReq.Rating))
 	}
 
-	// TODO: Implement rating logic once rating schema is defined
-
 	return nil, nil
+}
+
+// HandleCountPendingActions handles GET /bookings/pending
+func (a *API) HandleCountPendingActions(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+	uID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	pending, err := a.database.BookingService.CountPendingActions(r.Context.Request.Context(), uID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	return pending, nil
 }

@@ -327,3 +327,69 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 	}
 	return bookings, nil
 }
+
+// CountPendingActionsResponse represents the response for CountPendingActions
+type CountPendingActionsResponse struct {
+	PendingRatingsCount  int64 `json:"pendingRatingsCount"`
+	PendingRequestsCount int64 `json:"pendingRequestsCount"`
+}
+
+// CountPendingActions returns the count of pending ratings and booking requests for a user
+func (s *BookingService) CountPendingActions(ctx context.Context, userID primitive.ObjectID) (*CountPendingActionsResponse, error) {
+	// Use aggregation to count pending ratings and booking requests in a single query
+	pipeline := mongo.Pipeline{
+		{
+			{Key: "$facet", Value: bson.D{
+				{Key: "pendingRatings", Value: bson.A{
+					bson.D{
+						{Key: "$match", Value: bson.M{
+							"$or": []bson.M{
+								{"fromUserId": userID},
+								{"toUserId": userID},
+							},
+							"bookingStatus": BookingStatusReturned,
+						}},
+					},
+					bson.D{{Key: "$count", Value: "count"}},
+				}},
+				{Key: "pendingRequests", Value: bson.A{
+					bson.D{
+						{Key: "$match", Value: bson.M{
+							"toUserId":      userID,
+							"bookingStatus": BookingStatusPending,
+						}},
+					},
+					bson.D{{Key: "$count", Value: "count"}},
+				}},
+			}},
+		},
+		{
+			{Key: "$project", Value: bson.D{
+				{Key: "pendingRatingsCount", Value: bson.M{"$arrayElemAt": bson.A{"$pendingRatings.count", 0}}},
+				{Key: "pendingRequestsCount", Value: bson.M{"$arrayElemAt": bson.A{"$pendingRequests.count", 0}}},
+			}},
+		},
+	}
+
+	cursor, err := s.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate pending actions: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	// Parse the result
+	var result []CountPendingActionsResponse
+	if err := cursor.All(ctx, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse aggregation result: %w", err)
+	}
+
+	if len(result) == 0 {
+		return &CountPendingActionsResponse{
+			PendingRatingsCount:  0,
+			PendingRequestsCount: 0,
+		}, nil
+	}
+
+	// Return the first document in the result (contains the counts)
+	return &result[0], nil
+}
