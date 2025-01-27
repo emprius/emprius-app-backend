@@ -73,16 +73,16 @@ type UserProfile struct {
 
 // User represents the user type
 type User struct {
-	ID         string   `json:"id"`
-	Email      string   `json:"email"`
-	Name       string   `json:"name"`
-	Community  string   `json:"community"`
-	Tokens     uint64   `json:"tokens"`
-	Active     bool     `json:"active"`
-	Rating     int      `json:"rating"`
-	AvatarHash []byte   `json:"avatarHash"`
-	Location   Location `json:"location"`
-	Verified   bool     `json:"verified"`
+	ID         string         `json:"id"`
+	Email      string         `json:"email"`
+	Name       string         `json:"name"`
+	Community  string         `json:"community"`
+	Tokens     uint64         `json:"tokens"`
+	Active     bool           `json:"active"`
+	Rating     int            `json:"rating"`
+	AvatarHash types.HexBytes `json:"avatarHash"`
+	Location   Location       `json:"location"`
+	Verified   bool           `json:"verified"`
 }
 
 // FromDBUser converts a DB User to an API User
