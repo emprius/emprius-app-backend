@@ -117,6 +117,7 @@ type UsersWrapper struct {
 // Tool is the type of the tool
 type Tool struct {
 	ID               int64            `json:"id"`
+	UserID           string           `json:"userId"`
 	Title            string           `json:"title"`
 	Description      string           `json:"description"`
 	IsAvailable      *bool            `json:"isAvailable"`
@@ -130,11 +131,13 @@ type Tool struct {
 	EstimatedValue   uint64           `json:"estimatedValue"`
 	Height           uint32           `json:"height"`
 	Weight           uint32           `json:"weight"`
+	ReserverDates    []db.DateRange   `json:"reservedDates"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
 func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.ID = dbt.ID
+	t.UserID = dbt.UserID.Hex()
 	t.Title = dbt.Title
 	t.Description = dbt.Description
 	t.IsAvailable = &dbt.IsAvailable
@@ -152,6 +155,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.EstimatedValue = dbt.EstimatedValue
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
+	t.ReserverDates = dbt.ReservedDates
 	return t
 }
 
