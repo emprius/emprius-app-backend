@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -250,16 +251,22 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		// Get tool service from database
 		toolService := s.database.Collection("tools")
 
+		// Convert tool ID from string to int64
+		toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid tool ID: %w", err)
+		}
+
 		// Add reserved dates to tool
 		update := bson.M{
 			"$push": bson.M{
 				"reservedDates": bson.M{
-					"from": booking.StartDate,
-					"to":   booking.EndDate,
+					"from": uint32(booking.StartDate.Unix()),
+					"to":   uint32(booking.EndDate.Unix()),
 				},
 			},
 		}
-		_, err = toolService.UpdateOne(ctx, bson.M{"_id": booking.ToolID}, update)
+		_, err = toolService.UpdateOne(ctx, bson.M{"_id": toolID}, update)
 		if err != nil {
 			return fmt.Errorf("could not update tool reserved dates: %w", err)
 		}

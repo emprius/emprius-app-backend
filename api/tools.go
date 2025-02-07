@@ -105,6 +105,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		Images:           dbImages,
 		Location:         t.Location.ToDBLocation(),
 		TransportOptions: transportOptions,
+		ReservedDates:    []db.DateRange{}, // Initialize empty array
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 

@@ -131,7 +131,7 @@ type Tool struct {
 	EstimatedValue   uint64           `json:"estimatedValue"`
 	Height           uint32           `json:"height"`
 	Weight           uint32           `json:"weight"`
-	ReserverDates    []db.DateRange   `json:"reservedDates"`
+	ReservedDates    []db.DateRange   `json:"reservedDates"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
@@ -155,7 +155,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.EstimatedValue = dbt.EstimatedValue
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
-	t.ReserverDates = dbt.ReservedDates
+	t.ReservedDates = dbt.ReservedDates
 	return t
 }
 
