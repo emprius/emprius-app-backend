@@ -42,21 +42,10 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		})
 	}
 
-	if t.Title == "" || t.Description == "" {
-		return 0, ErrEmptyTitleOrDescription.WithErr(fmt.Errorf("title or description is empty"))
+	if t.Title == "" {
+		return 0, ErrEmptyTitleOrDescription.WithErr(fmt.Errorf("title is empty"))
 	}
-	if t.EstimatedValue == 0 {
-		return 0, ErrInvalidEstimatedValue.WithErr(fmt.Errorf("estimated value must be greater than 0"))
-	}
-	if t.MayBeFree == nil {
-		return 0, ErrMayBeFreeRequired.WithErr(fmt.Errorf("may be free field is required"))
-	}
-	if t.AskWithFee == nil {
-		return 0, ErrAskWithFeeRequired.WithErr(fmt.Errorf("ask with fee field is required"))
-	}
-	if t.Cost == nil {
-		return 0, ErrCostRequired.WithErr(fmt.Errorf("cost field is required"))
-	}
+
 	user, err := a.getUserByID(userID)
 	if err != nil {
 		return 0, ErrUserNotFound.WithErr(err)
@@ -83,12 +72,28 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		transportOptions[i] = db.Transport{ID: int64(id)}
 	}
 
+	// set default values
+	if t.MayBeFree == nil {
+		t.MayBeFree = new(bool)
+		*t.MayBeFree = true
+	}
+	if t.AskWithFee == nil {
+		t.AskWithFee = new(bool)
+	}
+	if t.Cost == nil {
+		t.Cost = new(uint64)
+	}
+	if t.IsAvailable == nil {
+		t.IsAvailable = new(bool)
+		*t.IsAvailable = true
+	}
+
 	dbTool := db.Tool{
 		ID:               toolID(userID, t.Title),
 		UserID:           user.ObjectID(),
 		Title:            db.SanitizeString(t.Title),
 		Description:      t.Description,
-		IsAvailable:      true,
+		IsAvailable:      *t.IsAvailable,
 		MayBeFree:        *t.MayBeFree,
 		AskWithFee:       *t.AskWithFee,
 		Cost:             *t.Cost,
