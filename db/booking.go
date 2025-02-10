@@ -494,14 +494,24 @@ func (s *BookingService) RateBooking(
 		return ErrBookingNotFound
 	}
 
-	// Update tool's average rating
+	// Update tool and owner ratings
+	if err := s.updateRatings(ctx, booking); err != nil {
+		return fmt.Errorf("failed to update ratings: %w", err)
+	}
+
+	return nil
+}
+
+// updateRatings updates both tool and user ratings based on the booking ratings
+func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) error {
+	// Update tool's rating
 	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid tool ID: %w", err)
 	}
 
 	// Calculate new average rating for the tool
-	pipeline := mongo.Pipeline{
+	toolPipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{
 			"toolId":        booking.ToolID,
 			"bookingStatus": BookingStatusReturned,
@@ -514,34 +524,77 @@ func (s *BookingService) RateBooking(
 		}}},
 	}
 
-	cursor, err := s.collection.Aggregate(ctx, pipeline)
+	toolCursor, err := s.collection.Aggregate(ctx, toolPipeline)
 	if err != nil {
-		return fmt.Errorf("failed to calculate average rating: %w", err)
+		return fmt.Errorf("failed to calculate tool average rating: %w", err)
 	}
 	defer func() {
-		if err := cursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing cursor")
+		if err := toolCursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing tool cursor")
 		}
 	}()
 
-	var results []struct {
+	var toolResults []struct {
 		AvgRating   float64 `bson:"avgRating"`
 		RatingCount int     `bson:"ratingCount"`
 	}
-	if err = cursor.All(ctx, &results); err != nil {
-		return fmt.Errorf("failed to decode average rating: %w", err)
+	if err = toolCursor.All(ctx, &toolResults); err != nil {
+		return fmt.Errorf("failed to decode tool average rating: %w", err)
 	}
 
-	if len(results) > 0 {
+	if len(toolResults) > 0 {
 		// Update tool's rating
 		toolService := s.database.Collection("tools")
 		_, err = toolService.UpdateOne(
 			ctx,
 			bson.M{"_id": toolID},
-			bson.M{"$set": bson.M{"rating": int32(math.Round(results[0].AvgRating))}},
+			bson.M{"$set": bson.M{"rating": int32(math.Round(toolResults[0].AvgRating))}},
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update tool rating: %w", err)
+		}
+	}
+
+	// Get all tools owned by the user
+	toolService := s.database.Collection("tools")
+	toolsCursor, err := toolService.Find(ctx, bson.M{"userId": booking.ToUserID})
+	if err != nil {
+		return fmt.Errorf("failed to get user's tools: %w", err)
+	}
+	defer func() {
+		if err := toolsCursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing tools cursor")
+		}
+	}()
+
+	var tools []struct {
+		Rating int32 `bson:"rating"`
+	}
+	if err = toolsCursor.All(ctx, &tools); err != nil {
+		return fmt.Errorf("failed to decode user's tools: %w", err)
+	}
+
+	// Calculate average rating of all user's tools
+	var totalRating float64
+	var ratedTools int
+	for _, tool := range tools {
+		if tool.Rating > 0 {
+			totalRating += float64(tool.Rating)
+			ratedTools++
+		}
+	}
+
+	// Update user's rating if they have any rated tools
+	if ratedTools > 0 {
+		userService := s.database.Collection("users")
+		_, err = userService.UpdateOne(
+			ctx,
+			bson.M{"_id": booking.ToUserID},
+			// Convert tool's 1-5 rating to user's 0-100 scale
+			bson.M{"$set": bson.M{"rating": int32(math.Round((totalRating / float64(ratedTools)) * 20))}},
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update user rating: %w", err)
 		}
 	}
 
