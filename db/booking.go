@@ -223,6 +223,7 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 
 // UpdateStatus updates the booking status and handles any related updates
 func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID, status BookingStatus) error {
+	// Get the booking first
 	booking, err := s.Get(ctx, id)
 	if err != nil {
 		return err
@@ -231,6 +232,28 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		return ErrBookingNotFound
 	}
 
+	// If accepting booking, verify tool exists and can be updated first
+	if status == BookingStatusAccepted {
+		toolService := s.database.Collection("tools")
+
+		// Convert tool ID from string to int64
+		toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid tool ID: %w", err)
+		}
+
+		// Verify tool exists
+		var tool bson.M
+		err = toolService.FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
+		if err != nil {
+			if err == mongo.ErrNoDocuments {
+				return fmt.Errorf("tool not found: %d", toolID)
+			}
+			return fmt.Errorf("error finding tool: %w", err)
+		}
+	}
+
+	// Update booking status
 	update := bson.M{
 		"$set": bson.M{
 			"bookingStatus": status,
@@ -248,14 +271,8 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 
 	// If accepting booking, update tool's reserved dates
 	if status == BookingStatusAccepted {
-		// Get tool service from database
 		toolService := s.database.Collection("tools")
-
-		// Convert tool ID from string to int64
-		toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid tool ID: %w", err)
-		}
+		toolID, _ := strconv.ParseInt(booking.ToolID, 10, 64) // Error already checked above
 
 		// Add reserved dates to tool
 		update := bson.M{
@@ -268,6 +285,17 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		}
 		_, err = toolService.UpdateOne(ctx, bson.M{"_id": toolID}, update)
 		if err != nil {
+			// If tool update fails, revert booking status
+			revertUpdate := bson.M{
+				"$set": bson.M{
+					"bookingStatus": BookingStatusPending,
+					"updatedAt":     time.Now(),
+				},
+			}
+			_, revertErr := s.collection.UpdateOne(ctx, bson.M{"_id": id}, revertUpdate)
+			if revertErr != nil {
+				return fmt.Errorf("failed to update tool and revert booking status: %v, %v", err, revertErr)
+			}
 			return fmt.Errorf("could not update tool reserved dates: %w", err)
 		}
 	}

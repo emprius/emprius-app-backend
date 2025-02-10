@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -10,6 +11,28 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// createTestTool creates a test tool in the database
+func createTestTool(ctx context.Context, db *mongo.Database, userID primitive.ObjectID) (int64, error) {
+	toolService := db.Collection("tools")
+	toolID := time.Now().UnixNano() % 10000000 // Generate a unique tool ID
+
+	tool := &Tool{
+		ID:            toolID,
+		Title:         "Test Tool",
+		Description:   "Test Description",
+		UserID:        userID,
+		IsAvailable:   true,
+		ReservedDates: []DateRange{}, // Initialize as empty array
+	}
+
+	_, err := toolService.InsertOne(ctx, tool)
+	if err != nil {
+		return 0, err
+	}
+
+	return toolID, nil
+}
 
 func TestBookingService(t *testing.T) {
 	c := qt.New(t)
@@ -37,13 +60,14 @@ func TestBookingService(t *testing.T) {
 	bookingService := NewBookingService(database)
 
 	c.Run("Create and Get Booking", func(c *qt.C) {
-		// Create test booking
-		toolID := "123456"
+		// Create test users and tool
 		fromUserID := primitive.NewObjectID()
 		toUserID := primitive.NewObjectID()
+		toolID, err := createTestTool(ctx, database, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
 
 		req := &CreateBookingRequest{
-			ToolID:    toolID,
+			ToolID:    strconv.FormatInt(toolID, 10),
 			StartDate: time.Now().Add(24 * time.Hour),
 			EndDate:   time.Now().Add(48 * time.Hour),
 			Contact:   "test@example.com",
@@ -66,13 +90,15 @@ func TestBookingService(t *testing.T) {
 	})
 
 	c.Run("Date Conflict Detection", func(c *qt.C) {
-		toolID := "123456"
+		// Create test users and tool
 		fromUserID := primitive.NewObjectID()
 		toUserID := primitive.NewObjectID()
+		toolID, err := createTestTool(ctx, database, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
 
 		// Create and accept initial booking
 		req1 := &CreateBookingRequest{
-			ToolID:    toolID,
+			ToolID:    strconv.FormatInt(toolID, 10),
 			StartDate: time.Now().Add(24 * time.Hour),
 			EndDate:   time.Now().Add(48 * time.Hour),
 			Contact:   "test1@example.com",
@@ -86,7 +112,7 @@ func TestBookingService(t *testing.T) {
 
 		// Try to create overlapping booking (should fail since first booking is accepted)
 		req2 := &CreateBookingRequest{
-			ToolID:    toolID,
+			ToolID:    strconv.FormatInt(toolID, 10),
 			StartDate: time.Now().Add(36 * time.Hour),
 			EndDate:   time.Now().Add(60 * time.Hour),
 			Contact:   "test2@example.com",
@@ -97,11 +123,13 @@ func TestBookingService(t *testing.T) {
 
 	c.Run("Get User Requests", func(c *qt.C) {
 		toUserID := primitive.NewObjectID()
+		toolID, err := createTestTool(ctx, database, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
 
 		// Create multiple bookings
 		for i := 0; i < 3; i++ {
 			req := &CreateBookingRequest{
-				ToolID:    "789012",
+				ToolID:    strconv.FormatInt(toolID, 10),
 				StartDate: time.Now().Add(time.Duration(i+1) * 24 * time.Hour),
 				EndDate:   time.Now().Add(time.Duration(i+2) * 24 * time.Hour),
 				Contact:   "test@example.com",
@@ -118,11 +146,14 @@ func TestBookingService(t *testing.T) {
 
 	c.Run("Get User Petitions", func(c *qt.C) {
 		fromUserID := primitive.NewObjectID()
+		toUserID := primitive.NewObjectID()
+		toolID, err := createTestTool(ctx, database, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
 
 		// Create multiple bookings
 		for i := 0; i < 3; i++ {
 			req := &CreateBookingRequest{
-				ToolID:    "345678",
+				ToolID:    strconv.FormatInt(toolID, 10),
 				StartDate: time.Now().Add(time.Duration(i+1) * 24 * time.Hour),
 				EndDate:   time.Now().Add(time.Duration(i+2) * 24 * time.Hour),
 				Contact:   "test@example.com",
@@ -138,13 +169,18 @@ func TestBookingService(t *testing.T) {
 	})
 
 	c.Run("Update Booking Status", func(c *qt.C) {
+		toUserID := primitive.NewObjectID()
+		toolID, err := createTestTool(ctx, database, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
+
 		req := &CreateBookingRequest{
-			ToolID:    "901234",
+			ToolID:    strconv.FormatInt(toolID, 10),
 			StartDate: time.Now().Add(24 * time.Hour),
 			EndDate:   time.Now().Add(48 * time.Hour),
 			Contact:   "test@example.com",
 		}
-		booking, err := bookingService.Create(ctx, req, primitive.NewObjectID(), primitive.NewObjectID())
+		fromUserID := primitive.NewObjectID()
+		booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
 
 		// Update status
@@ -158,16 +194,19 @@ func TestBookingService(t *testing.T) {
 	})
 
 	c.Run("Get Pending Ratings", func(c *qt.C) {
-		userID := primitive.NewObjectID()
+		fromUserID := primitive.NewObjectID()
+		toUserID := primitive.NewObjectID()
+		toolID, err := createTestTool(ctx, database, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
 
 		// Create returned booking
 		req := &CreateBookingRequest{
-			ToolID:    "567890",
+			ToolID:    strconv.FormatInt(toolID, 10),
 			StartDate: time.Now().Add(-48 * time.Hour),
 			EndDate:   time.Now().Add(-24 * time.Hour),
 			Contact:   "test@example.com",
 		}
-		booking, err := bookingService.Create(ctx, req, userID, primitive.NewObjectID())
+		booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
 		if err != nil {
 			c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test booking"))
 		}
@@ -177,7 +216,7 @@ func TestBookingService(t *testing.T) {
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test booking"))
 
 		// Get pending ratings
-		ratings, err := bookingService.GetPendingRatings(ctx, userID)
+		ratings, err := bookingService.GetPendingRatings(ctx, fromUserID)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
 		c.Assert(len(ratings), qt.Not(qt.Equals), 0, qt.Commentf("Expected at least one pending rating"))
 	})
