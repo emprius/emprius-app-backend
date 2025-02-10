@@ -160,14 +160,79 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(ratingsResp.Data), qt.Equals, 1)
 
-		// Submit rating
-		_, code = c.Request(http.MethodPost, renterJWT,
-			map[string]interface{}{
-				"rating": 5,
-			},
-			"bookings", bookingID, "rate",
-		)
-		qt.Assert(t, code, qt.Equals, 200)
+		// Test rating functionality
+		t.Run("Rating Tests", func(t *testing.T) {
+			// Try to rate without auth
+			_, code = c.Request(http.MethodPost, "",
+				map[string]interface{}{
+					"rating": 5,
+				},
+				"bookings", bookingID, "rate",
+			)
+			qt.Assert(t, code, qt.Equals, 401)
+
+			// Try to rate with invalid rating value
+			_, code = c.Request(http.MethodPost, renterJWT,
+				map[string]interface{}{
+					"rating": 6,
+				},
+				"bookings", bookingID, "rate",
+			)
+			qt.Assert(t, code, qt.Equals, 400)
+
+			// Try to rate with invalid rating value (too low)
+			_, code = c.Request(http.MethodPost, renterJWT,
+				map[string]interface{}{
+					"rating": 0,
+				},
+				"bookings", bookingID, "rate",
+			)
+			qt.Assert(t, code, qt.Equals, 400)
+
+			// Submit valid rating with comment
+			_, code = c.Request(http.MethodPost, renterJWT,
+				map[string]interface{}{
+					"rating":  5,
+					"comment": "Great experience!",
+				},
+				"bookings", bookingID, "rate",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to rate again (should fail)
+			_, code = c.Request(http.MethodPost, renterJWT,
+				map[string]interface{}{
+					"rating": 4,
+				},
+				"bookings", bookingID, "rate",
+			)
+			qt.Assert(t, code, qt.Equals, 403)
+
+			// Get submitted ratings
+			resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "rates", "submitted")
+			qt.Assert(t, code, qt.Equals, 200)
+			var submittedResp struct {
+				Data []api.BookingResponse `json:"data"`
+			}
+			err = json.Unmarshal(resp, &submittedResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(submittedResp.Data), qt.Equals, 1)
+			qt.Assert(t, submittedResp.Data[0].Rating, qt.Not(qt.IsNil))
+			qt.Assert(t, *submittedResp.Data[0].Rating, qt.Equals, 5)
+			qt.Assert(t, submittedResp.Data[0].RatingComment, qt.Equals, "Great experience!")
+
+			// Get received ratings (owner)
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "rates", "received")
+			qt.Assert(t, code, qt.Equals, 200)
+			var receivedResp struct {
+				Data []api.BookingResponse `json:"data"`
+			}
+			err = json.Unmarshal(resp, &receivedResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(receivedResp.Data), qt.Equals, 1)
+			qt.Assert(t, receivedResp.Data[0].Rating, qt.Not(qt.IsNil))
+			qt.Assert(t, *receivedResp.Data[0].Rating, qt.Equals, 5)
+		})
 
 		// Test deny petition
 		t.Run("Deny Petition", func(t *testing.T) {

@@ -83,7 +83,7 @@ var (
 	}
 
 	ErrAlreadyRated = &HTTPError{
-		Code:    http.StatusBadRequest,
+		Code:    http.StatusForbidden,
 		Message: "booking already rated",
 	}
 )

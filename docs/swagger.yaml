@@ -924,7 +924,7 @@ paths:
       tags:
         - Bookings
       summary: Rate a booking
-      description: Rate a booking after it has been returned
+      description: Rate a booking after it has been returned. Only users involved in the booking can rate it, and each user can only rate once.
       security:
         - bearerAuth: [ ]
       parameters:
@@ -952,17 +952,68 @@ paths:
                 comment:
                   type: string
                   description: Optional comment about the rating
+                  maxLength: 500
       responses:
         '200':
           description: Rating submitted successfully
         '400':
-          description: Invalid request or rating value
+          description: Invalid request or rating value (must be between 1-5)
         '401':
           description: Unauthorized
         '403':
           description: Cannot rate (already rated or not involved in booking)
         '404':
           description: Booking not found
+        '500':
+          description: Internal server error
+
+  /bookings/rates/submitted:
+    get:
+      tags:
+        - Bookings
+      summary: Get submitted ratings
+      description: Get bookings that have been rated by the authenticated user
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: List of rated bookings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BookingResponse'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /bookings/rates/received:
+    get:
+      tags:
+        - Bookings
+      summary: Get received ratings
+      description: Get bookings that have been rated where the authenticated user is the tool owner
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: List of received ratings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BookingResponse'
+        '401':
+          description: Unauthorized
         '500':
           description: Internal server error
 
