@@ -400,27 +400,31 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	// Validate rating value
+	if rateReq.Rating < 1 || rateReq.Rating > 5 {
+		return nil, ErrInvalidRating.WithErr(fmt.Errorf("rating value %d is not between 1 and 5", rateReq.Rating))
+	}
+
 	bookingID, err := primitive.ObjectIDFromHex(rateReq.BookingID)
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
+	// Rate the booking
+	err = a.database.BookingService.RateBooking(r.Context.Request.Context(), bookingID, user.ObjectID(), rateReq.Rating)
 	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if booking == nil {
-		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
-	}
-
-	// Verify user is involved in the booking
-	if booking.FromUserID != user.ObjectID() && booking.ToUserID != user.ObjectID() {
-		return nil, ErrUserNotInvolved.WithErr(fmt.Errorf("user %s is neither the requester nor the owner", user.ID))
-	}
-
-	// Verify rating value
-	if rateReq.Rating < 1 || rateReq.Rating > 5 {
-		return nil, ErrInvalidRating.WithErr(fmt.Errorf("rating value %d is not between 1 and 5", rateReq.Rating))
+		switch {
+		case err == db.ErrBookingNotFound:
+			return nil, ErrBookingNotFound.WithErr(err)
+		case err.Error() == "booking must be in RETURNED state to be rated":
+			return nil, ErrInvalidBookingStatus.WithErr(err)
+		case err.Error() == "user has already rated this booking":
+			return nil, ErrAlreadyRated.WithErr(err)
+		case err.Error() == "user is not involved in this booking":
+			return nil, ErrUserNotInvolved.WithErr(err)
+		default:
+			return nil, ErrInternalServerError.WithErr(err)
+		}
 	}
 
 	return nil, nil

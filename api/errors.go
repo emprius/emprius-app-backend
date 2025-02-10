@@ -74,7 +74,17 @@ var (
 	}
 	ErrInvalidRating = &HTTPError{
 		Code:    http.StatusBadRequest,
-		Message: "invalid rating value (must be between 1 and 5)",
+		Message: "invalid rating value",
+	}
+
+	ErrInvalidBookingStatus = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid booking status",
+	}
+
+	ErrAlreadyRated = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "booking already rated",
 	}
 )
 

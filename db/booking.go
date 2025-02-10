@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -26,17 +27,20 @@ const (
 
 // Booking represents a tool booking in the system
 type Booking struct {
-	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	ToolID        string             `bson:"toolId" json:"toolId"`
-	FromUserID    primitive.ObjectID `bson:"fromUserId" json:"fromUserId"`
-	ToUserID      primitive.ObjectID `bson:"toUserId" json:"toUserId"`
-	StartDate     time.Time          `bson:"startDate" json:"startDate"`
-	EndDate       time.Time          `bson:"endDate" json:"endDate"`
-	Contact       string             `bson:"contact" json:"contact"`
-	Comments      string             `bson:"comments" json:"comments"`
-	BookingStatus BookingStatus      `bson:"bookingStatus" json:"bookingStatus"`
-	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
-	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
+	ID            primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
+	ToolID        string              `bson:"toolId" json:"toolId"`
+	FromUserID    primitive.ObjectID  `bson:"fromUserId" json:"fromUserId"`
+	ToUserID      primitive.ObjectID  `bson:"toUserId" json:"toUserId"`
+	StartDate     time.Time           `bson:"startDate" json:"startDate"`
+	EndDate       time.Time           `bson:"endDate" json:"endDate"`
+	Contact       string              `bson:"contact" json:"contact"`
+	Comments      string              `bson:"comments" json:"comments"`
+	BookingStatus BookingStatus       `bson:"bookingStatus" json:"bookingStatus"`
+	Rating        *int                `bson:"rating,omitempty" json:"rating,omitempty"`
+	RatedBy       *primitive.ObjectID `bson:"ratedBy,omitempty" json:"ratedBy,omitempty"`
+	RatedAt       *time.Time          `bson:"ratedAt,omitempty" json:"ratedAt,omitempty"`
+	CreatedAt     time.Time           `bson:"createdAt" json:"createdAt"`
+	UpdatedAt     time.Time           `bson:"updatedAt" json:"updatedAt"`
 }
 
 // BookingService handles all booking related database operations
@@ -343,7 +347,7 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 			{"toUserId": userID},
 		},
 		"bookingStatus": BookingStatusReturned,
-		// Add additional conditions for unrated bookings
+		"ratedBy":       bson.M{"$ne": userID}, // Exclude bookings already rated by this user
 	}
 
 	cursor, err := s.collection.Find(ctx, filter)
@@ -361,6 +365,105 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 		return nil, err
 	}
 	return bookings, nil
+}
+
+// RateBooking adds a rating to a booking and updates the tool's average rating
+func (s *BookingService) RateBooking(ctx context.Context, bookingID primitive.ObjectID, userID primitive.ObjectID, rating int) error {
+	// Get the booking
+	booking, err := s.Get(ctx, bookingID)
+	if err != nil {
+		return err
+	}
+	if booking == nil {
+		return ErrBookingNotFound
+	}
+
+	// Verify booking is in RETURNED state
+	if booking.BookingStatus != BookingStatusReturned {
+		return fmt.Errorf("booking must be in RETURNED state to be rated")
+	}
+
+	// Verify user is involved in the booking
+	if booking.FromUserID != userID && booking.ToUserID != userID {
+		return fmt.Errorf("user is not involved in this booking")
+	}
+
+	// Verify user hasn't already rated this booking
+	if booking.RatedBy != nil && *booking.RatedBy == userID {
+		return fmt.Errorf("user has already rated this booking")
+	}
+
+	// Verify rating value
+	if rating < 1 || rating > 5 {
+		return fmt.Errorf("rating must be between 1 and 5")
+	}
+
+	// Update booking with rating
+	now := time.Now()
+	update := bson.M{
+		"$set": bson.M{
+			"rating":  rating,
+			"ratedBy": userID,
+			"ratedAt": now,
+		},
+	}
+
+	result, err := s.collection.UpdateOne(ctx, bson.M{"_id": bookingID}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return ErrBookingNotFound
+	}
+
+	// Update tool's average rating
+	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid tool ID: %w", err)
+	}
+
+	// Calculate new average rating for the tool
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{
+			"toolId":        booking.ToolID,
+			"bookingStatus": BookingStatusReturned,
+			"rating":        bson.M{"$exists": true},
+		}}},
+		{{Key: "$group", Value: bson.M{
+			"_id":         nil,
+			"avgRating":   bson.M{"$avg": "$rating"},
+			"ratingCount": bson.M{"$sum": 1},
+		}}},
+	}
+
+	cursor, err := s.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return fmt.Errorf("failed to calculate average rating: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var results []struct {
+		AvgRating   float64 `bson:"avgRating"`
+		RatingCount int     `bson:"ratingCount"`
+	}
+	if err = cursor.All(ctx, &results); err != nil {
+		return fmt.Errorf("failed to decode average rating: %w", err)
+	}
+
+	if len(results) > 0 {
+		// Update tool's rating
+		toolService := s.database.Collection("tools")
+		_, err = toolService.UpdateOne(
+			ctx,
+			bson.M{"_id": toolID},
+			bson.M{"$set": bson.M{"rating": int32(math.Round(results[0].AvgRating))}},
+		)
+		if err != nil {
+			return fmt.Errorf("failed to update tool rating: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // CountPendingActionsResponse represents the response for CountPendingActions
