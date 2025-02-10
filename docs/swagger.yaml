@@ -967,56 +967,6 @@ paths:
         '500':
           description: Internal server error
 
-  /bookings/rates/submitted:
-    get:
-      tags:
-        - Bookings
-      summary: Get submitted ratings
-      description: Get bookings that have been rated by the authenticated user
-      security:
-        - bearerAuth: [ ]
-      responses:
-        '200':
-          description: List of rated bookings
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BookingResponse'
-        '401':
-          description: Unauthorized
-        '500':
-          description: Internal server error
-
-  /bookings/rates/received:
-    get:
-      tags:
-        - Bookings
-      summary: Get received ratings
-      description: Get bookings that have been rated where the authenticated user is the tool owner
-      security:
-        - bearerAuth: [ ]
-      responses:
-        '200':
-          description: List of received ratings
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/BookingResponse'
-        '401':
-          description: Unauthorized
-        '500':
-          description: Internal server error
-
   /bookings/pendings:
     get:
       tags:
@@ -1046,6 +996,3 @@ paths:
                         description: Number of pending booking requests
         '401':
           description: Unauthorized
-      responses:
-        '200':
-          description: Rating submitted successfully

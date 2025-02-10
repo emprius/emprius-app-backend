@@ -23,7 +23,7 @@ import (
 const (
 	jwtSecret = "secret"
 	// RegisterToken is the test register token for authentication.
-	RegisterToken = "registerToken"
+	RegisterToken = "comunals"
 )
 
 // TestService is a test service for the API.
