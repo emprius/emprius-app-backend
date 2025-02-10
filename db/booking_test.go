@@ -7,6 +7,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -193,31 +194,77 @@ func TestBookingService(t *testing.T) {
 		c.Assert(updated.BookingStatus, qt.Equals, BookingStatusAccepted, qt.Commentf("Status should be updated to accepted"))
 	})
 
-	c.Run("Get Pending Ratings", func(c *qt.C) {
+	c.Run("Rating Functionality", func(c *qt.C) {
 		fromUserID := primitive.NewObjectID()
 		toUserID := primitive.NewObjectID()
 		toolID, err := createTestTool(ctx, database, toUserID)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
 
-		// Create returned booking
-		req := &CreateBookingRequest{
-			ToolID:    strconv.FormatInt(toolID, 10),
-			StartDate: time.Now().Add(-48 * time.Hour),
-			EndDate:   time.Now().Add(-24 * time.Hour),
-			Contact:   "test@example.com",
-		}
-		booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
-		if err != nil {
+		// Create multiple returned bookings
+		var bookings []*Booking
+		for i := 0; i < 3; i++ {
+			req := &CreateBookingRequest{
+				ToolID:    strconv.FormatInt(toolID, 10),
+				StartDate: time.Now().Add(-time.Duration(i+2) * 24 * time.Hour),
+				EndDate:   time.Now().Add(-time.Duration(i+1) * 24 * time.Hour),
+				Contact:   "test@example.com",
+			}
+			booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
 			c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test booking"))
+
+			// Mark as returned
+			err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusReturned)
+			c.Assert(err, qt.IsNil, qt.Commentf("Failed to update booking status"))
+
+			bookings = append(bookings, booking)
 		}
 
-		// Update status to returned
-		err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusReturned)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test booking"))
-
-		// Get pending ratings
+		// Test GetPendingRatings
 		ratings, err := bookingService.GetPendingRatings(ctx, fromUserID)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
-		c.Assert(len(ratings), qt.Not(qt.Equals), 0, qt.Commentf("Expected at least one pending rating"))
+		c.Assert(len(ratings), qt.Equals, 3, qt.Commentf("Expected three pending ratings"))
+
+		// Rate first booking
+		err = bookingService.RateBooking(ctx, bookings[0].ID, fromUserID, 5)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
+
+		// Verify pending ratings decreased
+		ratings, err = bookingService.GetPendingRatings(ctx, fromUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
+		c.Assert(len(ratings), qt.Equals, 2, qt.Commentf("Expected two pending ratings after rating one"))
+
+		// Rate second booking
+		err = bookingService.RateBooking(ctx, bookings[1].ID, fromUserID, 4)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
+
+		// Verify pending ratings decreased again
+		ratings, err = bookingService.GetPendingRatings(ctx, fromUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
+		c.Assert(len(ratings), qt.Equals, 1, qt.Commentf("Expected one pending rating after rating two"))
+
+		// Try to rate first booking again (should fail)
+		err = bookingService.RateBooking(ctx, bookings[0].ID, fromUserID, 3)
+		c.Assert(err, qt.Not(qt.IsNil), qt.Commentf("Should not be able to rate twice"))
+		c.Assert(err.Error(), qt.Equals, "user has already rated this booking")
+
+		// Verify tool's rating was updated to average
+		var tool Tool
+		err = database.Collection("tools").FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool"))
+		c.Assert(tool.Rating, qt.Equals, int32(5), qt.Commentf("Tool rating should be updated to average"))
+
+		// Rate third booking
+		err = bookingService.RateBooking(ctx, bookings[2].ID, fromUserID, 3)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
+
+		// Verify no more pending ratings
+		ratings, err = bookingService.GetPendingRatings(ctx, fromUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
+		c.Assert(len(ratings), qt.Equals, 0, qt.Commentf("Expected no pending ratings after rating all"))
+
+		// Verify final tool rating average
+		err = database.Collection("tools").FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool"))
+		c.Assert(tool.Rating, qt.Equals, int32(4), qt.Commentf("Tool rating should be updated to final average"))
 	})
 }

@@ -341,13 +341,28 @@ func (s *BookingService) checkDateConflicts(
 
 // GetPendingRatings gets bookings that need to be rated by the user
 func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
+	// We need to find:
+	// 1. Bookings where the user is either fromUser or toUser
+	// 2. Booking status is RETURNED
+	// 3. Either:
+	//    - ratedBy field doesn't exist (no one has rated yet)
+	//    - ratedBy field exists but is not equal to userID (someone else rated but not this user)
 	filter := bson.M{
-		"$or": []bson.M{
-			{"fromUserId": userID},
-			{"toUserId": userID},
+		"$and": []bson.M{
+			{
+				"$or": []bson.M{
+					{"fromUserId": userID},
+					{"toUserId": userID},
+				},
+			},
+			{"bookingStatus": BookingStatusReturned},
+			{
+				"$or": []bson.M{
+					{"ratedBy": bson.M{"$exists": false}},
+					{"ratedBy": bson.M{"$ne": userID}},
+				},
+			},
 		},
-		"bookingStatus": BookingStatusReturned,
-		"ratedBy":       bson.M{"$ne": userID}, // Exclude bookings already rated by this user
 	}
 
 	cursor, err := s.collection.Find(ctx, filter)
