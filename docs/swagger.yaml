@@ -225,6 +225,17 @@ components:
         bookingStatus:
           type: string
           enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, RETURNED]
+        isRated:
+          type: boolean
+          description: Whether this booking has been rated
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Rating value if the booking has been rated
+        ratingComment:
+          type: string
+          description: Optional comment provided with the rating
         createdAt:
           type: string
           format: date-time
@@ -847,11 +858,113 @@ paths:
       tags:
         - Bookings
       summary: Get pending ratings
+      description: Get bookings that need to be rated by the user
       security:
         - bearerAuth: [ ]
       responses:
         '200':
-          description: List of pending ratings
+          description: List of bookings pending rating
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookingResponse'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /bookings/rates/submitted:
+    get:
+      tags:
+        - Bookings
+      summary: Get submitted ratings
+      description: Get bookings that have been rated by the user
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: List of rated bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookingResponse'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /bookings/rates/received:
+    get:
+      tags:
+        - Bookings
+      summary: Get received ratings
+      description: Get bookings that have been rated where the user is the tool owner
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: List of received ratings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BookingResponse'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /bookings/{bookingId}/rate:
+    post:
+      tags:
+        - Bookings
+      summary: Rate a booking
+      description: Rate a booking after it has been returned
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - rating
+              properties:
+                rating:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                  description: Rating value between 1 and 5
+                comment:
+                  type: string
+                  description: Optional comment about the rating
+      responses:
+        '200':
+          description: Rating submitted successfully
+        '400':
+          description: Invalid request or rating value
+        '401':
+          description: Unauthorized
+        '403':
+          description: Cannot rate (already rated or not involved in booking)
+        '404':
+          description: Booking not found
+        '500':
+          description: Internal server error
 
   /bookings/pendings:
     get:
@@ -882,34 +995,6 @@ paths:
                         description: Number of pending booking requests
         '401':
           description: Unauthorized
-    post:
-      tags:
-        - Bookings
-      summary: Rate a booking
-      security:
-        - bearerAuth: [ ]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - bookingId
-                - rating
-              properties:
-                bookingId:
-                  type: string
-                  format: objectid
-                  description: MongoDB ObjectID of the booking to rate
-                rating:
-                  type: integer
-                  minimum: 1
-                  maximum: 5
-                  description: Rating value between 1 and 5
-                comment:
-                  type: string
-                  description: Optional comment about the rating
       responses:
         '200':
           description: Rating submitted successfully

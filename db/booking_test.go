@@ -225,7 +225,7 @@ func TestBookingService(t *testing.T) {
 		c.Assert(len(ratings), qt.Equals, 3, qt.Commentf("Expected three pending ratings"))
 
 		// Rate first booking
-		err = bookingService.RateBooking(ctx, bookings[0].ID, fromUserID, 5)
+		err = bookingService.RateBooking(ctx, bookings[0].ID, fromUserID, 5, "Great experience!")
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
 
 		// Verify pending ratings decreased
@@ -234,7 +234,7 @@ func TestBookingService(t *testing.T) {
 		c.Assert(len(ratings), qt.Equals, 2, qt.Commentf("Expected two pending ratings after rating one"))
 
 		// Rate second booking
-		err = bookingService.RateBooking(ctx, bookings[1].ID, fromUserID, 4)
+		err = bookingService.RateBooking(ctx, bookings[1].ID, fromUserID, 4, "Good tool")
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
 
 		// Verify pending ratings decreased again
@@ -243,7 +243,7 @@ func TestBookingService(t *testing.T) {
 		c.Assert(len(ratings), qt.Equals, 1, qt.Commentf("Expected one pending rating after rating two"))
 
 		// Try to rate first booking again (should fail)
-		err = bookingService.RateBooking(ctx, bookings[0].ID, fromUserID, 3)
+		err = bookingService.RateBooking(ctx, bookings[0].ID, fromUserID, 3, "Trying to rate again")
 		c.Assert(err, qt.Not(qt.IsNil), qt.Commentf("Should not be able to rate twice"))
 		c.Assert(err.Error(), qt.Equals, "user has already rated this booking")
 
@@ -254,7 +254,7 @@ func TestBookingService(t *testing.T) {
 		c.Assert(tool.Rating, qt.Equals, int32(5), qt.Commentf("Tool rating should be updated to average"))
 
 		// Rate third booking
-		err = bookingService.RateBooking(ctx, bookings[2].ID, fromUserID, 3)
+		err = bookingService.RateBooking(ctx, bookings[2].ID, fromUserID, 3, "Average experience")
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
 
 		// Verify no more pending ratings

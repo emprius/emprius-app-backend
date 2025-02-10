@@ -24,6 +24,9 @@ func convertBookingToResponse(booking *db.Booking) BookingResponse {
 		Contact:       booking.Contact,
 		Comments:      booking.Comments,
 		BookingStatus: string(booking.BookingStatus),
+		IsRated:       booking.RatedBy != nil,
+		Rating:        booking.Rating,
+		RatingComment: booking.RatingComment,
 		CreatedAt:     booking.CreatedAt,
 		UpdatedAt:     booking.UpdatedAt,
 	}
@@ -322,10 +325,60 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 	return response, nil
 }
 
+// HandleGetSubmittedRatings handles GET /bookings/rates/submitted
+func (a *API) HandleGetSubmittedRatings(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get user from database
+	user, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	bookings, err := a.database.BookingService.GetSubmittedRatings(r.Context.Request.Context(), user.ObjectID())
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	response := make([]BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		response[i] = convertBookingToResponse(booking)
+	}
+
+	return response, nil
+}
+
+// HandleGetReceivedRatings handles GET /bookings/rates/received
+func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get user from database
+	user, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	bookings, err := a.database.BookingService.GetReceivedRatings(r.Context.Request.Context(), user.ObjectID())
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	response := make([]BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		response[i] = convertBookingToResponse(booking)
+	}
+
+	return response, nil
+}
+
 // RateRequest represents the request body for rating a booking
 type RateRequest struct {
-	Rating    int    `json:"rating"`
-	BookingID string `json:"bookingId"`
+	Rating  int    `json:"rating"`
+	Comment string `json:"comment"`
 }
 
 // HandleCreateBooking handles POST /bookings
@@ -383,7 +436,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 	return convertBookingToResponse(booking), nil
 }
 
-// HandleRateBooking handles POST /bookings/rates
+// HandleRateBooking handles POST /bookings/{bookingId}/rate
 func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -405,13 +458,19 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRating.WithErr(fmt.Errorf("rating value %d is not between 1 and 5", rateReq.Rating))
 	}
 
-	bookingID, err := primitive.ObjectIDFromHex(rateReq.BookingID)
+	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
 	// Rate the booking
-	err = a.database.BookingService.RateBooking(r.Context.Request.Context(), bookingID, user.ObjectID(), rateReq.Rating)
+	err = a.database.BookingService.RateBooking(
+		r.Context.Request.Context(),
+		bookingID,
+		user.ObjectID(),
+		rateReq.Rating,
+		rateReq.Comment,
+	)
 	if err != nil {
 		switch {
 		case err == db.ErrBookingNotFound:

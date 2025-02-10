@@ -37,6 +37,7 @@ type Booking struct {
 	Comments      string              `bson:"comments" json:"comments"`
 	BookingStatus BookingStatus       `bson:"bookingStatus" json:"bookingStatus"`
 	Rating        *int                `bson:"rating,omitempty" json:"rating,omitempty"`
+	RatingComment string              `bson:"ratingComment,omitempty" json:"ratingComment,omitempty"`
 	RatedBy       *primitive.ObjectID `bson:"ratedBy,omitempty" json:"ratedBy,omitempty"`
 	RatedAt       *time.Time          `bson:"ratedAt,omitempty" json:"ratedAt,omitempty"`
 	CreatedAt     time.Time           `bson:"createdAt" json:"createdAt"`
@@ -94,6 +95,12 @@ type CreateBookingRequest struct {
 	EndDate   time.Time `bson:"endDate" json:"endDate"`
 	Contact   string    `bson:"contact" json:"contact"`
 	Comments  string    `bson:"comments" json:"comments"`
+}
+
+// CountPendingActionsResponse represents the response for CountPendingActions
+type CountPendingActionsResponse struct {
+	PendingRatingsCount  int64 `json:"pendingRatingsCount"`
+	PendingRequestsCount int64 `json:"pendingRequestsCount"`
 }
 
 // Create creates a new booking
@@ -382,8 +389,63 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 	return bookings, nil
 }
 
+// GetSubmittedRatings gets bookings that have been rated by the user
+func (s *BookingService) GetSubmittedRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
+	filter := bson.M{
+		"ratedBy": userID,
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var bookings []*Booking
+	if err = cursor.All(ctx, &bookings); err != nil {
+		return nil, err
+	}
+	return bookings, nil
+}
+
+// GetReceivedRatings gets bookings that have been rated where the user is the tool owner
+func (s *BookingService) GetReceivedRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
+	filter := bson.M{
+		"toUserId": userID,
+		"rating": bson.M{
+			"$exists": true,
+		},
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var bookings []*Booking
+	if err = cursor.All(ctx, &bookings); err != nil {
+		return nil, err
+	}
+	return bookings, nil
+}
+
 // RateBooking adds a rating to a booking and updates the tool's average rating
-func (s *BookingService) RateBooking(ctx context.Context, bookingID primitive.ObjectID, userID primitive.ObjectID, rating int) error {
+func (s *BookingService) RateBooking(
+	ctx context.Context,
+	bookingID primitive.ObjectID,
+	userID primitive.ObjectID,
+	rating int,
+	comment string,
+) error {
 	// Get the booking
 	booking, err := s.Get(ctx, bookingID)
 	if err != nil {
@@ -417,9 +479,10 @@ func (s *BookingService) RateBooking(ctx context.Context, bookingID primitive.Ob
 	now := time.Now()
 	update := bson.M{
 		"$set": bson.M{
-			"rating":  rating,
-			"ratedBy": userID,
-			"ratedAt": now,
+			"rating":        rating,
+			"ratingComment": comment,
+			"ratedBy":       userID,
+			"ratedAt":       now,
 		},
 	}
 
@@ -455,7 +518,11 @@ func (s *BookingService) RateBooking(ctx context.Context, bookingID primitive.Ob
 	if err != nil {
 		return fmt.Errorf("failed to calculate average rating: %w", err)
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var results []struct {
 		AvgRating   float64 `bson:"avgRating"`
@@ -479,12 +546,6 @@ func (s *BookingService) RateBooking(ctx context.Context, bookingID primitive.Ob
 	}
 
 	return nil
-}
-
-// CountPendingActionsResponse represents the response for CountPendingActions
-type CountPendingActionsResponse struct {
-	PendingRatingsCount  int64 `json:"pendingRatingsCount"`
-	PendingRequestsCount int64 `json:"pendingRequestsCount"`
 }
 
 // CountPendingActions returns the count of pending ratings and booking requests for a user

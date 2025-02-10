@@ -163,10 +163,9 @@ func TestBookings(t *testing.T) {
 		// Submit rating
 		_, code = c.Request(http.MethodPost, renterJWT,
 			map[string]interface{}{
-				"rating":    5,
-				"bookingId": bookingID,
+				"rating": 5,
 			},
-			"bookings", "rates",
+			"bookings", bookingID, "rate",
 		)
 		qt.Assert(t, code, qt.Equals, 200)
 

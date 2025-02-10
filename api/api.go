@@ -190,9 +190,9 @@ func (a *API) router() http.Handler {
 		// GET /bookings/rates
 		log.Info().Msg("register route GET /bookings/rates")
 		r.Get("/bookings/rates", a.routerHandler(a.HandleGetPendingRatings))
-		// POST /bookings/rates
-		log.Info().Msg("register route POST /bookings/rates")
-		r.Post("/bookings/rates", a.routerHandler(a.HandleRateBooking))
+		// POST /bookings/{bookingId}/rate
+		log.Info().Msg("register route POST /bookings/{bookingId}/rate")
+		r.Post("/bookings/{bookingId}/rate", a.routerHandler(a.HandleRateBooking))
 		// GET /bookings/user/{id}
 		log.Info().Msg("register route GET /bookings/user/{id}")
 		r.Get("/bookings/user/{id}", a.routerHandler(a.HandleGetUserBookings))

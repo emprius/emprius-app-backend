@@ -205,6 +205,9 @@ type BookingResponse struct {
 	Contact       string    `json:"contact"`
 	Comments      string    `json:"comments"`
 	BookingStatus string    `json:"bookingStatus"`
+	IsRated       bool      `json:"isRated"`
+	Rating        *int      `json:"rating,omitempty"`
+	RatingComment string    `json:"ratingComment,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
