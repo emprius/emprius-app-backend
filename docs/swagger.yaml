@@ -389,14 +389,14 @@ paths:
       tags:
         - Images
       summary: Get image by hash
-      security:
-        - bearerAuth: []
+      description: Public endpoint that returns the binary image data directly
       parameters:
         - name: hash
           in: path
           required: true
           schema:
             type: string
+            description: Hex-encoded SHA256 hash of the image
       responses:
         '200':
           description: Image file
@@ -405,6 +405,10 @@ paths:
               schema:
                 type: string
                 format: binary
+        '400':
+          description: Invalid hash format
+        '404':
+          description: Image not found
 
   /images:
     post:

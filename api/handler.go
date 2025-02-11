@@ -191,6 +191,17 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			}
 			return
 		}
+		// Check if response is binary
+		if binaryResp, ok := handlerResp.(*BinaryResponse); ok {
+			w.Header().Set("Content-Type", binaryResp.ContentType)
+			w.WriteHeader(http.StatusOK)
+			if _, err := w.Write(binaryResp.Data); err != nil {
+				log.Error().Err(err).Msg("failed to write binary response")
+			}
+			return
+		}
+
+		// Handle normal JSON response
 		resp.Header.Success = true
 		resp.Data = handlerResp
 		data, err := json.Marshal(resp)

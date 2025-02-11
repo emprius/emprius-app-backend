@@ -85,9 +85,6 @@ func (a *API) router() http.Handler {
 		r.Get("/users/{id}", a.routerHandler(a.getUserHandler))
 
 		// Images
-		// GET /images/{hash}
-		log.Info().Msg("register route GET /images/{hash}")
-		r.Get("/images/{hash}", a.routerHandler(a.imageHandler))
 		// POST /images
 		log.Info().Msg("register route POST /images")
 		r.Post("/images", a.routerHandler(a.imageUploadHandler))
@@ -228,6 +225,9 @@ func (a *API) router() http.Handler {
 		r.Post("/register", a.routerHandler(a.registerHandler))
 		log.Info().Msg("register route GET /info")
 		r.Get("/info", a.routerHandler(a.infoHandler))
+		// GET /images/{hash}
+		log.Info().Msg("register route GET /images/{hash}")
+		r.Get("/images/{hash}", a.routerHandler(a.imageHandler))
 	})
 
 	return r

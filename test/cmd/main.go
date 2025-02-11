@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -18,6 +18,8 @@ import (
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/test/utils"
 )
+
+const imagePath = "test/cmd/images/"
 
 var (
 	// Realistic Catalan names
@@ -40,6 +42,7 @@ var (
 		category    int
 		cost        int
 		value       int
+		image       string
 	}{
 		{
 			title:       "Trepant percutor professional",
@@ -47,6 +50,7 @@ var (
 			category:    1,
 			cost:        15,
 			value:       180,
+			image:       "trepant.jpg",
 		},
 		{
 			title:       "Serra circular de mà",
@@ -54,27 +58,31 @@ var (
 			category:    1,
 			cost:        20,
 			value:       150,
+			image:       "serra.jpeg",
 		},
 		{
 			title:       "Desbrossadora gasolina",
 			description: "Desbrossadora Stihl FS 55. Perfecta per mantenir el jardí net.",
 			category:    2,
 			cost:        25,
-			value:       300,
+			value:       500,
+			image:       "desbrossadora.jpeg",
 		},
 		{
 			title:       "Escala extensible alumini",
 			description: "Escala extensible 3x3m. Molt lleugera i fàcil de transportar.",
 			category:    3,
 			cost:        10,
-			value:       120,
+			value:       220,
+			image:       "escala.jpg",
 		},
 		{
 			title:       "Carretó de mà",
 			description: "Carretó metàl·lic amb roda pneumàtica. Capacitat 80L.",
 			category:    3,
 			cost:        8,
-			value:       45,
+			value:       60,
+			image:       "carreto.jpeg",
 		},
 	}
 
@@ -130,8 +138,9 @@ func main() {
 		firstName := firstNames[rand.Intn(len(firstNames))]
 		lastName := lastNames[rand.Intn(len(lastNames))]
 		name := fmt.Sprintf("%s %s", firstName, lastName)
-		email := fmt.Sprintf("%s.%s%d@test.cat", strings.ToLower(firstName), strings.ToLower(lastName), rand.Intn(10000))
-		password := fmt.Sprintf("pass_%s%d", strings.ToLower(firstName), rand.Intn(100))
+		userName := fmt.Sprintf("%s%d", strings.ToLower(firstName), rand.Intn(1000))
+		email := fmt.Sprintf("%s@test.cat", userName)
+		password := userName
 		loc := locations[rand.Intn(len(locations))]
 
 		log.Printf("Creating user: %s (%s) from %s", name, email, loc.city)
@@ -175,7 +184,7 @@ func main() {
 			)
 
 			// Upload an image first
-			imageHash := s.uploadToolImage(users[i].jwt, baseTool.title)
+			imageHash := s.uploadToolImage(users[i].jwt, baseTool.title, path.Join(imagePath, baseTool.image))
 
 			log.Printf("Creating tool '%s' for user %s in %s", uniqueTitle, users[i].name, loc.city)
 			toolID := s.createTool(users[i].jwt, struct {
@@ -318,10 +327,9 @@ func (s *testService) registerAndLogin(email, name, password string, lat, long f
 	return jwt, profileResponse.Data.ID
 }
 
-func (s *testService) uploadToolImage(jwt, toolName string) string {
-	// Create a simple PNG image with tool name
-	imageData, err := base64.StdEncoding.DecodeString(
-		"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+func (s *testService) uploadToolImage(jwt, toolName string, imgpath string) string {
+	// Load image data
+	imageData, err := os.ReadFile(imgpath)
 	if err != nil {
 		log.Fatalf("Failed to decode base64 image data: %v", err)
 	}
@@ -330,7 +338,7 @@ func (s *testService) uploadToolImage(jwt, toolName string) string {
 	resp, err := s.request(http.MethodPost, jwt,
 		map[string]interface{}{
 			"content": imageData,
-			"name":    fmt.Sprintf("%s.png", toolName),
+			"name":    fmt.Sprintf("%s.jpg", toolName),
 		},
 		"images",
 	)

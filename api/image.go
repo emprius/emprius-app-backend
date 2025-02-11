@@ -120,12 +120,14 @@ func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 	return dbImage, nil
 }
 
+// BinaryResponse represents a binary response that should be sent directly to the client
+type BinaryResponse struct {
+	ContentType string
+	Data        []byte
+}
+
 // GET /image/:hash returns the image with the given hash.
 func (a *API) imageHandler(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
 	hash := r.Context.URLParam("hash")
 	if hash == nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing hash"))
@@ -140,5 +142,24 @@ func (a *API) imageHandler(r *Request) (interface{}, error) {
 		return nil, err
 	}
 
-	return image, nil
+	// Get the format from the first few bytes of the image
+	format := ""
+	if len(image.Content) > 2 {
+		if bytes.HasPrefix(image.Content, []byte{0xFF, 0xD8, 0xFF}) {
+			format = "jpeg"
+		} else if bytes.HasPrefix(image.Content, []byte{0x89, 0x50, 0x4E, 0x47}) {
+			format = "png"
+		} else if bytes.HasPrefix(image.Content, []byte{0x47, 0x49, 0x46}) {
+			format = "gif"
+		}
+	}
+	if format == "" {
+		return nil, ErrInvalidImageFormat.WithErr(fmt.Errorf("unsupported image format"))
+	}
+
+	contentType := fmt.Sprintf("image/%s", format)
+	return &BinaryResponse{
+		ContentType: contentType,
+		Data:        image.Content,
+	}, nil
 }
