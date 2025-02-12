@@ -627,28 +627,28 @@ func (s *BookingService) CountPendingActions(
 				{Key: "pendingRatings", Value: bson.A{
 					bson.D{
 						{Key: "$match", Value: bson.M{
-							"$or": []bson.M{
-								{"fromUserId": userID},
-								{"toUserId": userID},
-							},
-							"bookingStatus": bson.M{
-								"$in": []BookingStatus{
-									BookingStatusReturned,
-									BookingStatusAccepted,
+							"$and": []bson.M{
+								{"fromUserId": userID}, // Only count ratings the user needs to perform
+								{"bookingStatus": BookingStatusReturned},
+								{
+									"$or": []bson.M{
+										{"ratedBy": bson.M{"$exists": false}},
+										{"ratedBy": bson.M{"$ne": userID}},
+									},
 								},
 							},
 						}},
 					},
-					bson.D{{Key: "$count", Value: "count"}}, // Count the number of matching documents
+					bson.D{{Key: "$count", Value: "count"}},
 				}},
 				{Key: "pendingRequests", Value: bson.A{
 					bson.D{
 						{Key: "$match", Value: bson.M{
 							"toUserId":      userID,
-							"bookingStatus": BookingStatusPending, // Only count PENDING requests
+							"bookingStatus": BookingStatusPending,
 						}},
 					},
-					bson.D{{Key: "$count", Value: "count"}}, // Count the number of matching documents
+					bson.D{{Key: "$count", Value: "count"}},
 				}},
 			}},
 		},

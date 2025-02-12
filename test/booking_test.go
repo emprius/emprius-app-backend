@@ -416,8 +416,20 @@ func TestBookings(t *testing.T) {
 			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID, "accept")
 			qt.Assert(t, code, qt.Equals, 200)
 
-			// Verify owner now has 0 pending request and 1 pending rating
+			// Mark booking as returned
+			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingID, "return")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Verify owner now has 0 pending request and 0 pending rating
 			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "pendings")
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &countResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, countResp.Data.PendingRequestsCount, qt.Equals, int64(0))
+			qt.Assert(t, countResp.Data.PendingRatingsCount, qt.Equals, int64(0))
+
+			// Verify renter has 1 pending rating
+			resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "pendings")
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &countResp)
 			qt.Assert(t, err, qt.IsNil)

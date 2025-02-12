@@ -234,6 +234,67 @@ func TestBookingService(t *testing.T) {
 		c.Assert(len(tool.ReservedDates), qt.Equals, 0, qt.Commentf("Tool should have no reserved dates after return"))
 	})
 
+	c.Run("Count Pending Actions", func(c *qt.C) {
+		// Create users
+		fromUserID := primitive.NewObjectID()
+		toUserID := primitive.NewObjectID()
+		toolID, err := createTestTool(ctx, database, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
+
+		// Create a pending booking request
+		req1 := &CreateBookingRequest{
+			ToolID:    strconv.FormatInt(toolID, 10),
+			StartDate: time.Now().Add(24 * time.Hour),
+			EndDate:   time.Now().Add(48 * time.Hour),
+			Contact:   "test@example.com",
+		}
+		_, err = bookingService.Create(ctx, req1, fromUserID, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
+
+		// Create a returned booking that needs rating
+		req2 := &CreateBookingRequest{
+			ToolID:    strconv.FormatInt(toolID, 10),
+			StartDate: time.Now().Add(-48 * time.Hour),
+			EndDate:   time.Now().Add(-24 * time.Hour),
+			Contact:   "test@example.com",
+		}
+		booking2, err := bookingService.Create(ctx, req2, fromUserID, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
+
+		// Mark second booking as accepted then returned
+		err = bookingService.UpdateStatus(ctx, booking2.ID, BookingStatusAccepted)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to accept booking"))
+		err = bookingService.UpdateStatus(ctx, booking2.ID, BookingStatusReturned)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to return booking"))
+
+		// Check pending actions for tool owner (toUserID)
+		ownerPending, err := bookingService.CountPendingActions(ctx, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to count pending actions"))
+		c.Assert(ownerPending.PendingRequestsCount, qt.Equals, int64(1), qt.Commentf("Owner should have 1 pending request"))
+		c.Assert(ownerPending.PendingRatingsCount, qt.Equals, int64(0), qt.Commentf("Owner should have 0 pending ratings"))
+
+		// Check pending actions for requester (fromUserID)
+		requesterPending, err := bookingService.CountPendingActions(ctx, fromUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to count pending actions"))
+		c.Assert(requesterPending.PendingRequestsCount, qt.Equals, int64(0), qt.Commentf("Requester should have 0 pending requests"))
+		c.Assert(requesterPending.PendingRatingsCount, qt.Equals, int64(1), qt.Commentf("Requester should have 1 pending rating"))
+
+		// Rate the booking as the requester
+		err = bookingService.RateBooking(ctx, booking2.ID, fromUserID, 5, "Great tool!")
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
+
+		// Verify requester's pending ratings decreased
+		requesterPending, err = bookingService.CountPendingActions(ctx, fromUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to count pending actions"))
+		c.Assert(requesterPending.PendingRatingsCount, qt.Equals, int64(0),
+			qt.Commentf("Requester should have 0 pending ratings after rating"))
+
+		// Owner should still have no pending ratings
+		ownerPending, err = bookingService.CountPendingActions(ctx, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to count pending actions"))
+		c.Assert(ownerPending.PendingRatingsCount, qt.Equals, int64(0), qt.Commentf("Owner should still have 0 pending ratings"))
+	})
+
 	c.Run("Rating Functionality", func(c *qt.C) {
 		fromUserID := primitive.NewObjectID()
 		toUserID := primitive.NewObjectID()
