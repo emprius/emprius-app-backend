@@ -280,26 +280,40 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		return ErrBookingNotFound
 	}
 
-	// If accepting booking, update tool's reserved dates
-	if status == BookingStatusAccepted {
+	// Handle tool's reserved dates based on status
+	if status == BookingStatusAccepted || status == BookingStatusReturned {
 		toolService := s.database.Collection("tools")
 		toolID, _ := strconv.ParseInt(booking.ToolID, 10, 64) // Error already checked above
 
-		// Add reserved dates to tool
-		update := bson.M{
-			"$push": bson.M{
-				"reservedDates": bson.M{
-					"from": uint32(booking.StartDate.Unix()),
-					"to":   uint32(booking.EndDate.Unix()),
+		var update bson.M
+		if status == BookingStatusAccepted {
+			// Add reserved dates to tool
+			update = bson.M{
+				"$push": bson.M{
+					"reservedDates": bson.M{
+						"from": uint32(booking.StartDate.Unix()),
+						"to":   uint32(booking.EndDate.Unix()),
+					},
 				},
-			},
+			}
+		} else { // BookingStatusReturned
+			// Remove reserved dates from tool
+			update = bson.M{
+				"$pull": bson.M{
+					"reservedDates": bson.M{
+						"from": uint32(booking.StartDate.Unix()),
+						"to":   uint32(booking.EndDate.Unix()),
+					},
+				},
+			}
 		}
+
 		_, err = toolService.UpdateOne(ctx, bson.M{"_id": toolID}, update)
 		if err != nil {
 			// If tool update fails, revert booking status
 			revertUpdate := bson.M{
 				"$set": bson.M{
-					"bookingStatus": BookingStatusPending,
+					"bookingStatus": booking.BookingStatus, // Revert to previous status
 					"updatedAt":     time.Now(),
 				},
 			}

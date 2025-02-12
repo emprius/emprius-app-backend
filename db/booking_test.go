@@ -194,6 +194,46 @@ func TestBookingService(t *testing.T) {
 		c.Assert(updated.BookingStatus, qt.Equals, BookingStatusAccepted, qt.Commentf("Status should be updated to accepted"))
 	})
 
+	c.Run("Reserved Dates Management", func(c *qt.C) {
+		fromUserID := primitive.NewObjectID()
+		toUserID := primitive.NewObjectID()
+		toolID, err := createTestTool(ctx, database, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
+
+		// Create a booking
+		startDate := time.Now().Add(24 * time.Hour)
+		endDate := time.Now().Add(48 * time.Hour)
+		req := &CreateBookingRequest{
+			ToolID:    strconv.FormatInt(toolID, 10),
+			StartDate: startDate,
+			EndDate:   endDate,
+			Contact:   "test@example.com",
+		}
+		booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
+
+		// Accept the booking
+		err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusAccepted)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to accept booking"))
+
+		// Verify dates are added to tool's reservedDates
+		var tool Tool
+		err = database.Collection("tools").FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool"))
+		c.Assert(len(tool.ReservedDates), qt.Equals, 1, qt.Commentf("Tool should have one reserved date range"))
+		c.Assert(tool.ReservedDates[0].From, qt.Equals, uint32(startDate.Unix()), qt.Commentf("Start date should match"))
+		c.Assert(tool.ReservedDates[0].To, qt.Equals, uint32(endDate.Unix()), qt.Commentf("End date should match"))
+
+		// Mark booking as returned
+		err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusReturned)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to mark booking as returned"))
+
+		// Verify dates are removed from tool's reservedDates
+		err = database.Collection("tools").FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool"))
+		c.Assert(len(tool.ReservedDates), qt.Equals, 0, qt.Commentf("Tool should have no reserved dates after return"))
+	})
+
 	c.Run("Rating Functionality", func(c *qt.C) {
 		fromUserID := primitive.NewObjectID()
 		toUserID := primitive.NewObjectID()
