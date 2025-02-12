@@ -25,6 +25,7 @@ type Register struct {
 	UserEmail         string `json:"email"`
 	RegisterAuthToken string `json:"invitationToken"`
 	UserProfile
+	Tokens uint64 `json:"tokens,omitempty"`
 }
 
 type Login struct {

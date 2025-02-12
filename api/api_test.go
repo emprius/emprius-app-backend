@@ -30,6 +30,7 @@ var testUser1 = db.User{
 	Active:    true,
 	Verified:  true,
 	Email:     "bob@emprius.cat",
+	Tokens:    1000,
 }
 
 var testUser2 = db.User{
@@ -39,6 +40,7 @@ var testUser2 = db.User{
 	Active:    true,
 	Verified:  true,
 	Email:     "alice@emprius.cat",
+	Tokens:    1000,
 }
 
 func pngImageForTest() []byte {

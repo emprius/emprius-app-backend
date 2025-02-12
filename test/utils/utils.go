@@ -122,6 +122,7 @@ func (s *TestService) RegisterAndLoginWithID(email, name, password string) (stri
 					Longitude: 2492793,  // 2.492793 * 1e6
 				},
 			},
+			Tokens: 1000, // Give each test user 1000 tokens
 		},
 		"register",
 	)

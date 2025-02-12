@@ -232,6 +232,12 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 	return bookings, nil
 }
 
+// calculateTokenCost calculates the total token cost for a booking
+func (s *BookingService) calculateTokenCost(booking *Booking, tool *Tool) uint64 {
+	days := uint64(math.Ceil(booking.EndDate.Sub(booking.StartDate).Hours() / 24))
+	return tool.Cost * days
+}
+
 // UpdateStatus updates the booking status and handles any related updates
 func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID, status BookingStatus) error {
 	// Get the booking first
@@ -243,9 +249,10 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		return ErrBookingNotFound
 	}
 
-	// If accepting booking, verify tool exists and can be updated first
-	if status == BookingStatusAccepted {
-		toolService := s.database.Collection("tools")
+	// If accepting booking or returning, we need the tool information
+	var tool *Tool
+	if status == BookingStatusAccepted || status == BookingStatusReturned {
+		toolService := NewToolService(&Database{Database: s.database})
 
 		// Convert tool ID from string to int64
 		toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
@@ -253,14 +260,51 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 			return fmt.Errorf("invalid tool ID: %w", err)
 		}
 
-		// Verify tool exists
-		var tool bson.M
-		err = toolService.FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
+		// Get tool
+		tool, err = toolService.GetToolByID(ctx, toolID)
 		if err != nil {
 			if err == mongo.ErrNoDocuments {
 				return fmt.Errorf("tool not found: %d", toolID)
 			}
 			return fmt.Errorf("error finding tool: %w", err)
+		}
+
+		// If accepting, check if user has enough tokens
+		if status == BookingStatusAccepted {
+			userService := s.database.Collection("users")
+			var fromUser User
+			err = userService.FindOne(ctx, bson.M{"_id": booking.FromUserID}).Decode(&fromUser)
+			if err != nil {
+				return fmt.Errorf("error finding user: %w", err)
+			}
+
+			tokenCost := s.calculateTokenCost(booking, tool)
+			if fromUser.Tokens < tokenCost {
+				return fmt.Errorf("insufficient tokens: user has %d, needs %d", fromUser.Tokens, tokenCost)
+			}
+
+			// Deduct tokens from renting user
+			_, err = userService.UpdateOne(ctx,
+				bson.M{"_id": booking.FromUserID},
+				bson.M{"$inc": bson.M{"tokens": -int64(tokenCost)}},
+			)
+			if err != nil {
+				return fmt.Errorf("error updating user tokens: %w", err)
+			}
+		}
+
+		// If returning, add tokens to lending user
+		if status == BookingStatusReturned {
+			userService := s.database.Collection("users")
+			tokenCost := s.calculateTokenCost(booking, tool)
+
+			_, err = userService.UpdateOne(ctx,
+				bson.M{"_id": booking.ToUserID},
+				bson.M{"$inc": bson.M{"tokens": int64(tokenCost)}},
+			)
+			if err != nil {
+				return fmt.Errorf("error updating user tokens: %w", err)
+			}
 		}
 	}
 

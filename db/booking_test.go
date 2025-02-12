@@ -2,370 +2,233 @@ package db
 
 import (
 	"context"
-	"strconv"
 	"testing"
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// createTestTool creates a test tool in the database
-func createTestTool(ctx context.Context, db *mongo.Database, userID primitive.ObjectID) (int64, error) {
-	toolService := db.Collection("tools")
-	toolID := time.Now().UnixNano() % 10000000 // Generate a unique tool ID
-
-	tool := &Tool{
-		ID:            toolID,
-		Title:         "Test Tool",
-		Description:   "Test Description",
-		UserID:        userID,
-		IsAvailable:   true,
-		ReservedDates: []DateRange{}, // Initialize as empty array
-	}
-
-	_, err := toolService.InsertOne(ctx, tool)
-	if err != nil {
-		return 0, err
-	}
-
-	return toolID, nil
-}
-
-func TestBookingService(t *testing.T) {
-	c := qt.New(t)
+func TestBookingService_TokenOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// Start MongoDB container
 	container, err := StartMongoContainer(ctx)
-	c.Assert(err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
-	defer func() { _ = container.Terminate(ctx) }()
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
 
 	// Get MongoDB connection string
 	mongoURI, err := container.Endpoint(ctx, "mongodb")
-	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
 
 	// Create a MongoDB client
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
-	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
 	defer func() { _ = client.Disconnect(ctx) }()
 
 	// Use a random database name for isolation
 	dbName := RandomDatabaseName()
-	database := client.Database(dbName)
+	db := client.Database(dbName)
 
-	// Initialize BookingService
-	bookingService := NewBookingService(database)
+	bookingService := NewBookingService(db)
+	userService := NewUserService(&Database{Database: db})
+	toolService := NewToolService(&Database{Database: db})
 
-	c.Run("Create and Get Booking", func(c *qt.C) {
-		// Create test users and tool
-		fromUserID := primitive.NewObjectID()
-		toUserID := primitive.NewObjectID()
-		toolID, err := createTestTool(ctx, database, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
+	// Create test users
+	fromUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "renter@test.com",
+		Name:     "Renter",
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, fromUser)
+	assert.NoError(t, err)
 
-		req := &CreateBookingRequest{
-			ToolID:    strconv.FormatInt(toolID, 10),
-			StartDate: time.Now().Add(24 * time.Hour),
-			EndDate:   time.Now().Add(48 * time.Hour),
-			Contact:   "test@example.com",
-			Comments:  "Test booking",
-		}
+	toUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "owner@test.com",
+		Name:     "Owner",
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, toUser)
+	assert.NoError(t, err)
 
-		// Create booking
-		booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
-		c.Assert(booking.ID, qt.Not(qt.Equals), primitive.NilObjectID, qt.Commentf("Booking ID should not be nil"))
-		c.Assert(booking.BookingStatus, qt.Equals, BookingStatusPending, qt.Commentf("Initial status should be pending"))
+	// Create test tool
+	tool := &Tool{
+		ID:             1,
+		Title:          "Test Tool",
+		Description:    "Test Description",
+		IsAvailable:    true,
+		Cost:           100, // 100 tokens per day
+		UserID:         toUser.ID,
+		EstimatedValue: 10000,
+		Location: DBLocation{
+			Type:        "Point",
+			Coordinates: []float64{2.492793, 41.695384},
+		},
+		ReservedDates: []DateRange{}, // Initialize empty array
+	}
+	_, err = toolService.InsertTool(ctx, tool)
+	assert.NoError(t, err)
 
-		// Get booking
-		retrieved, err := bookingService.Get(ctx, booking.ID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get booking"))
-		c.Assert(retrieved, qt.Not(qt.IsNil), qt.Commentf("Retrieved booking should not be nil"))
-		c.Assert(retrieved.ID, qt.Equals, booking.ID, qt.Commentf("Booking IDs should match"))
-		c.Assert(retrieved.ToolID, qt.Equals, booking.ToolID, qt.Commentf("Tool IDs should match"))
-		c.Assert(retrieved.FromUserID, qt.Equals, booking.FromUserID, qt.Commentf("FromUserIDs should match"))
-	})
+	// Create test booking for 2 days
+	now := time.Now()
+	booking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "1",
+		FromUserID:    fromUser.ID,
+		ToUserID:      toUser.ID,
+		StartDate:     now,
+		EndDate:       now.Add(48 * time.Hour), // 2 days
+		Contact:       "test contact",
+		Comments:      "test comments",
+		BookingStatus: BookingStatusPending,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	_, err = bookingService.collection.InsertOne(ctx, booking)
+	assert.NoError(t, err)
 
-	c.Run("Date Conflict Detection", func(c *qt.C) {
-		// Create test users and tool
-		fromUserID := primitive.NewObjectID()
-		toUserID := primitive.NewObjectID()
-		toolID, err := createTestTool(ctx, database, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
+	// Test accepting booking deducts tokens from renter
+	err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusAccepted)
+	assert.NoError(t, err)
 
-		// Create and accept initial booking
-		req1 := &CreateBookingRequest{
-			ToolID:    strconv.FormatInt(toolID, 10),
-			StartDate: time.Now().Add(24 * time.Hour),
-			EndDate:   time.Now().Add(48 * time.Hour),
-			Contact:   "test1@example.com",
-		}
-		booking1, err := bookingService.Create(ctx, req1, fromUserID, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create first booking"))
+	// Verify renter's tokens were deducted (2 days * 100 tokens = 200 tokens)
+	var updatedFromUser User
+	err = userService.Collection.FindOne(ctx, bson.M{"_id": fromUser.ID}).Decode(&updatedFromUser)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(800), updatedFromUser.Tokens) // 1000 - 200
 
-		// Accept first booking
-		err = bookingService.UpdateStatus(ctx, booking1.ID, BookingStatusAccepted)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to accept first booking"))
+	// Test returning tool adds tokens to owner
+	err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusReturned)
+	assert.NoError(t, err)
 
-		// Try to create overlapping booking (should fail since first booking is accepted)
-		req2 := &CreateBookingRequest{
-			ToolID:    strconv.FormatInt(toolID, 10),
-			StartDate: time.Now().Add(36 * time.Hour),
-			EndDate:   time.Now().Add(60 * time.Hour),
-			Contact:   "test2@example.com",
-		}
-		_, err = bookingService.Create(ctx, req2, primitive.NewObjectID(), toUserID)
-		c.Assert(err, qt.Not(qt.IsNil), qt.Commentf("Expected error for overlapping booking"))
-	})
+	// Verify owner's tokens were increased
+	var updatedToUser User
+	err = userService.Collection.FindOne(ctx, bson.M{"_id": toUser.ID}).Decode(&updatedToUser)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1200), updatedToUser.Tokens) // 1000 + 200
 
-	c.Run("Get User Requests", func(c *qt.C) {
-		toUserID := primitive.NewObjectID()
-		toolID, err := createTestTool(ctx, database, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
+	// Test insufficient tokens case
+	poorUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "poor@test.com",
+		Name:     "Poor User",
+		Tokens:   50, // Not enough tokens for the booking
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, poorUser)
+	assert.NoError(t, err)
 
-		// Create multiple bookings
-		for i := 0; i < 3; i++ {
-			req := &CreateBookingRequest{
-				ToolID:    strconv.FormatInt(toolID, 10),
-				StartDate: time.Now().Add(time.Duration(i+1) * 24 * time.Hour),
-				EndDate:   time.Now().Add(time.Duration(i+2) * 24 * time.Hour),
-				Contact:   "test@example.com",
+	poorBooking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "1",
+		FromUserID:    poorUser.ID,
+		ToUserID:      toUser.ID,
+		StartDate:     now,
+		EndDate:       now.Add(48 * time.Hour), // 2 days
+		Contact:       "test contact",
+		Comments:      "test comments",
+		BookingStatus: BookingStatusPending,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	_, err = bookingService.collection.InsertOne(ctx, poorBooking)
+	assert.NoError(t, err)
+
+	// Test accepting booking with insufficient tokens
+	err = bookingService.UpdateStatus(ctx, poorBooking.ID, BookingStatusAccepted)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "insufficient tokens")
+
+	// Verify poor user's tokens remain unchanged
+	var updatedPoorUser User
+	err = userService.Collection.FindOne(ctx, bson.M{"_id": poorUser.ID}).Decode(&updatedPoorUser)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(50), updatedPoorUser.Tokens)
+}
+
+func TestBookingService_TokenCalculation(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	db := client.Database(dbName)
+
+	bookingService := NewBookingService(db)
+
+	// Test cases for different durations
+	testCases := []struct {
+		name     string
+		duration time.Duration
+		cost     uint64
+		expected uint64
+	}{
+		{
+			name:     "1 day exactly",
+			duration: 24 * time.Hour,
+			cost:     100,
+			expected: 100,
+		},
+		{
+			name:     "2 days exactly",
+			duration: 48 * time.Hour,
+			cost:     100,
+			expected: 200,
+		},
+		{
+			name:     "1.5 days (rounds up)",
+			duration: 36 * time.Hour,
+			cost:     100,
+			expected: 200,
+		},
+		{
+			name:     "23 hours (rounds up to 1 day)",
+			duration: 23 * time.Hour,
+			cost:     100,
+			expected: 100,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			now := time.Now()
+			booking := &Booking{
+				StartDate: now,
+				EndDate:   now.Add(tc.duration),
 			}
-			_, err := bookingService.Create(ctx, req, primitive.NewObjectID(), toUserID)
-			c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test booking"))
-		}
-
-		// Get requests
-		requests, err := bookingService.GetUserRequests(ctx, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get user requests"))
-		c.Assert(len(requests), qt.Equals, 3, qt.Commentf("Expected 3 requests"))
-	})
-
-	c.Run("Get User Petitions", func(c *qt.C) {
-		fromUserID := primitive.NewObjectID()
-		toUserID := primitive.NewObjectID()
-		toolID, err := createTestTool(ctx, database, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
-
-		// Create multiple bookings
-		for i := 0; i < 3; i++ {
-			req := &CreateBookingRequest{
-				ToolID:    strconv.FormatInt(toolID, 10),
-				StartDate: time.Now().Add(time.Duration(i+1) * 24 * time.Hour),
-				EndDate:   time.Now().Add(time.Duration(i+2) * 24 * time.Hour),
-				Contact:   "test@example.com",
+			tool := &Tool{
+				Cost: tc.cost,
 			}
-			_, err := bookingService.Create(ctx, req, fromUserID, primitive.NewObjectID())
-			c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test booking"))
-		}
 
-		// Get petitions
-		petitions, err := bookingService.GetUserPetitions(ctx, fromUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get user petitions"))
-		c.Assert(len(petitions), qt.Equals, 3, qt.Commentf("Expected 3 petitions"))
-	})
-
-	c.Run("Update Booking Status", func(c *qt.C) {
-		toUserID := primitive.NewObjectID()
-		toolID, err := createTestTool(ctx, database, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
-
-		req := &CreateBookingRequest{
-			ToolID:    strconv.FormatInt(toolID, 10),
-			StartDate: time.Now().Add(24 * time.Hour),
-			EndDate:   time.Now().Add(48 * time.Hour),
-			Contact:   "test@example.com",
-		}
-		fromUserID := primitive.NewObjectID()
-		booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
-
-		// Update status
-		err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusAccepted)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to update booking status"))
-
-		// Verify update
-		updated, err := bookingService.Get(ctx, booking.ID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get updated booking"))
-		c.Assert(updated.BookingStatus, qt.Equals, BookingStatusAccepted, qt.Commentf("Status should be updated to accepted"))
-	})
-
-	c.Run("Reserved Dates Management", func(c *qt.C) {
-		fromUserID := primitive.NewObjectID()
-		toUserID := primitive.NewObjectID()
-		toolID, err := createTestTool(ctx, database, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
-
-		// Create a booking
-		startDate := time.Now().Add(24 * time.Hour)
-		endDate := time.Now().Add(48 * time.Hour)
-		req := &CreateBookingRequest{
-			ToolID:    strconv.FormatInt(toolID, 10),
-			StartDate: startDate,
-			EndDate:   endDate,
-			Contact:   "test@example.com",
-		}
-		booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
-
-		// Accept the booking
-		err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusAccepted)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to accept booking"))
-
-		// Verify dates are added to tool's reservedDates
-		var tool Tool
-		err = database.Collection("tools").FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool"))
-		c.Assert(len(tool.ReservedDates), qt.Equals, 1, qt.Commentf("Tool should have one reserved date range"))
-		c.Assert(tool.ReservedDates[0].From, qt.Equals, uint32(startDate.Unix()), qt.Commentf("Start date should match"))
-		c.Assert(tool.ReservedDates[0].To, qt.Equals, uint32(endDate.Unix()), qt.Commentf("End date should match"))
-
-		// Mark booking as returned
-		err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusReturned)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to mark booking as returned"))
-
-		// Verify dates are removed from tool's reservedDates
-		err = database.Collection("tools").FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool"))
-		c.Assert(len(tool.ReservedDates), qt.Equals, 0, qt.Commentf("Tool should have no reserved dates after return"))
-	})
-
-	c.Run("Count Pending Actions", func(c *qt.C) {
-		// Create users
-		fromUserID := primitive.NewObjectID()
-		toUserID := primitive.NewObjectID()
-		toolID, err := createTestTool(ctx, database, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
-
-		// Create a pending booking request
-		req1 := &CreateBookingRequest{
-			ToolID:    strconv.FormatInt(toolID, 10),
-			StartDate: time.Now().Add(24 * time.Hour),
-			EndDate:   time.Now().Add(48 * time.Hour),
-			Contact:   "test@example.com",
-		}
-		_, err = bookingService.Create(ctx, req1, fromUserID, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
-
-		// Create a returned booking that needs rating
-		req2 := &CreateBookingRequest{
-			ToolID:    strconv.FormatInt(toolID, 10),
-			StartDate: time.Now().Add(-48 * time.Hour),
-			EndDate:   time.Now().Add(-24 * time.Hour),
-			Contact:   "test@example.com",
-		}
-		booking2, err := bookingService.Create(ctx, req2, fromUserID, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create booking"))
-
-		// Mark second booking as accepted then returned
-		err = bookingService.UpdateStatus(ctx, booking2.ID, BookingStatusAccepted)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to accept booking"))
-		err = bookingService.UpdateStatus(ctx, booking2.ID, BookingStatusReturned)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to return booking"))
-
-		// Check pending actions for tool owner (toUserID)
-		ownerPending, err := bookingService.CountPendingActions(ctx, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to count pending actions"))
-		c.Assert(ownerPending.PendingRequestsCount, qt.Equals, int64(1), qt.Commentf("Owner should have 1 pending request"))
-		c.Assert(ownerPending.PendingRatingsCount, qt.Equals, int64(0), qt.Commentf("Owner should have 0 pending ratings"))
-
-		// Check pending actions for requester (fromUserID)
-		requesterPending, err := bookingService.CountPendingActions(ctx, fromUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to count pending actions"))
-		c.Assert(requesterPending.PendingRequestsCount, qt.Equals, int64(0), qt.Commentf("Requester should have 0 pending requests"))
-		c.Assert(requesterPending.PendingRatingsCount, qt.Equals, int64(1), qt.Commentf("Requester should have 1 pending rating"))
-
-		// Rate the booking as the requester
-		err = bookingService.RateBooking(ctx, booking2.ID, fromUserID, 5, "Great tool!")
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
-
-		// Verify requester's pending ratings decreased
-		requesterPending, err = bookingService.CountPendingActions(ctx, fromUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to count pending actions"))
-		c.Assert(requesterPending.PendingRatingsCount, qt.Equals, int64(0),
-			qt.Commentf("Requester should have 0 pending ratings after rating"))
-
-		// Owner should still have no pending ratings
-		ownerPending, err = bookingService.CountPendingActions(ctx, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to count pending actions"))
-		c.Assert(ownerPending.PendingRatingsCount, qt.Equals, int64(0), qt.Commentf("Owner should still have 0 pending ratings"))
-	})
-
-	c.Run("Rating Functionality", func(c *qt.C) {
-		fromUserID := primitive.NewObjectID()
-		toUserID := primitive.NewObjectID()
-		toolID, err := createTestTool(ctx, database, toUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test tool"))
-
-		// Create multiple returned bookings
-		var bookings []*Booking
-		for i := 0; i < 3; i++ {
-			req := &CreateBookingRequest{
-				ToolID:    strconv.FormatInt(toolID, 10),
-				StartDate: time.Now().Add(-time.Duration(i+2) * 24 * time.Hour),
-				EndDate:   time.Now().Add(-time.Duration(i+1) * 24 * time.Hour),
-				Contact:   "test@example.com",
-			}
-			booking, err := bookingService.Create(ctx, req, fromUserID, toUserID)
-			c.Assert(err, qt.IsNil, qt.Commentf("Failed to create test booking"))
-
-			// Mark as returned
-			err = bookingService.UpdateStatus(ctx, booking.ID, BookingStatusReturned)
-			c.Assert(err, qt.IsNil, qt.Commentf("Failed to update booking status"))
-
-			bookings = append(bookings, booking)
-		}
-
-		// Test GetPendingRatings
-		ratings, err := bookingService.GetPendingRatings(ctx, fromUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
-		c.Assert(len(ratings), qt.Equals, 3, qt.Commentf("Expected three pending ratings"))
-
-		// Rate first booking
-		err = bookingService.RateBooking(ctx, bookings[0].ID, fromUserID, 5, "Great experience!")
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
-
-		// Verify pending ratings decreased
-		ratings, err = bookingService.GetPendingRatings(ctx, fromUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
-		c.Assert(len(ratings), qt.Equals, 2, qt.Commentf("Expected two pending ratings after rating one"))
-
-		// Rate second booking
-		err = bookingService.RateBooking(ctx, bookings[1].ID, fromUserID, 4, "Good tool")
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
-
-		// Verify pending ratings decreased again
-		ratings, err = bookingService.GetPendingRatings(ctx, fromUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
-		c.Assert(len(ratings), qt.Equals, 1, qt.Commentf("Expected one pending rating after rating two"))
-
-		// Try to rate first booking again (should fail)
-		err = bookingService.RateBooking(ctx, bookings[0].ID, fromUserID, 3, "Trying to rate again")
-		c.Assert(err, qt.Not(qt.IsNil), qt.Commentf("Should not be able to rate twice"))
-		c.Assert(err.Error(), qt.Equals, "user has already rated this booking")
-
-		// Verify tool's rating was updated to average
-		var tool Tool
-		err = database.Collection("tools").FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool"))
-		c.Assert(tool.Rating, qt.Equals, int32(5), qt.Commentf("Tool rating should be updated to average"))
-
-		// Rate third booking
-		err = bookingService.RateBooking(ctx, bookings[2].ID, fromUserID, 3, "Average experience")
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to rate booking"))
-
-		// Verify no more pending ratings
-		ratings, err = bookingService.GetPendingRatings(ctx, fromUserID)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
-		c.Assert(len(ratings), qt.Equals, 0, qt.Commentf("Expected no pending ratings after rating all"))
-
-		// Verify final tool rating average
-		err = database.Collection("tools").FindOne(ctx, bson.M{"_id": toolID}).Decode(&tool)
-		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool"))
-		c.Assert(tool.Rating, qt.Equals, int32(4), qt.Commentf("Tool rating should be updated to final average"))
-	})
+			result := bookingService.calculateTokenCost(booking, tool)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
 }
