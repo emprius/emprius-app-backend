@@ -14,7 +14,10 @@ import (
 
 	stdDraw "image/draw"
 
+	"golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
+	"golang.org/x/image/tiff"
+	_ "golang.org/x/image/webp" // Register WebP decoder
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
@@ -161,6 +164,13 @@ func createThumbnail(imgBytes []byte, format string) ([]byte, error) {
 		err = png.Encode(&buf, dst)
 	case "gif":
 		err = gif.Encode(&buf, dst, nil)
+	case "bmp":
+		err = bmp.Encode(&buf, dst)
+	case "tiff":
+		err = tiff.Encode(&buf, dst, &tiff.Options{Compression: tiff.Deflate})
+	case "webp":
+		// For WebP, we'll encode as PNG since the webp package doesn't provide an encoder
+		err = png.Encode(&buf, dst)
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", format)
 	}
@@ -169,6 +179,31 @@ func createThumbnail(imgBytes []byte, format string) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// detectImageFormat detects the format of an image from its magic bytes
+func detectImageFormat(data []byte) string {
+	if len(data) < 12 {
+		return ""
+	}
+
+	// Check magic bytes for different formats
+	switch {
+	case bytes.HasPrefix(data, []byte{0xFF, 0xD8, 0xFF}):
+		return "jpeg"
+	case bytes.HasPrefix(data, []byte{0x89, 0x50, 0x4E, 0x47}):
+		return "png"
+	case bytes.HasPrefix(data, []byte{0x47, 0x49, 0x46}):
+		return "gif"
+	case bytes.HasPrefix(data, []byte{0x42, 0x4D}):
+		return "bmp"
+	case bytes.HasPrefix(data, []byte{0x49, 0x49, 0x2A, 0x00}) || bytes.HasPrefix(data, []byte{0x4D, 0x4D, 0x00, 0x2A}):
+		return "tiff"
+	case bytes.HasPrefix(data, []byte{0x52, 0x49, 0x46, 0x46}) && bytes.Equal(data[8:12], []byte{0x57, 0x45, 0x42, 0x50}):
+		return "webp"
+	default:
+		return ""
+	}
 }
 
 // GET /image/:hash returns the image with the given hash.
@@ -188,17 +223,8 @@ func (a *API) imageHandler(r *Request) (interface{}, error) {
 		return nil, err
 	}
 
-	// Get the format from the first few bytes of the image
-	format := ""
-	if len(image.Content) > 2 {
-		if bytes.HasPrefix(image.Content, []byte{0xFF, 0xD8, 0xFF}) {
-			format = "jpeg"
-		} else if bytes.HasPrefix(image.Content, []byte{0x89, 0x50, 0x4E, 0x47}) {
-			format = "png"
-		} else if bytes.HasPrefix(image.Content, []byte{0x47, 0x49, 0x46}) {
-			format = "gif"
-		}
-	}
+	// Get the format from the image data
+	format := detectImageFormat(image.Content)
 	if format == "" {
 		return nil, ErrInvalidImageFormat.WithErr(fmt.Errorf("unsupported image format"))
 	}
