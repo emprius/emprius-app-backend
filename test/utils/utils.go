@@ -169,7 +169,7 @@ func (s *TestService) CreateTool(jwt string, title string) int64 {
 			"mayBeFree":      true,
 			"askWithFee":     false,
 			"cost":           10,
-			"category":       1,
+			"toolCategory":   1,
 			"estimatedValue": 20,
 			"height":         30,
 			"weight":         40,

@@ -293,16 +293,3 @@ func TestImageErrors(t *testing.T) {
 	_, err = a.image([]byte("invalid hash"))
 	c.Assert(ErrImageNotFound.IsErr(err), qt.IsTrue)
 }
-
-func TestImage(t *testing.T) {
-	a := testAPI(t)
-
-	// insert image
-	i, err := a.addImage("image1", pngImageForTest())
-	qt.Assert(t, err, qt.IsNil)
-
-	// get image
-	image, err := a.image(i.Hash)
-	qt.Assert(t, err, qt.IsNil)
-	qt.Assert(t, image.Content, qt.DeepEquals, pngImageForTest())
-}

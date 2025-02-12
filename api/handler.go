@@ -194,6 +194,7 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 		// Check if response is binary
 		if binaryResp, ok := handlerResp.(*BinaryResponse); ok {
 			w.Header().Set("Content-Type", binaryResp.ContentType)
+			w.Header().Set("Cache-Control", "public, max-age=86400")
 			w.WriteHeader(http.StatusOK)
 			if _, err := w.Write(binaryResp.Data); err != nil {
 				log.Error().Err(err).Msg("failed to write binary response")

@@ -120,12 +120,6 @@ func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 	return dbImage, nil
 }
 
-// BinaryResponse represents a binary response that should be sent directly to the client
-type BinaryResponse struct {
-	ContentType string
-	Data        []byte
-}
-
 // GET /image/:hash returns the image with the given hash.
 func (a *API) imageHandler(r *Request) (interface{}, error) {
 	hash := r.Context.URLParam("hash")

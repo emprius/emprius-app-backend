@@ -21,6 +21,12 @@ type ResponseHeader struct {
 	ErrorCode int    `json:"errorCode,omitempty"`
 }
 
+// BinaryResponse represents a binary response that should be sent directly to the client
+type BinaryResponse struct {
+	ContentType string
+	Data        []byte
+}
+
 type Register struct {
 	UserEmail         string `json:"email"`
 	RegisterAuthToken string `json:"invitationToken"`
@@ -127,7 +133,7 @@ type Tool struct {
 	Cost             uint64           `json:"cost"`
 	Images           []types.HexBytes `json:"images"`
 	TransportOptions []int            `json:"transportOptions"`
-	Category         int              `json:"category"`
+	Category         int              `json:"toolCategory"`
 	Location         Location         `json:"location"`
 	EstimatedValue   *uint64          `json:"estimatedValue"`
 	Height           uint32           `json:"height"`
