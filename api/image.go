@@ -8,9 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	_ "image/gif"  // Import image decoders for supported formats
-	_ "image/jpeg" // JPEG support
-	_ "image/png"  // PNG support
+	"image/gif"
+	"image/jpeg"
+	"image/png"
+
+	stdDraw "image/draw"
+
+	"golang.org/x/image/draw"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
@@ -120,7 +124,55 @@ func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 	return dbImage, nil
 }
 
+const maxThumbnailSize = 512
+
+// createThumbnail generates a thumbnail version of the image with max dimension of 512px
+func createThumbnail(imgBytes []byte, format string) ([]byte, error) {
+	// Decode original image
+	src, _, err := image.Decode(bytes.NewReader(imgBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode image: %w", err)
+	}
+
+	// Calculate new dimensions
+	bounds := src.Bounds()
+	ratio := float64(bounds.Dx()) / float64(bounds.Dy())
+	var width, height int
+	if bounds.Dx() > bounds.Dy() {
+		width = maxThumbnailSize
+		height = int(float64(maxThumbnailSize) / ratio)
+	} else {
+		height = maxThumbnailSize
+		width = int(float64(maxThumbnailSize) * ratio)
+	}
+
+	// Create new image with calculated dimensions
+	dst := image.NewRGBA(image.Rect(0, 0, width, height))
+
+	// Scale the image using high-quality algorithm
+	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), stdDraw.Over, nil)
+
+	// Encode the thumbnail
+	var buf bytes.Buffer
+	switch format {
+	case "jpeg":
+		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85})
+	case "png":
+		err = png.Encode(&buf, dst)
+	case "gif":
+		err = gif.Encode(&buf, dst, nil)
+	default:
+		return nil, fmt.Errorf("unsupported format: %s", format)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode thumbnail: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
 // GET /image/:hash returns the image with the given hash.
+// Supports optional thumbnail parameter to return a resized version.
 func (a *API) imageHandler(r *Request) (interface{}, error) {
 	hash := r.Context.URLParam("hash")
 	if hash == nil {
@@ -152,8 +204,19 @@ func (a *API) imageHandler(r *Request) (interface{}, error) {
 	}
 
 	contentType := fmt.Sprintf("image/%s", format)
+	data := image.Content
+
+	// Check if thumbnail is requested
+	if thumbnail := r.Context.URLParam("thumbnail"); thumbnail != nil && thumbnail[0] == "true" {
+		thumbnailData, err := createThumbnail(data, format)
+		if err != nil {
+			return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to create thumbnail: %w", err))
+		}
+		data = thumbnailData
+	}
+
 	return &BinaryResponse{
 		ContentType: contentType,
-		Data:        image.Content,
+		Data:        data,
 	}, nil
 }
