@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
+	"github.com/emprius/emprius-app-backend/types"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -43,7 +44,11 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	}
 
 	if t.Title == "" {
-		return 0, ErrEmptyTitleOrDescription.WithErr(fmt.Errorf("title is empty"))
+		return 0, ErrEmptyTitleOrDescription
+	}
+
+	if t.EstimatedValue == nil {
+		return 0, ErrInvalidEstimatedValue
 	}
 
 	user, err := a.getUserByID(userID)
@@ -88,9 +93,18 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	if t.AskWithFee == nil {
 		t.AskWithFee = new(bool)
 	}
-	if t.Cost == nil {
-		t.Cost = new(uint64)
+
+	// Set the cost based on the estimated value.
+	if *t.EstimatedValue != 0 {
+		t.Cost = *t.EstimatedValue / types.FactorCostToPrice
+		if t.Cost == 0 {
+			t.Cost = 1
+		}
+	} else {
+		t.Cost = 0
 	}
+
+	// Set the availability to true by default
 	if t.IsAvailable == nil {
 		t.IsAvailable = new(bool)
 		*t.IsAvailable = true
@@ -104,10 +118,10 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		IsAvailable:      *t.IsAvailable,
 		MayBeFree:        *t.MayBeFree,
 		AskWithFee:       *t.AskWithFee,
-		Cost:             *t.Cost,
+		Cost:             t.Cost,
 		ToolCategory:     t.Category,
 		Rating:           50,
-		EstimatedValue:   t.EstimatedValue,
+		EstimatedValue:   *t.EstimatedValue,
 		Height:           t.Height,
 		Weight:           t.Weight,
 		Images:           dbImages,
@@ -195,11 +209,9 @@ func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 	if newTool.AskWithFee != nil {
 		tool.AskWithFee = *newTool.AskWithFee
 	}
-	if newTool.Cost != nil {
-		tool.Cost = *newTool.Cost
-	}
-	if newTool.EstimatedValue != 0 {
-		tool.EstimatedValue = newTool.EstimatedValue
+	if newTool.EstimatedValue != nil {
+		tool.EstimatedValue = *newTool.EstimatedValue
+		tool.Cost = *newTool.EstimatedValue / types.FactorCostToPrice
 	}
 	if newTool.Height != 0 {
 		tool.Height = newTool.Height

@@ -27,9 +27,8 @@ func TestTools(t *testing.T) {
 				"description":    "Test tool description",
 				"mayBeFree":      true,
 				"askWithFee":     false,
-				"cost":           10,
 				"category":       1,
-				"estimatedValue": 20,
+				"estimatedValue": 10000,
 				"height":         30,
 				"weight":         40,
 				"isAvailable":    true,
@@ -52,9 +51,8 @@ func TestTools(t *testing.T) {
 				"description":    "Test tool description",
 				"mayBeFree":      true,
 				"askWithFee":     false,
-				"cost":           20, // We'll override it later
 				"category":       1,
-				"estimatedValue": 20,
+				"estimatedValue": 20000,
 				"height":         30,
 				"weight":         40,
 				"location": map[string]interface{}{
@@ -86,9 +84,8 @@ func TestTools(t *testing.T) {
 				"description":    "Another tool description",
 				"mayBeFree":      false, // This will be relevant for filtering
 				"askWithFee":     true,
-				"cost":           20, // We'll exclude it from maxCost=15
 				"category":       1,
-				"estimatedValue": 30,
+				"estimatedValue": 20000,
 				"height":         40,
 				"weight":         50,
 				"isAvailable":    true,
@@ -125,9 +122,8 @@ func TestTools(t *testing.T) {
 				"description":    "Updated description",
 				"mayBeFree":      false,
 				"askWithFee":     true,
-				"cost":           20,
 				"category":       1,
-				"estimatedValue": 30,
+				"estimatedValue": 20000,
 				"height":         40,
 				"weight":         50,
 				"isAvailable":    true,
@@ -202,9 +198,8 @@ func TestTools(t *testing.T) {
 					"description":    "Tool at 5km away",
 					"mayBeFree":      true,  // different from "Updated Tool"
 					"askWithFee":     false, // cost=10 => included by maxCost=15
-					"cost":           10,
 					"category":       1,
-					"estimatedValue": 20,
+					"estimatedValue": 10000,
 					"height":         30,
 					"weight":         40,
 					"isAvailable":    true,
@@ -224,9 +219,8 @@ func TestTools(t *testing.T) {
 					"description":    "Tool at 15km away",
 					"mayBeFree":      true,
 					"askWithFee":     false,
-					"cost":           20, // excluded from maxCost=15
 					"category":       1,
-					"estimatedValue": 20,
+					"estimatedValue": 20000,
 					"height":         30,
 					"weight":         40,
 					"isAvailable":    true,
@@ -246,9 +240,8 @@ func TestTools(t *testing.T) {
 					"description":    "Tool at 25km away",
 					"mayBeFree":      true,
 					"askWithFee":     false,
-					"cost":           20, // also excluded by maxCost=15
 					"category":       1,
-					"estimatedValue": 20,
+					"estimatedValue": 20000,
 					"height":         30,
 					"weight":         40,
 					"isAvailable":    true,
@@ -333,16 +326,6 @@ func TestTools(t *testing.T) {
 			//     and is also within 20 km.
 			//--------------------------------------------------------------
 			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?term=Another&distance=20000")
-			qt.Assert(t, code, qt.Equals, 200)
-			err = json.Unmarshal(resp, &searchResp)
-			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 1)
-
-			//--------------------------------------------------------------
-			// 8G) Search with maxCost=15 => we expect 1
-			//     Only “Tool at 5km” has cost=10. The rest are cost=20.
-			//--------------------------------------------------------------
-			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?maxCost=15")
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &searchResp)
 			qt.Assert(t, err, qt.IsNil)

@@ -123,12 +123,12 @@ type Tool struct {
 	IsAvailable      *bool            `json:"isAvailable"`
 	MayBeFree        *bool            `json:"mayBeFree"`
 	AskWithFee       *bool            `json:"askWithFee"`
-	Cost             *uint64          `json:"cost"`
+	Cost             uint64           `json:"cost"`
 	Images           []types.HexBytes `json:"images"`
 	TransportOptions []int            `json:"transportOptions"`
 	Category         int              `json:"category"`
 	Location         Location         `json:"location"`
-	EstimatedValue   uint64           `json:"estimatedValue"`
+	EstimatedValue   *uint64          `json:"estimatedValue"`
 	Height           uint32           `json:"height"`
 	Weight           uint32           `json:"weight"`
 	ReservedDates    []db.DateRange   `json:"reservedDates"`
@@ -143,7 +143,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.IsAvailable = &dbt.IsAvailable
 	t.MayBeFree = &dbt.MayBeFree
 	t.AskWithFee = &dbt.AskWithFee
-	t.Cost = &dbt.Cost
+	t.Cost = dbt.Cost
 	for i := range dbt.Images {
 		t.Images = append(t.Images, dbt.Images[i].Hash)
 	}
@@ -152,7 +152,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	}
 	t.Category = dbt.ToolCategory
 	t.Location.FromDBLocation(dbt.Location)
-	t.EstimatedValue = dbt.EstimatedValue
+	t.EstimatedValue = &dbt.EstimatedValue
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
 	t.ReservedDates = dbt.ReservedDates

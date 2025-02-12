@@ -64,8 +64,8 @@ var testTool1 = Tool{
 	Description:    "tool1 description",
 	MayBeFree:      boolPtr(true),
 	AskWithFee:     boolPtr(false),
-	EstimatedValue: 10000,
-	Cost:           uint64Ptr(10),
+	EstimatedValue: uint64Ptr(10000),
+	Cost:           10000 / types.FactorCostToPrice,
 	Images:         []types.HexBytes{},
 	Location: Location{
 		Latitude:  41778407, // 41.778407 * 1e6 (~10km north)
