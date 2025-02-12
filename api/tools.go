@@ -50,7 +50,15 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	if err != nil {
 		return 0, ErrUserNotFound.WithErr(err)
 	}
-	if t.Category < 0 || t.Category >= len(a.toolCategories()) {
+	categories := a.toolCategories()
+	validCategory := false
+	for _, cat := range categories {
+		if cat.ID == t.Category {
+			validCategory = true
+			break
+		}
+	}
+	if !validCategory {
 		return 0, ErrInvalidToolCategory.WithErr(fmt.Errorf("category %d is not valid", t.Category))
 	}
 
@@ -200,7 +208,15 @@ func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 		tool.Weight = newTool.Weight
 	}
 	if newTool.Category != 0 {
-		if newTool.Category < 0 || newTool.Category >= len(a.toolCategories()) {
+		categories := a.toolCategories()
+		validCategory := false
+		for _, cat := range categories {
+			if cat.ID == newTool.Category {
+				validCategory = true
+				break
+			}
+		}
+		if !validCategory {
 			return 0, ErrInvalidToolCategory.WithErr(fmt.Errorf("category %d is not valid", newTool.Category))
 		}
 		tool.ToolCategory = newTool.Category
