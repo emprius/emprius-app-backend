@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"testing"
 	"time"
@@ -41,16 +40,6 @@ var testUser2 = db.User{
 	Verified:  true,
 	Email:     "alice@emprius.cat",
 	Tokens:    1000,
-}
-
-// pngImageForTest returns a small test PNG image
-func pngImageForTest() []byte {
-	const testImage = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
-	data, err := base64.StdEncoding.DecodeString(testImage)
-	if err != nil {
-		panic(err)
-	}
-	return data
 }
 
 func boolPtr(b bool) *bool {

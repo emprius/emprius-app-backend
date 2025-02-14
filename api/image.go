@@ -127,9 +127,9 @@ func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 	return dbImage, nil
 }
 
-const maxThumbnailSize = 512
+const maxThumbnailSize = 768
 
-// createThumbnail generates a thumbnail version of the image with max dimension of 512px
+// createThumbnail generates a thumbnail version of the image with 2:1 aspect ratio and max width of 512px
 func createThumbnail(imgBytes []byte, format string) ([]byte, error) {
 	// Decode original image
 	src, _, err := image.Decode(bytes.NewReader(imgBytes))
@@ -137,23 +137,34 @@ func createThumbnail(imgBytes []byte, format string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to decode image: %w", err)
 	}
 
-	// Calculate new dimensions
+	// Calculate dimensions for 2:1 aspect ratio
 	bounds := src.Bounds()
-	ratio := float64(bounds.Dx()) / float64(bounds.Dy())
-	var width, height int
-	if bounds.Dx() > bounds.Dy() {
-		width = maxThumbnailSize
-		height = int(float64(maxThumbnailSize) / ratio)
+	width := maxThumbnailSize
+	height := maxThumbnailSize / 2
+
+	// Calculate source rectangle for cropping
+	srcWidth := bounds.Dx()
+	srcHeight := bounds.Dy()
+	targetRatio := float64(2) // width:height = 2:1
+
+	var srcRect image.Rectangle
+	if float64(srcWidth)/float64(srcHeight) > targetRatio {
+		// Image is wider than 2:1, crop width
+		newWidth := int(float64(srcHeight) * targetRatio)
+		offset := (srcWidth - newWidth) / 2
+		srcRect = image.Rect(offset, 0, offset+newWidth, srcHeight)
 	} else {
-		height = maxThumbnailSize
-		width = int(float64(maxThumbnailSize) * ratio)
+		// Image is taller than 2:1, crop height
+		newHeight := int(float64(srcWidth) / targetRatio)
+		offset := (srcHeight - newHeight) / 2
+		srcRect = image.Rect(0, offset, srcWidth, offset+newHeight)
 	}
 
-	// Create new image with calculated dimensions
+	// Create new image with 2:1 dimensions
 	dst := image.NewRGBA(image.Rect(0, 0, width, height))
 
 	// Scale the image using high-quality algorithm
-	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), stdDraw.Over, nil)
+	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, srcRect, stdDraw.Over, nil)
 
 	// Encode the thumbnail
 	var buf bytes.Buffer
