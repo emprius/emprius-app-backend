@@ -162,6 +162,7 @@ func TestBookings(t *testing.T) {
 
 		// Test rating functionality
 		t.Run("Rating Tests", func(t *testing.T) {
+			// First test: Basic rating functionality
 			// Try to rate without auth
 			_, code = c.Request(http.MethodPost, "",
 				map[string]interface{}{
@@ -232,6 +233,33 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, len(receivedResp.Data), qt.Equals, 1)
 			qt.Assert(t, receivedResp.Data[0].Rating, qt.Not(qt.IsNil))
 			qt.Assert(t, *receivedResp.Data[0].Rating, qt.Equals, 5)
+
+			// Second test: Owner rating their own booking
+			// Create a new booking where owner will rate it
+			resp, code = c.Request(http.MethodPost, ownerJWT,
+				map[string]interface{}{
+					"rating":  4,
+					"comment": "Self rating test",
+				},
+				"bookings", bookingID, "rate")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Get submitted ratings - should not include self-rating
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "rates", "submitted")
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &submittedResp)
+			qt.Assert(t, err, qt.IsNil)
+			// Should still be 0 since self-rating is excluded
+			qt.Assert(t, len(submittedResp.Data), qt.Equals, 0)
+
+			// Get received ratings - should include self-rating
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "rates", "received")
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &receivedResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(receivedResp.Data), qt.Equals, 1)
+			qt.Assert(t, receivedResp.Data[0].Rating, qt.Not(qt.IsNil))
+			qt.Assert(t, *receivedResp.Data[0].Rating, qt.Equals, 4)
 		})
 
 		// Test deny petition

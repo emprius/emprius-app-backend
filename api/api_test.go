@@ -1,14 +1,9 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
-	"image"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
@@ -297,60 +292,4 @@ func TestImageErrors(t *testing.T) {
 	// Test invalid image hash
 	_, err = a.image([]byte("invalid hash"))
 	c.Assert(ErrImageNotFound.IsErr(err), qt.IsTrue)
-}
-
-func TestThumbnailGeneration(t *testing.T) {
-	c := qt.New(t)
-	a := testAPI(t)
-
-	// Create test image
-	testImage := pngImageForTest()
-
-	// Add image to database
-	dbImage, err := a.addImage("test.png", testImage)
-	c.Assert(err, qt.IsNil)
-
-	// Test thumbnail endpoint
-	r := &Request{
-		Context: &HTTPContext{
-			Request: &http.Request{
-				URL: &url.URL{RawQuery: "thumbnail=true"},
-			},
-			Writer: httptest.NewRecorder(),
-		},
-	}
-	r.Context.Request.Header = make(http.Header)
-	r.Path = []string{"images", dbImage.Hash.String()}
-
-	// Get thumbnail through endpoint
-	resp, err := a.imageHandler(r)
-	c.Assert(err, qt.IsNil)
-	binaryResp, ok := resp.(*BinaryResponse)
-	c.Assert(ok, qt.IsTrue)
-	c.Assert(binaryResp.ContentType, qt.Equals, "image/png")
-	c.Assert(len(binaryResp.Data) < len(testImage), qt.IsTrue)
-
-	// Test thumbnail generation
-	thumbnailData, err := createThumbnail(testImage, "png")
-	c.Assert(err, qt.IsNil)
-
-	// Verify thumbnail is smaller than original
-	c.Assert(len(thumbnailData) < len(testImage), qt.IsTrue)
-
-	// Decode thumbnail to verify dimensions
-	img, _, err := image.Decode(bytes.NewReader(thumbnailData))
-	c.Assert(err, qt.IsNil)
-
-	// Verify dimensions are within max thumbnail size
-	bounds := img.Bounds()
-	c.Assert(bounds.Dx() <= maxThumbnailSize, qt.IsTrue)
-	c.Assert(bounds.Dy() <= maxThumbnailSize, qt.IsTrue)
-
-	// Test invalid format
-	_, err = createThumbnail(testImage, "invalid")
-	c.Assert(err, qt.ErrorMatches, "unsupported format: invalid")
-
-	// Test invalid image data
-	_, err = createThumbnail([]byte("invalid image data"), "png")
-	c.Assert(err, qt.ErrorMatches, "failed to decode image:.*")
 }

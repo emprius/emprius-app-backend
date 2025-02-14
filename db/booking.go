@@ -447,10 +447,11 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 	return bookings, nil
 }
 
-// GetSubmittedRatings gets bookings that have been rated by the user
+// GetSubmittedRatings gets bookings that have been rated by the user (excluding self-ratings)
 func (s *BookingService) GetSubmittedRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
 	filter := bson.M{
-		"ratedBy": userID,
+		"ratedBy":  userID,
+		"toUserId": bson.M{"$ne": userID}, // Exclude ratings where user is the tool owner
 	}
 
 	cursor, err := s.collection.Find(ctx, filter)
