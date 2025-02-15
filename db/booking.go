@@ -633,24 +633,48 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 		return fmt.Errorf("failed to decode user's tools: %w", err)
 	}
 
-	// Calculate average rating of all user's tools
-	var totalRating float64
-	var ratedTools int
-	for _, tool := range tools {
-		if tool.Rating > 0 {
-			totalRating += float64(tool.Rating)
-			ratedTools++
-		}
+	// Calculate user's rating based on all received ratings
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{
+			"toUserId":      booking.ToUserID,
+			"bookingStatus": BookingStatusReturned,
+			"rating":        bson.M{"$exists": true},
+		}}},
+		{{Key: "$group", Value: bson.M{
+			"_id":         nil,
+			"avgRating":   bson.M{"$avg": "$rating"},
+			"ratingCount": bson.M{"$sum": 1},
+		}}},
 	}
 
-	// Update user's rating if they have any rated tools
-	if ratedTools > 0 {
+	userRatingCursor, err := s.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return fmt.Errorf("failed to calculate user average rating: %w", err)
+	}
+	defer func() {
+		if err := userRatingCursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing user rating cursor")
+		}
+	}()
+
+	var userResults []struct {
+		AvgRating   float64 `bson:"avgRating"`
+		RatingCount int     `bson:"ratingCount"`
+	}
+	if err = userRatingCursor.All(ctx, &userResults); err != nil {
+		return fmt.Errorf("failed to decode user average rating: %w", err)
+	}
+
+	if len(userResults) > 0 {
+		// Convert 5-star rating to percentage (5 stars = 100%, 4 stars = 80%, etc.)
+		userRating := int32(math.Round((userResults[0].AvgRating / 5.0) * 100))
+
+		// Update user's rating
 		userService := s.database.Collection("users")
 		_, err = userService.UpdateOne(
 			ctx,
 			bson.M{"_id": booking.ToUserID},
-			// Convert tool's 1-5 rating to user's 0-100 scale
-			bson.M{"$set": bson.M{"rating": int32(math.Round((totalRating / float64(ratedTools)) * 20))}},
+			bson.M{"$set": bson.M{"rating": userRating}},
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update user rating: %w", err)
