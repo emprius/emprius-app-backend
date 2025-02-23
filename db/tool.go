@@ -76,7 +76,7 @@ type Tool struct {
 
 // SanitizeString ensures the search term is safe for use in regex.
 func SanitizeString(s string) string {
-	reg := regexp.MustCompile(`[^a-zA-Z0-9,._\s-]+`)
+	reg := regexp.MustCompile(`[^0-9\p{L},._\s-]+`)
 	return reg.ReplaceAllString(s, "")
 }
 
