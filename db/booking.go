@@ -600,7 +600,7 @@ func (s *BookingService) RateBooking(
 }
 
 // updateRatings recalculates and updates the tool's average rating and the tool owner's overall rating
-// based on the ratings stored in the booking's Ratings array.
+// based solely on ratings received from other users (i.e. excluding self-ratings).
 func (s *BookingService) updateRatings(ctx context.Context, bookingID primitive.ObjectID) error {
 	// Fetch updated booking.
 	booking, err := s.Get(ctx, bookingID)
@@ -661,26 +661,37 @@ func (s *BookingService) updateRatings(ctx context.Context, bookingID primitive.
 		}
 	}
 
-	// Calculate the tool owner's (user's) rating from received ratings.
-	pipeline := mongo.Pipeline{
+	// Calculate the tool owner's overall rating from received ratings,
+	// but only use ratings submitted by other users.
+	userPipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{
 			"toUserId":      booking.ToUserID,
 			"bookingStatus": BookingStatusReturned,
 			"ratings":       bson.M{"$exists": true, "$ne": []interface{}{}},
 		}}},
-		{{Key: "$unwind", Value: "$ratings"}},
-		// Only consider ratings given by the other party.
-		{{Key: "$match", Value: bson.M{
-			"ratings.userId": bson.M{"$ne": booking.ToUserID},
+		// Project only ratings from other users (exclude self-ratings).
+		{{Key: "$project", Value: bson.M{
+			"otherRatings": bson.M{
+				"$filter": bson.M{
+					"input": "$ratings",
+					"as":    "r",
+					"cond":  bson.M{"$ne": []interface{}{"$$r.userId", booking.ToUserID}},
+				},
+			},
 		}}},
+		// Remove bookings that have no otherRatings.
+		{{Key: "$match", Value: bson.M{
+			"otherRatings": bson.M{"$ne": []interface{}{}},
+		}}},
+		{{Key: "$unwind", Value: "$otherRatings"}},
 		{{Key: "$group", Value: bson.M{
 			"_id":         nil,
-			"avgRating":   bson.M{"$avg": "$ratings.rating"},
+			"avgRating":   bson.M{"$avg": "$otherRatings.rating"},
 			"ratingCount": bson.M{"$sum": 1},
 		}}},
 	}
 
-	userRatingCursor, err := s.collection.Aggregate(ctx, pipeline)
+	userRatingCursor, err := s.collection.Aggregate(ctx, userPipeline)
 	if err != nil {
 		return fmt.Errorf("failed to calculate user average rating: %w", err)
 	}

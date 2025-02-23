@@ -464,5 +464,120 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, countResp.Data.PendingRequestsCount, qt.Equals, int64(0))
 			qt.Assert(t, countResp.Data.PendingRatingsCount, qt.Equals, int64(1))
 		})
+
+		t.Run("Owner Overall Rating", func(t *testing.T) {
+			// Scenario A: Only the renter rates the booking.
+			{
+				// Create a new booking.
+				resp, code := c.Request(http.MethodPost, renterJWT,
+					map[string]interface{}{
+						"toolId":    fmt.Sprint(toolID),
+						"startDate": time.Now().Add(24 * time.Hour).Unix(),
+						"endDate":   time.Now().Add(48 * time.Hour).Unix(),
+						"contact":   "test@example.com",
+						"comments":  "Booking for rating test A",
+					},
+					"bookings",
+				)
+				qt.Assert(t, code, qt.Equals, 200)
+
+				var bookingResp struct {
+					Data api.BookingResponse `json:"data"`
+				}
+				err := json.Unmarshal(resp, &bookingResp)
+				qt.Assert(t, err, qt.IsNil)
+				bookingID := bookingResp.Data.ID
+
+				// Owner accepts the booking.
+				_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID, "accept")
+				qt.Assert(t, code, qt.Equals, 200)
+
+				// Mark booking as returned.
+				_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingID, "return")
+				qt.Assert(t, code, qt.Equals, 200)
+
+				// Renter submits a rating of 5.
+				_, code = c.Request(http.MethodPost, renterJWT,
+					map[string]interface{}{
+						"rating":  5,
+						"comment": "Excellent!",
+					},
+					"bookings", bookingID, "rate",
+				)
+				qt.Assert(t, code, qt.Equals, 200)
+
+				// Retrieve the owner's profile.
+				resp, code = c.Request(http.MethodGet, ownerJWT, nil, "profile")
+				qt.Assert(t, code, qt.Equals, 200)
+				var profileResp struct {
+					Data *api.User `json:"data"`
+				}
+				err = json.Unmarshal(resp, &profileResp)
+				qt.Assert(t, err, qt.IsNil)
+				// Expect owner's overall rating to be 100 (5 stars → 100%).
+				qt.Assert(t, profileResp.Data.Rating, qt.Equals, 100)
+			}
+
+			// Scenario B: Both the renter and the owner rate the booking.
+			{
+				// Create a new booking.
+				resp, code := c.Request(http.MethodPost, renterJWT,
+					map[string]interface{}{
+						"toolId":    fmt.Sprint(toolID),
+						"startDate": time.Now().Add(72 * time.Hour).Unix(),
+						"endDate":   time.Now().Add(96 * time.Hour).Unix(),
+						"contact":   "test@example.com",
+						"comments":  "Booking for rating test B",
+					},
+					"bookings",
+				)
+				qt.Assert(t, code, qt.Equals, 200)
+
+				var bookingResp struct {
+					Data api.BookingResponse `json:"data"`
+				}
+				err := json.Unmarshal(resp, &bookingResp)
+				qt.Assert(t, err, qt.IsNil)
+				bookingID := bookingResp.Data.ID
+
+				// Owner accepts the booking.
+				_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID, "accept")
+				qt.Assert(t, code, qt.Equals, 200)
+
+				// Mark booking as returned.
+				_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingID, "return")
+				qt.Assert(t, code, qt.Equals, 200)
+
+				// Renter submits a rating of 5.
+				_, code = c.Request(http.MethodPost, renterJWT,
+					map[string]interface{}{
+						"rating":  5,
+						"comment": "Excellent!",
+					},
+					"bookings", bookingID, "rate",
+				)
+				qt.Assert(t, code, qt.Equals, 200)
+
+				// Owner submits a rating of 4.
+				_, code = c.Request(http.MethodPost, ownerJWT,
+					map[string]interface{}{
+						"rating":  4,
+						"comment": "Good, but could improve",
+					},
+					"bookings", bookingID, "rate",
+				)
+				qt.Assert(t, code, qt.Equals, 200)
+
+				// Retrieve the owner's profile.
+				resp, code = c.Request(http.MethodGet, ownerJWT, nil, "profile")
+				qt.Assert(t, code, qt.Equals, 200)
+				var profileResp struct {
+					Data *api.User `json:"data"`
+				}
+				err = json.Unmarshal(resp, &profileResp)
+				qt.Assert(t, err, qt.IsNil)
+				qt.Assert(t, profileResp.Data.Rating, qt.Equals, 100)
+			}
+		})
 	})
 }
