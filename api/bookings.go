@@ -12,8 +12,21 @@ import (
 	"github.com/emprius/emprius-app-backend/db"
 )
 
-// convertBookingToResponse converts a db.Booking to a BookingResponse
+// convertBookingToResponse converts a db.Booking to a BookingResponse.
 func convertBookingToResponse(booking *db.Booking) BookingResponse {
+	var isRated bool
+	var rating *int
+	var ratingComment string
+
+	// If the booking has one or more ratings, we mark it as rated.
+	if len(booking.Ratings) > 0 {
+		isRated = true
+		// For this example, we return the first rating.
+		r := booking.Ratings[0]
+		rating = &r.Rating
+		ratingComment = r.RatingComment
+	}
+
 	return BookingResponse{
 		ID:            booking.ID.Hex(),
 		ToolID:        booking.ToolID,
@@ -24,9 +37,9 @@ func convertBookingToResponse(booking *db.Booking) BookingResponse {
 		Contact:       booking.Contact,
 		Comments:      booking.Comments,
 		BookingStatus: string(booking.BookingStatus),
-		IsRated:       booking.RatedBy != nil,
-		Rating:        booking.Rating,
-		RatingComment: booking.RatingComment,
+		IsRated:       isRated,
+		Rating:        rating,
+		RatingComment: ratingComment,
 		CreatedAt:     booking.CreatedAt,
 		UpdatedAt:     booking.UpdatedAt,
 	}

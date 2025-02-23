@@ -454,7 +454,7 @@ func TestBookings(t *testing.T) {
 			err = json.Unmarshal(resp, &countResp)
 			qt.Assert(t, err, qt.IsNil)
 			qt.Assert(t, countResp.Data.PendingRequestsCount, qt.Equals, int64(0))
-			qt.Assert(t, countResp.Data.PendingRatingsCount, qt.Equals, int64(0))
+			qt.Assert(t, countResp.Data.PendingRatingsCount, qt.Equals, int64(1))
 
 			// Verify renter has 1 pending rating
 			resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "pendings")

@@ -30,6 +30,11 @@ func InitializeDatabase(db *Database) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Run migrations first.
+	if err := RunMigrations(ctx, db.Database); err != nil {
+		return err
+	}
+
 	// Create unique indexes
 	if err := createUniqueIndexes(db, ctx); err != nil {
 		return err

@@ -25,23 +25,29 @@ const (
 	BookingStatusReturned  BookingStatus = "RETURNED"
 )
 
-// Booking represents a tool booking in the system
+// BookingRating represents a rating given by a user for a booking.
+type BookingRating struct {
+	UserID        primitive.ObjectID `bson:"userId" json:"userId"`
+	Rating        int                `bson:"rating" json:"rating"`
+	RatingComment string             `bson:"ratingComment,omitempty" json:"ratingComment,omitempty"`
+	RatedAt       time.Time          `bson:"ratedAt" json:"ratedAt"`
+}
+
+// Booking represents a tool booking in the system.
 type Booking struct {
-	ID            primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
-	ToolID        string              `bson:"toolId" json:"toolId"`
-	FromUserID    primitive.ObjectID  `bson:"fromUserId" json:"fromUserId"`
-	ToUserID      primitive.ObjectID  `bson:"toUserId" json:"toUserId"`
-	StartDate     time.Time           `bson:"startDate" json:"startDate"`
-	EndDate       time.Time           `bson:"endDate" json:"endDate"`
-	Contact       string              `bson:"contact" json:"contact"`
-	Comments      string              `bson:"comments" json:"comments"`
-	BookingStatus BookingStatus       `bson:"bookingStatus" json:"bookingStatus"`
-	Rating        *int                `bson:"rating,omitempty" json:"rating,omitempty"`
-	RatingComment string              `bson:"ratingComment,omitempty" json:"ratingComment,omitempty"`
-	RatedBy       *primitive.ObjectID `bson:"ratedBy,omitempty" json:"ratedBy,omitempty"`
-	RatedAt       *time.Time          `bson:"ratedAt,omitempty" json:"ratedAt,omitempty"`
-	CreatedAt     time.Time           `bson:"createdAt" json:"createdAt"`
-	UpdatedAt     time.Time           `bson:"updatedAt" json:"updatedAt"`
+	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	ToolID        string             `bson:"toolId" json:"toolId"`
+	FromUserID    primitive.ObjectID `bson:"fromUserId" json:"fromUserId"`
+	ToUserID      primitive.ObjectID `bson:"toUserId" json:"toUserId"`
+	StartDate     time.Time          `bson:"startDate" json:"startDate"`
+	EndDate       time.Time          `bson:"endDate" json:"endDate"`
+	Contact       string             `bson:"contact" json:"contact"`
+	Comments      string             `bson:"comments" json:"comments"`
+	BookingStatus BookingStatus      `bson:"bookingStatus" json:"bookingStatus"`
+	// Ratings now holds zero, one, or two ratings (one from each involved user).
+	Ratings   []BookingRating `bson:"ratings,omitempty" json:"ratings,omitempty"`
+	CreatedAt time.Time       `bson:"createdAt" json:"createdAt"`
+	UpdatedAt time.Time       `bson:"updatedAt" json:"updatedAt"`
 }
 
 // BookingService handles all booking related database operations
@@ -404,27 +410,37 @@ func (s *BookingService) checkDateConflicts(
 	return count > 0, nil
 }
 
-// GetPendingRatings gets bookings that need to be rated by the user
+// GetPendingRatings retrieves all bookings that the given user still needs to rate.
 func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
-	// We need to find:
-	// 1. Bookings where the user is either fromUser or toUser
-	// 2. Booking status is RETURNED
-	// 3. Either:
-	//    - ratedBy field doesn't exist (no one has rated yet)
-	//    - ratedBy field exists but is not equal to userID (someone else rated but not this user)
 	filter := bson.M{
-		"$and": []bson.M{
-			{
-				"$or": []bson.M{
-					{"fromUserId": userID},
-					{"toUserId": userID},
+		"bookingStatus": BookingStatusReturned,
+		"$or": []bson.M{
+			{"fromUserId": userID},
+			{"toUserId": userID},
+		},
+		"$expr": bson.M{
+			"$and": []interface{}{
+				// Ensure fewer than 2 ratings exist.
+				bson.M{
+					"$lt": []interface{}{
+						bson.M{"$size": bson.M{"$ifNull": []interface{}{"$ratings", []interface{}{}}}},
+						2,
+					},
 				},
-			},
-			{"bookingStatus": BookingStatusReturned},
-			{
-				"$or": []bson.M{
-					{"ratedBy": bson.M{"$exists": false}},
-					{"ratedBy": bson.M{"$ne": userID}},
+				// Ensure the current user has not rated it yet.
+				bson.M{
+					"$not": bson.M{
+						"$in": []interface{}{
+							userID,
+							bson.M{
+								"$map": bson.M{
+									"input": bson.M{"$ifNull": []interface{}{"$ratings", []interface{}{}}},
+									"as":    "r",
+									"in":    "$$r.userId",
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -434,11 +450,7 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err := cursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing cursor")
-		}
-	}()
+	defer cursor.Close(ctx) // nolint: errcheck
 
 	var bookings []*Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
@@ -447,11 +459,13 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 	return bookings, nil
 }
 
-// GetSubmittedRatings gets bookings that have been rated by the user (excluding self-ratings)
+// GetSubmittedRatings retrieves bookings that have been rated by the user (excluding self-ratings).
 func (s *BookingService) GetSubmittedRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
 	filter := bson.M{
-		"ratedBy":  userID,
-		"toUserId": bson.M{"$ne": userID}, // Exclude ratings where user is the tool owner
+		"ratings": bson.M{
+			"$elemMatch": bson.M{"userId": userID},
+		},
+		"toUserId": bson.M{"$ne": userID}, // Exclude self-ratings.
 	}
 
 	cursor, err := s.collection.Find(ctx, filter)
@@ -471,13 +485,13 @@ func (s *BookingService) GetSubmittedRatings(ctx context.Context, userID primiti
 	return bookings, nil
 }
 
-// GetReceivedRatings gets bookings that have been rated where the user is the tool owner
+// GetReceivedRatings retrieves bookings that have been rated where the user is the tool owner.
+// If the owner has submitted a rating, that rating is returned in preference to the other party's rating.
 func (s *BookingService) GetReceivedRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
+	// Retrieve all bookings where the tool owner is the current user and ratings exist.
 	filter := bson.M{
 		"toUserId": userID,
-		"rating": bson.M{
-			"$exists": true,
-		},
+		"ratings":  bson.M{"$exists": true, "$not": bson.M{"$size": 0}},
 	}
 
 	cursor, err := s.collection.Find(ctx, filter)
@@ -494,10 +508,24 @@ func (s *BookingService) GetReceivedRatings(ctx context.Context, userID primitiv
 	if err = cursor.All(ctx, &bookings); err != nil {
 		return nil, err
 	}
+
+	// For each booking, if the owner has submitted a rating (i.e. rating.userId equals userID),
+	// swap it to the first position so that convertBookingToResponse returns that rating.
+	for _, booking := range bookings {
+		for i, r := range booking.Ratings {
+			if r.UserID == userID {
+				if i != 0 {
+					booking.Ratings[0], booking.Ratings[i] = booking.Ratings[i], booking.Ratings[0]
+				}
+				break
+			}
+		}
+	}
+
 	return bookings, nil
 }
 
-// RateBooking adds a rating to a booking and updates the tool's average rating
+// RateBooking adds a rating to a booking and then updates the tool's and owner's ratings.
 func (s *BookingService) RateBooking(
 	ctx context.Context,
 	bookingID primitive.ObjectID,
@@ -505,7 +533,7 @@ func (s *BookingService) RateBooking(
 	rating int,
 	comment string,
 ) error {
-	// Get the booking
+	// Get the booking.
 	booking, err := s.Get(ctx, bookingID)
 	if err != nil {
 		return err
@@ -514,34 +542,44 @@ func (s *BookingService) RateBooking(
 		return ErrBookingNotFound
 	}
 
-	// Verify booking is in RETURNED state
+	// Verify booking is in RETURNED state.
 	if booking.BookingStatus != BookingStatusReturned {
 		return fmt.Errorf("booking must be in RETURNED state to be rated")
 	}
 
-	// Verify user is involved in the booking
+	// Verify user is involved in the booking.
 	if booking.FromUserID != userID && booking.ToUserID != userID {
 		return fmt.Errorf("user is not involved in this booking")
 	}
 
-	// Verify user hasn't already rated this booking
-	if booking.RatedBy != nil && *booking.RatedBy == userID {
-		return fmt.Errorf("user has already rated this booking")
+	// Verify the user hasn't already rated this booking.
+	for _, r := range booking.Ratings {
+		if r.UserID == userID {
+			return fmt.Errorf("user has already rated this booking")
+		}
 	}
 
-	// Verify rating value
+	// Verify rating value.
 	if rating < 1 || rating > 5 {
 		return fmt.Errorf("rating must be between 1 and 5")
 	}
 
-	// Update booking with rating
+	// Create the new rating.
 	now := time.Now()
+	newRating := BookingRating{
+		UserID:        userID,
+		Rating:        rating,
+		RatingComment: comment,
+		RatedAt:       now,
+	}
+
+	// Push the new rating into the ratings array.
 	update := bson.M{
+		"$push": bson.M{
+			"ratings": newRating,
+		},
 		"$set": bson.M{
-			"rating":        rating,
-			"ratingComment": comment,
-			"ratedBy":       userID,
-			"ratedAt":       now,
+			"updatedAt": now,
 		},
 	}
 
@@ -553,32 +591,42 @@ func (s *BookingService) RateBooking(
 		return ErrBookingNotFound
 	}
 
-	// Update tool and owner ratings
-	if err := s.updateRatings(ctx, booking); err != nil {
+	// Update tool and owner ratings based on the new rating.
+	if err := s.updateRatings(ctx, bookingID); err != nil {
 		return fmt.Errorf("failed to update ratings: %w", err)
 	}
 
 	return nil
 }
 
-// updateRatings updates both tool and user ratings based on the booking ratings
-func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) error {
-	// Update tool's rating
+// updateRatings recalculates and updates the tool's average rating and the tool owner's overall rating
+// based on the ratings stored in the booking's Ratings array.
+func (s *BookingService) updateRatings(ctx context.Context, bookingID primitive.ObjectID) error {
+	// Fetch updated booking.
+	booking, err := s.Get(ctx, bookingID)
+	if err != nil {
+		return err
+	}
+	if booking == nil {
+		return ErrBookingNotFound
+	}
+
+	// Update tool's rating.
 	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
 	if err != nil {
 		return fmt.Errorf("invalid tool ID: %w", err)
 	}
 
-	// Calculate new average rating for the tool
 	toolPipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{
 			"toolId":        booking.ToolID,
 			"bookingStatus": BookingStatusReturned,
-			"rating":        bson.M{"$exists": true},
+			"ratings":       bson.M{"$exists": true, "$ne": []interface{}{}},
 		}}},
+		{{Key: "$unwind", Value: "$ratings"}},
 		{{Key: "$group", Value: bson.M{
 			"_id":         nil,
-			"avgRating":   bson.M{"$avg": "$rating"},
+			"avgRating":   bson.M{"$avg": "$ratings.rating"},
 			"ratingCount": bson.M{"$sum": 1},
 		}}},
 	}
@@ -602,7 +650,6 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 	}
 
 	if len(toolResults) > 0 {
-		// Update tool's rating
 		toolService := s.database.Collection("tools")
 		_, err = toolService.UpdateOne(
 			ctx,
@@ -614,35 +661,21 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 		}
 	}
 
-	// Get all tools owned by the user
-	toolService := s.database.Collection("tools")
-	toolsCursor, err := toolService.Find(ctx, bson.M{"userId": booking.ToUserID})
-	if err != nil {
-		return fmt.Errorf("failed to get user's tools: %w", err)
-	}
-	defer func() {
-		if err := toolsCursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing tools cursor")
-		}
-	}()
-
-	var tools []struct {
-		Rating int32 `bson:"rating"`
-	}
-	if err = toolsCursor.All(ctx, &tools); err != nil {
-		return fmt.Errorf("failed to decode user's tools: %w", err)
-	}
-
-	// Calculate user's rating based on all received ratings
+	// Calculate the tool owner's (user's) rating from received ratings.
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{
 			"toUserId":      booking.ToUserID,
 			"bookingStatus": BookingStatusReturned,
-			"rating":        bson.M{"$exists": true},
+			"ratings":       bson.M{"$exists": true, "$ne": []interface{}{}},
+		}}},
+		{{Key: "$unwind", Value: "$ratings"}},
+		// Only consider ratings given by the other party.
+		{{Key: "$match", Value: bson.M{
+			"ratings.userId": bson.M{"$ne": booking.ToUserID},
 		}}},
 		{{Key: "$group", Value: bson.M{
 			"_id":         nil,
-			"avgRating":   bson.M{"$avg": "$rating"},
+			"avgRating":   bson.M{"$avg": "$ratings.rating"},
 			"ratingCount": bson.M{"$sum": 1},
 		}}},
 	}
@@ -666,10 +699,8 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 	}
 
 	if len(userResults) > 0 {
-		// Convert 5-star rating to percentage (5 stars = 100%, 4 stars = 80%, etc.)
+		// Convert the 5‑star average to a percentage (5 stars = 100%).
 		userRating := int32(math.Round((userResults[0].AvgRating / 5.0) * 100))
-
-		// Update user's rating
 		userService := s.database.Collection("users")
 		_, err = userService.UpdateOne(
 			ctx,
@@ -684,25 +715,43 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 	return nil
 }
 
-// CountPendingActions returns the count of pending ratings and booking requests for a user
+// CountPendingActions returns the count of pending ratings and booking requests for a user.
 func (s *BookingService) CountPendingActions(
 	ctx context.Context,
 	userID primitive.ObjectID,
 ) (*CountPendingActionsResponse, error) {
-	// Use aggregation to count pending ratings and booking requests in a single query
 	pipeline := mongo.Pipeline{
 		{
 			{Key: "$facet", Value: bson.D{
 				{Key: "pendingRatings", Value: bson.A{
 					bson.D{
 						{Key: "$match", Value: bson.M{
-							"$and": []bson.M{
-								{"fromUserId": userID}, // Only count ratings the user needs to perform
-								{"bookingStatus": BookingStatusReturned},
-								{
-									"$or": []bson.M{
-										{"ratedBy": bson.M{"$exists": false}},
-										{"ratedBy": bson.M{"$ne": userID}},
+							"bookingStatus": BookingStatusReturned,
+							"$or": []bson.M{
+								{"fromUserId": userID},
+								{"toUserId": userID},
+							},
+							"$expr": bson.M{
+								"$and": []interface{}{
+									bson.M{
+										"$lt": []interface{}{
+											bson.M{"$size": bson.M{"$ifNull": []interface{}{"$ratings", []interface{}{}}}},
+											2,
+										},
+									},
+									bson.M{
+										"$not": bson.M{
+											"$in": []interface{}{
+												userID,
+												bson.M{
+													"$map": bson.M{
+														"input": bson.M{"$ifNull": []interface{}{"$ratings", []interface{}{}}},
+														"as":    "r",
+														"in":    "$$r.userId",
+													},
+												},
+											},
+										},
 									},
 								},
 							},
@@ -734,13 +783,11 @@ func (s *BookingService) CountPendingActions(
 		return nil, fmt.Errorf("failed to aggregate pending actions: %w", err)
 	}
 	defer func() {
-		err := cursor.Close(ctx)
-		if err != nil {
+		if err := cursor.Close(ctx); err != nil {
 			log.Error().Err(err).Msg("Error closing cursor")
 		}
 	}()
 
-	// Parse the result
 	var result []CountPendingActionsResponse
 	if err := cursor.All(ctx, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse aggregation result: %w", err)
@@ -753,6 +800,5 @@ func (s *BookingService) CountPendingActions(
 		}, nil
 	}
 
-	// Return the first document in the result (contains the counts)
 	return &result[0], nil
 }

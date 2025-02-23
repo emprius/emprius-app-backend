@@ -216,6 +216,99 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 	})
 }
 
+func TestBookingService_GetPendingRatings(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	db := client.Database(dbName)
+
+	bookingService := NewBookingService(db)
+
+	// Create test users
+	fromUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "renter@test.com",
+		Name:     "Renter",
+		Active:   true,
+		Verified: true,
+	}
+
+	toUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "owner@test.com",
+		Name:     "Owner",
+		Active:   true,
+		Verified: true,
+	}
+
+	// Create test booking
+	now := time.Now()
+	booking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "1",
+		FromUserID:    fromUser.ID,
+		ToUserID:      toUser.ID,
+		StartDate:     now,
+		EndDate:       now.Add(24 * time.Hour),
+		Contact:       "test contact",
+		Comments:      "test comments",
+		BookingStatus: BookingStatusReturned,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	_, err = bookingService.collection.InsertOne(ctx, booking)
+	assert.NoError(t, err)
+
+	// Test 1: Initially both users should see the pending rating
+	fromUserPending, err := bookingService.GetPendingRatings(ctx, fromUser.ID)
+	assert.NoError(t, err)
+	assert.Len(t, fromUserPending, 1, "Renter should see pending rating initially")
+
+	toUserPending, err := bookingService.GetPendingRatings(ctx, toUser.ID)
+	assert.NoError(t, err)
+	assert.Len(t, toUserPending, 1, "Owner should see pending rating initially")
+
+	// Test 2: After renter rates, only owner should see pending rating
+	err = bookingService.RateBooking(ctx, booking.ID, fromUser.ID, 5, "Great tool!")
+	assert.NoError(t, err)
+
+	fromUserPending, err = bookingService.GetPendingRatings(ctx, fromUser.ID)
+	assert.NoError(t, err)
+	assert.Len(t, fromUserPending, 0, "Renter should not see pending rating after rating")
+
+	toUserPending, err = bookingService.GetPendingRatings(ctx, toUser.ID)
+	assert.NoError(t, err)
+	assert.Len(t, toUserPending, 1, "Owner should still see pending rating")
+
+	// Test 3: After both rate, neither should see pending rating
+	err = bookingService.RateBooking(ctx, booking.ID, toUser.ID, 5, "Great renter!")
+	assert.NoError(t, err)
+
+	fromUserPending, err = bookingService.GetPendingRatings(ctx, fromUser.ID)
+	assert.NoError(t, err)
+	assert.Len(t, fromUserPending, 0, "Renter should not see pending rating after both rated")
+
+	toUserPending, err = bookingService.GetPendingRatings(ctx, toUser.ID)
+	assert.NoError(t, err)
+	assert.Len(t, toUserPending, 0, "Owner should not see pending rating after both rated")
+}
+
 func TestBookingService_TokenCalculation(t *testing.T) {
 	ctx := context.Background()
 
