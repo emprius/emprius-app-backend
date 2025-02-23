@@ -179,19 +179,59 @@ components:
         - endDate
       properties:
         toolId:
-          type: integer
-          format: int64
-          description: ID of the tool to book
+          type: string
+          description: ID of the tool to book (as string)
         startDate:
           type: integer
           format: int64
+          description: Start date as UNIX timestamp
         endDate:
           type: integer
           format: int64
+          description: End date as UNIX timestamp
         contact:
           type: string
+          description: Contact information for the booking
         comments:
           type: string
+          description: Additional comments about the booking
+
+    BookingRating:
+      type: object
+      properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the rating
+        bookingId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the rated booking
+        fromUserId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the user giving the rating
+        toUserId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the user receiving the rating
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Rating value between 1 and 5
+        ratingComment:
+          type: string
+          description: Optional comment about the rating
+        ratingHashImages:
+          type: array
+          items:
+            type: string
+          description: Optional array of image hashes associated with the rating
+        ratedAt:
+          type: string
+          format: date-time
+          description: When the rating was submitted
 
     BookingResponse:
       type: object
@@ -201,8 +241,7 @@ components:
           format: objectid
           description: MongoDB ObjectID of the booking
         toolId:
-          type: integer
-          format: int64
+          type: string
           description: ID of the booked tool
         fromUserId:
           type: string
@@ -215,33 +254,72 @@ components:
         startDate:
           type: integer
           format: int64
+          description: Start date as UNIX timestamp
         endDate:
           type: integer
           format: int64
+          description: End date as UNIX timestamp
         contact:
           type: string
+          description: Contact information for the booking
         comments:
           type: string
+          description: Additional comments about the booking
         bookingStatus:
           type: string
           enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, RETURNED]
+          description: Current status of the booking
         isRated:
           type: boolean
-          description: Whether this booking has been rated
+          description: Whether this booking has been rated by any party
+        ratings:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingRating'
+          description: Array of ratings associated with this booking
+        # Legacy fields marked as deprecated
         rating:
           type: integer
           minimum: 1
           maximum: 5
-          description: Rating value if the booking has been rated
+          description: Deprecated. Use ratings array instead. Legacy rating value.
+          deprecated: true
         ratingComment:
           type: string
-          description: Optional comment provided with the rating
+          description: Deprecated. Use ratings array instead. Legacy rating comment.
+          deprecated: true
         createdAt:
           type: string
           format: date-time
+          description: When the booking was created
         updatedAt:
           type: string
           format: date-time
+          description: When the booking was last updated
+
+    RatingResponse:
+      type: object
+      properties:
+        ratings:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookingRating'
+          description: Array of ratings
+
+    RateRequest:
+      type: object
+      required:
+        - rating
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: Rating value between 1 and 5
+        comment:
+          type: string
+          description: Optional comment about the rating
+          maxLength: 500
 
 paths:
   /ping:
@@ -890,18 +968,16 @@ paths:
       tags:
         - Bookings
       summary: Get submitted ratings
-      description: Get bookings that have been rated by the user
+      description: Get ratings submitted by the user (excluding self-ratings)
       security:
         - bearerAuth: [ ]
       responses:
         '200':
-          description: List of rated bookings
+          description: List of submitted ratings
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/BookingResponse'
+                $ref: '#/components/schemas/RatingResponse'
         '401':
           description: Unauthorized
         '500':
@@ -912,7 +988,7 @@ paths:
       tags:
         - Bookings
       summary: Get received ratings
-      description: Get bookings that have been rated where the user is the tool owner
+      description: Get ratings received by the user (excluding self-ratings)
       security:
         - bearerAuth: [ ]
       responses:
@@ -921,9 +997,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/BookingResponse'
+                $ref: '#/components/schemas/RatingResponse'
         '401':
           description: Unauthorized
         '500':
@@ -950,19 +1024,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required:
-                - rating
-              properties:
-                rating:
-                  type: integer
-                  minimum: 1
-                  maximum: 5
-                  description: Rating value between 1 and 5
-                comment:
-                  type: string
-                  description: Optional comment about the rating
-                  maxLength: 500
+              $ref: '#/components/schemas/RateRequest'
       responses:
         '200':
           description: Rating submitted successfully
