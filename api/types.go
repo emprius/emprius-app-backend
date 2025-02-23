@@ -221,3 +221,8 @@ type BookingResponse struct {
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
+
+// RatingResponse represents the API response for ratings
+type RatingResponse struct {
+	Ratings []*db.BookingRating `json:"ratings"`
+}

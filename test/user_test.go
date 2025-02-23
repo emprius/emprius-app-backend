@@ -60,12 +60,12 @@ func TestUser(t *testing.T) {
 
 		// Update profile
 		_, code = c.Request(http.MethodPost, user1JWT,
-			map[string]interface{}{
-				"name":      "Updated User1",
-				"community": "Updated Community",
-				"location": map[string]int64{
-					"latitude":  41695384000,
-					"longitude": 2492793000,
+			api.UserProfile{
+				Name:      "Updated User1",
+				Community: "Updated Community",
+				Location: &api.Location{
+					Latitude:  41695384000,
+					Longitude: 2492793000,
 				},
 			},
 			"profile",

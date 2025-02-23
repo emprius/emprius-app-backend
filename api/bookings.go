@@ -21,10 +21,10 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 
 	// Find the rating for the user, we only consider the rating that received FromUserID here.
 	// This is legacy code to be removed
-	if booking.Ratings != nil {
+	if len(booking.Ratings) > 0 {
 		if booking.Ratings[0].ToUserID == booking.FromUserID {
 			rating = booking.Ratings[0]
-		} else if booking.Ratings[1].ToUserID == booking.FromUserID {
+		} else if len(booking.Ratings) > 1 && booking.Ratings[1].ToUserID == booking.FromUserID {
 			rating = booking.Ratings[1]
 		}
 	}
@@ -367,9 +367,7 @@ func (a *API) HandleGetSubmittedRatings(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return map[string]interface{}{
-		"ratings": ratings,
-	}, nil
+	return &RatingResponse{Ratings: ratings}, nil
 }
 
 // HandleGetReceivedRatings handles GET /bookings/rates/received
@@ -389,9 +387,7 @@ func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return map[string]interface{}{
-		"ratings": ratings,
-	}, nil
+	return &RatingResponse{Ratings: ratings}, nil
 }
 
 // RateRequest represents the request body for rating a booking

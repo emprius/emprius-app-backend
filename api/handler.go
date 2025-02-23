@@ -222,6 +222,7 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			}
 			return
 		}
+		log.Debug().Msgf("response: %s", data)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(data); err != nil {

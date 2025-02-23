@@ -284,70 +284,62 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 	return nil
 }
 
-// CountPendingActions returns the count of pending ratings and booking requests for a user.
-func (s *BookingService) CountPendingActions(
-	ctx context.Context,
-	userID primitive.ObjectID,
-) (*CountPendingActionsResponse, error) {
+// CountPendingActions counts the number of pending actions for a user. This includes:
+// - Ratings pending submission by the user.
+// - Requests pending approval by the user.
+func (s *BookingService) CountPendingActions(ctx context.Context, userID primitive.ObjectID) (*CountPendingActionsResponse, error) {
 	pipeline := mongo.Pipeline{
-		{
-			{Key: "$facet", Value: bson.D{
+		{{
+			Key: "$facet", Value: bson.D{
 				{Key: "pendingRatings", Value: bson.A{
-					bson.D{
-						{Key: "$match", Value: bson.M{
-							"bookingStatus": BookingStatusReturned,
-							"$or": []bson.M{
-								{"fromUserId": userID},
-								{"toUserId": userID},
-							},
-							"$expr": bson.M{
-								"$and": []interface{}{
-									bson.M{
-										"$lt": []interface{}{
-											bson.M{"$size": bson.M{"$ifNull": []interface{}{"$ratings", []interface{}{}}}},
-											2,
-										},
-									},
-									bson.M{
-										"$not": bson.M{
-											"$in": []interface{}{
-												userID,
-												bson.M{
-													"$map": bson.M{
-														"input": bson.M{"$ifNull": []interface{}{"$ratings", []interface{}{}}},
-														"as":    "r",
-														"in":    "$$r.userId",
-													},
-												},
-											},
-										},
-									},
+					bson.D{{Key: "$match", Value: bson.M{
+						"bookingStatus": BookingStatusReturned,
+						"$or": []bson.M{
+							{"fromUserId": userID},
+							{"toUserId": userID},
+						},
+					}}},
+					bson.D{{Key: "$lookup", Value: bson.M{
+						"from":         s.ratingsCollection.Name(),
+						"localField":   "_id",
+						"foreignField": "bookingId",
+						"as":           "ratings",
+					}}},
+					// Add a field that counts ratings submitted by the user.
+					bson.D{{Key: "$addFields", Value: bson.M{
+						"userRatingCount": bson.M{
+							"$size": bson.M{
+								"$filter": bson.M{
+									"input": "$ratings",
+									"as":    "r",
+									"cond":  bson.M{"$eq": []interface{}{"$$r.fromUserId", userID}},
 								},
 							},
-						}},
-					},
+						},
+					}}},
+					bson.D{{Key: "$match", Value: bson.M{
+						"userRatingCount": bson.M{"$lt": 1},
+					}}},
 					bson.D{{Key: "$count", Value: "count"}},
 				}},
 				{Key: "pendingRequests", Value: bson.A{
-					bson.D{
-						{Key: "$match", Value: bson.M{
-							"toUserId":      userID,
-							"bookingStatus": BookingStatusPending,
-						}},
-					},
+					bson.D{{Key: "$match", Value: bson.M{
+						"toUserId":      userID,
+						"bookingStatus": BookingStatusPending,
+					}}},
 					bson.D{{Key: "$count", Value: "count"}},
 				}},
-			}},
-		},
-		{
-			{Key: "$project", Value: bson.D{
+			},
+		}},
+		{{
+			Key: "$project", Value: bson.D{
 				{Key: "pendingRatingsCount", Value: bson.M{"$arrayElemAt": bson.A{"$pendingRatings.count", 0}}},
 				{Key: "pendingRequestsCount", Value: bson.M{"$arrayElemAt": bson.A{"$pendingRequests.count", 0}}},
-			}},
-		},
+			},
+		}},
 	}
 
-	cursor, err := s.ratingsCollection.Aggregate(ctx, pipeline)
+	cursor, err := s.collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, fmt.Errorf("failed to aggregate pending actions: %w", err)
 	}

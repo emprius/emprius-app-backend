@@ -11,6 +11,14 @@ import (
 	qt "github.com/frankban/quicktest"
 )
 
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+func uint64Ptr(i uint64) *uint64 {
+	return &i
+}
+
 func TestTools(t *testing.T) {
 	c := utils.NewTestService(t)
 
@@ -22,19 +30,19 @@ func TestTools(t *testing.T) {
 		// 1) Attempt to create "Test Tool" without auth => 401
 		//----------------------------------------------------------------------
 		_, code := c.Request(http.MethodPost, "",
-			map[string]interface{}{
-				"title":          "Test Tool",
-				"description":    "Test tool description",
-				"mayBeFree":      true,
-				"askWithFee":     false,
-				"toolCategory":   1,
-				"estimatedValue": 10000,
-				"height":         30,
-				"weight":         40,
-				"isAvailable":    true,
-				"location": map[string]interface{}{
-					"latitude":  41920384, // 41.920384 * 1e6 (~25 km north)
-					"longitude": 2492793,  // 2.492793 * 1e6
+			api.Tool{
+				Title:          "Test Tool",
+				Description:    "Test tool description",
+				MayBeFree:      boolPtr(true),
+				AskWithFee:     boolPtr(false),
+				Category:       1,
+				EstimatedValue: uint64Ptr(10000),
+				Height:         30,
+				Weight:         40,
+				IsAvailable:    boolPtr(true),
+				Location: api.Location{
+					Latitude:  41920384, // 41.920384 * 1e6 (~25 km north)
+					Longitude: 2492793,  // 2.492793 * 1e6
 				},
 			},
 			"tools",
@@ -46,18 +54,18 @@ func TestTools(t *testing.T) {
 		//    (Starts at ~25 km but we'll soon edit it to a different lat.)
 		//----------------------------------------------------------------------
 		resp, code := c.Request(http.MethodPost, userJWT,
-			map[string]interface{}{
-				"title":          "Test Tool",
-				"description":    "Test tool description",
-				"mayBeFree":      true,
-				"askWithFee":     false,
-				"toolCategory":   1,
-				"estimatedValue": 20000,
-				"height":         30,
-				"weight":         40,
-				"location": map[string]interface{}{
-					"latitude":  41920384, // 41.920384 * 1e6 (~25 km north)
-					"longitude": 2492793,  // 2.492793 * 1e6
+			api.Tool{
+				Title:          "Test Tool",
+				Description:    "Test tool description",
+				MayBeFree:      boolPtr(true),
+				AskWithFee:     boolPtr(false),
+				Category:       1,
+				EstimatedValue: uint64Ptr(20000),
+				Height:         30,
+				Weight:         40,
+				Location: api.Location{
+					Latitude:  41920384, // 41.920384 * 1e6 (~25 km north)
+					Longitude: 2492793,  // 2.492793 * 1e6
 				},
 			},
 			"tools",
@@ -79,19 +87,19 @@ func TestTools(t *testing.T) {
 		//    appears in 10 km searches (and also meets other test cases).
 		//----------------------------------------------------------------------
 		_, code = c.Request(http.MethodPost, userJWT,
-			map[string]interface{}{
-				"title":          "Another Tool",
-				"description":    "Another tool description",
-				"mayBeFree":      false, // This will be relevant for filtering
-				"askWithFee":     true,
-				"toolCategory":   1,
-				"estimatedValue": 20000,
-				"height":         40,
-				"weight":         50,
-				"isAvailable":    true,
-				"location": map[string]interface{}{
-					"latitude":  41785384, // 41.785384 * 1e6 (~9 km from updated location)
-					"longitude": 2492793,  // 2.492793 * 1e6
+			api.Tool{
+				Title:          "Another Tool",
+				Description:    "Another tool description",
+				MayBeFree:      boolPtr(false), // This will be relevant for filtering
+				AskWithFee:     boolPtr(true),
+				Category:       1,
+				EstimatedValue: uint64Ptr(20000),
+				Height:         40,
+				Weight:         50,
+				IsAvailable:    boolPtr(true),
+				Location: api.Location{
+					Latitude:  41785384, // 41.785384 * 1e6 (~9 km from updated location)
+					Longitude: 2492793,  // 2.492793 * 1e6
 				},
 			},
 			"tools",
@@ -117,19 +125,19 @@ func TestTools(t *testing.T) {
 		//    We'll set cost=20, mayBeFree=false so it's excluded from some tests.
 		//----------------------------------------------------------------------
 		resp, code = c.Request(http.MethodPut, userJWT,
-			map[string]interface{}{
-				"title":          "Updated Tool",
-				"description":    "Updated description",
-				"mayBeFree":      false,
-				"askWithFee":     true,
-				"toolCategory":   1,
-				"estimatedValue": 20000,
-				"height":         40,
-				"weight":         50,
-				"isAvailable":    true,
-				"location": map[string]interface{}{
-					"latitude":  41695384, // 41.695384 * 1e6 (center)
-					"longitude": 2492793,  // 2.492793 * 1e6
+			api.Tool{
+				Title:          "Updated Tool",
+				Description:    "Updated description",
+				MayBeFree:      boolPtr(false),
+				AskWithFee:     boolPtr(true),
+				Category:       1,
+				EstimatedValue: uint64Ptr(20000),
+				Height:         40,
+				Weight:         50,
+				IsAvailable:    boolPtr(true),
+				Location: api.Location{
+					Latitude:  41695384, // 41.695384 * 1e6 (center)
+					Longitude: 2492793,  // 2.492793 * 1e6
 				},
 			},
 			"tools", fmt.Sprint(toolID),
@@ -193,19 +201,19 @@ func TestTools(t *testing.T) {
 
 			// Tool at ~5 km
 			_, code = c.Request(http.MethodPost, userJWT,
-				map[string]interface{}{
-					"title":          "Tool at 5km",
-					"description":    "Tool at 5km away",
-					"mayBeFree":      true,  // different from "Updated Tool"
-					"askWithFee":     false, // cost=10 => included by maxCost=15
-					"toolCategory":   1,
-					"estimatedValue": 10000,
-					"height":         30,
-					"weight":         40,
-					"isAvailable":    true,
-					"location": map[string]interface{}{
-						"latitude":  41745384, // 41.745384 * 1e6 (~5 km from center)
-						"longitude": 2492793,  // 2.492793 * 1e6
+				api.Tool{
+					Title:          "Tool at 5km",
+					Description:    "Tool at 5km away",
+					MayBeFree:      boolPtr(true),  // different from "Updated Tool"
+					AskWithFee:     boolPtr(false), // cost=10 => included by maxCost=15
+					Category:       1,
+					EstimatedValue: uint64Ptr(10000),
+					Height:         30,
+					Weight:         40,
+					IsAvailable:    boolPtr(true),
+					Location: api.Location{
+						Latitude:  41745384, // 41.745384 * 1e6 (~5 km from center)
+						Longitude: 2492793,  // 2.492793 * 1e6
 					},
 				},
 				"tools",
@@ -214,19 +222,19 @@ func TestTools(t *testing.T) {
 
 			// Tool at ~15 km
 			_, code = c.Request(http.MethodPost, userJWT,
-				map[string]interface{}{
-					"title":          "Tool at 15km",
-					"description":    "Tool at 15km away",
-					"mayBeFree":      true,
-					"askWithFee":     false,
-					"toolCategory":   1,
-					"estimatedValue": 20000,
-					"height":         30,
-					"weight":         40,
-					"isAvailable":    true,
-					"location": map[string]interface{}{
-						"latitude":  41845384, // 41.845384 * 1e6 (~15 km from center)
-						"longitude": 2492793,  // 2.492793 * 1e6
+				api.Tool{
+					Title:          "Tool at 15km",
+					Description:    "Tool at 15km away",
+					MayBeFree:      boolPtr(true),
+					AskWithFee:     boolPtr(false),
+					Category:       1,
+					EstimatedValue: uint64Ptr(20000),
+					Height:         30,
+					Weight:         40,
+					IsAvailable:    boolPtr(true),
+					Location: api.Location{
+						Latitude:  41845384, // 41.845384 * 1e6 (~15 km from center)
+						Longitude: 2492793,  // 2.492793 * 1e6
 					},
 				},
 				"tools",
@@ -235,19 +243,19 @@ func TestTools(t *testing.T) {
 
 			// Tool at ~25 km
 			_, code = c.Request(http.MethodPost, userJWT,
-				map[string]interface{}{
-					"title":          "Tool at 25km",
-					"description":    "Tool at 25km away",
-					"mayBeFree":      true,
-					"askWithFee":     false,
-					"toolCategory":   1,
-					"estimatedValue": 20000,
-					"height":         30,
-					"weight":         40,
-					"isAvailable":    true,
-					"location": map[string]interface{}{
-						"latitude":  41945384, // 41.945384 * 1e6 (~25 km from center)
-						"longitude": 2492793,  // 2.492793 * 1e6
+				api.Tool{
+					Title:          "Tool at 25km",
+					Description:    "Tool at 25km away",
+					MayBeFree:      boolPtr(true),
+					AskWithFee:     boolPtr(false),
+					Category:       1,
+					EstimatedValue: uint64Ptr(20000),
+					Height:         30,
+					Weight:         40,
+					IsAvailable:    boolPtr(true),
+					Location: api.Location{
+						Latitude:  41945384, // 41.945384 * 1e6 (~25 km from center)
+						Longitude: 2492793,  // 2.492793 * 1e6
 					},
 				},
 				"tools",
