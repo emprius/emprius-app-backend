@@ -167,7 +167,7 @@ func (a *API) router() http.Handler {
 				return nil, err
 			}
 
-			return convertBookingToResponse(booking), nil
+			return convertBookingToResponse(&db.BookingWithRatings{Booking: *booking}), nil
 		}))
 		// GET /bookings/requests
 		log.Info().Msg("register route GET /bookings/requests")

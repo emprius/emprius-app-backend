@@ -13,6 +13,15 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+func clearBookingsAndRatings(s *BookingService, t *testing.T) {
+	// Delete all bookings.
+	_, err := s.collection.DeleteMany(context.Background(), bson.M{})
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("failed to clear bookings: %v", err))
+	// Delete all ratings.
+	_, err = s.ratingsCollection.DeleteMany(context.Background(), bson.M{})
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("failed to clear ratings: %v", err))
+}
+
 func TestBookingService_RatingCalculation(t *testing.T) {
 	ctx := context.Background()
 
@@ -48,7 +57,7 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 		Verified: true,
 	}
 	_, err = userService.InsertUser(ctx, fromUser)
-	assert.NoError(t, err)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert renter"))
 
 	toUser := &User{
 		ID:       primitive.NewObjectID(),
@@ -59,7 +68,7 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 		Verified: true,
 	}
 	_, err = userService.InsertUser(ctx, toUser)
-	assert.NoError(t, err)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert owner"))
 
 	// Create test tool
 	tool := &Tool{
@@ -75,56 +84,32 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 		},
 	}
 	_, err = toolService.InsertTool(ctx, tool)
-	assert.NoError(t, err)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert tool"))
 
-	// Test cases for different ratings
 	now := time.Now()
+
 	testCases := []struct {
 		name           string
 		rating         int
-		expectedRating int32 // Expected user rating (0-100)
+		expectedRating int32 // Expected overall owner rating (in percentage)
 	}{
-		{
-			name:           "5 stars = 100%",
-			rating:         5,
-			expectedRating: 100,
-		},
-		{
-			name:           "4 stars = 80%",
-			rating:         4,
-			expectedRating: 80,
-		},
-		{
-			name:           "3 stars = 60%",
-			rating:         3,
-			expectedRating: 60,
-		},
-		{
-			name:           "2 stars = 40%",
-			rating:         2,
-			expectedRating: 40,
-		},
-		{
-			name:           "1 star = 20%",
-			rating:         1,
-			expectedRating: 20,
-		},
+		{"5 stars = 100%", 5, 100},
+		{"4 stars = 80%", 4, 80},
+		{"3 stars = 60%", 3, 60},
+		{"2 stars = 40%", 2, 40},
+		{"1 star = 20%", 1, 20},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Reset user's rating to initial value
-			_, err = userService.Collection.UpdateOne(
-				ctx,
-				bson.M{"_id": toUser.ID},
-				bson.M{"$set": bson.M{"rating": 50}},
-			)
-			assert.NoError(t, err)
+			// Clean up both bookings and ratings.
+			clearBookingsAndRatings(bookingService, t)
 
-			// Clear all existing bookings
-			_, err = bookingService.collection.DeleteMany(ctx, bson.M{})
-			assert.NoError(t, err)
-			// Create a new booking for each test case
+			// Reset owner's rating to initial value.
+			_, err = userService.Collection.UpdateOne(ctx, bson.M{"_id": toUser.ID}, bson.M{"$set": bson.M{"rating": 50}})
+			qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to reset owner rating"))
+
+			// Create a new booking (with status RETURNED to allow rating).
 			booking := &Booking{
 				ID:            primitive.NewObjectID(),
 				ToolID:        "1",
@@ -134,39 +119,34 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 				EndDate:       now.Add(24 * time.Hour),
 				Contact:       "test contact",
 				Comments:      "test comments",
-				BookingStatus: BookingStatusReturned, // Set to RETURNED to allow rating
+				BookingStatus: BookingStatusReturned,
 				CreatedAt:     now,
 				UpdatedAt:     now,
 			}
 			_, err = bookingService.collection.InsertOne(ctx, booking)
-			assert.NoError(t, err)
+			qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert booking"))
 
-			// Rate the booking
+			// Rate the booking from the renter.
 			err = bookingService.RateBooking(ctx, booking.ID, fromUser.ID, tc.rating, "Test comment")
-			assert.NoError(t, err)
+			qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to rate booking"))
 
-			// Verify user's rating was updated correctly
+			// Verify that the owner's overall rating has been updated correctly.
 			var updatedUser User
 			err = userService.Collection.FindOne(ctx, bson.M{"_id": toUser.ID}).Decode(&updatedUser)
-			assert.NoError(t, err)
-			assert.Equal(t, tc.expectedRating, updatedUser.Rating)
+			qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get updated owner"))
+			qt.Assert(t, updatedUser.Rating, qt.Equals, tc.expectedRating)
 		})
 	}
 
-	// Test multiple ratings average
 	t.Run("Multiple ratings average", func(t *testing.T) {
-		// Reset user's rating to initial value
-		_, err = userService.Collection.UpdateOne(
-			ctx,
-			bson.M{"_id": toUser.ID},
-			bson.M{"$set": bson.M{"rating": 50}},
-		)
-		assert.NoError(t, err)
+		// Clean up bookings and ratings.
+		clearBookingsAndRatings(bookingService, t)
 
-		// Clear all existing bookings
-		_, err = bookingService.collection.DeleteMany(ctx, bson.M{})
-		assert.NoError(t, err)
-		// Create another booking
+		// Reset owner's rating.
+		_, err = userService.Collection.UpdateOne(ctx, bson.M{"_id": toUser.ID}, bson.M{"$set": bson.M{"rating": 50}})
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to reset owner rating"))
+
+		// Create a booking (booking2) and rate it with 3 stars.
 		booking2 := &Booking{
 			ID:            primitive.NewObjectID(),
 			ToolID:        "1",
@@ -181,13 +161,12 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 			UpdatedAt:     now,
 		}
 		_, err = bookingService.collection.InsertOne(ctx, booking2)
-		assert.NoError(t, err)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert booking2"))
 
-		// Rate with 3 stars (60%)
 		err = bookingService.RateBooking(ctx, booking2.ID, fromUser.ID, 3, "Test comment")
-		assert.NoError(t, err)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to rate booking2"))
 
-		// Create first booking
+		// Create another booking (booking1) and rate it with 5 stars.
 		booking1 := &Booking{
 			ID:            primitive.NewObjectID(),
 			ToolID:        "1",
@@ -202,17 +181,16 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 			UpdatedAt:     now,
 		}
 		_, err = bookingService.collection.InsertOne(ctx, booking1)
-		assert.NoError(t, err)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert booking1"))
 
-		// Rate first booking with 5 stars (100%)
 		err = bookingService.RateBooking(ctx, booking1.ID, fromUser.ID, 5, "Test comment")
-		assert.NoError(t, err)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to rate booking1"))
 
-		// Verify user's rating is average of both ratings (80%)
+		// Expected overall rating is the average of 3 and 5 which is 4 stars → 80%.
 		var updatedUser User
 		err = userService.Collection.FindOne(ctx, bson.M{"_id": toUser.ID}).Decode(&updatedUser)
-		assert.NoError(t, err)
-		assert.Equal(t, int32(80), updatedUser.Rating)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get updated owner after multiple ratings"))
+		qt.Assert(t, updatedUser.Rating, qt.Equals, int32(80))
 	})
 }
 
