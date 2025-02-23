@@ -359,3 +359,129 @@ func TestSearchToolsByLocation(t *testing.T) {
 		}
 	})
 }
+
+func TestSearchTitleAndDescription(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize ToolService
+	toolService := NewToolService(&Database{
+		Client:   client,
+		Database: database,
+	})
+
+	// Insert test tools
+	location := DBLocation{
+		Type: "Point",
+		Coordinates: []float64{
+			2.492793,  // longitude
+			41.695384, // latitude
+		},
+	}
+
+	tools := []Tool{
+		{
+			ID:          1,
+			Title:       "AmazingTool",
+			Description: "A great tool for professionals",
+			IsAvailable: true,
+			Location:    location,
+		},
+		{
+			ID:          2,
+			Title:       "Super RangeFinder",
+			Description: "Find distances with precision",
+			IsAvailable: true,
+			Location:    location,
+		},
+		{
+			ID:          3,
+			Title:       "rangeX 3000",
+			Description: "Powerful laser range device",
+			IsAvailable: true,
+			Location:    location,
+		},
+		{
+			ID:          4,
+			Title:       "Basic Hammer",
+			Description: "Simple but effective hammer",
+			IsAvailable: true,
+			Location:    location,
+		},
+		{
+			ID:          5,
+			Title:       "DrillMaster",
+			Description: "A powerful drill machine",
+			IsAvailable: true,
+			Location:    location,
+		},
+	}
+
+	for _, tool := range tools {
+		_, err := toolService.InsertTool(ctx, &tool)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert tool: %s", tool.Title))
+	}
+
+	// Define search test cases
+	tests := []struct {
+		name        string
+		searchTerm  string
+		expectedIDs []int64
+	}{
+		{
+			name:        "Case-insensitive match",
+			searchTerm:  "amazing",
+			expectedIDs: []int64{1}, // Matches "AmazingTool"
+		},
+		{
+			name:        "Partial word match in title",
+			searchTerm:  "range",
+			expectedIDs: []int64{2, 3}, // Matches "Super RangeFinder" and "rangeX 3000"
+		},
+		{
+			name:        "Search in description",
+			searchTerm:  "powerful",
+			expectedIDs: []int64{3, 5}, // Matches "Powerful laser range device" and "A powerful drill machine"
+		},
+		{
+			name:        "No match scenario",
+			searchTerm:  "nonexistent",
+			expectedIDs: nil, // No tools should match
+		},
+	}
+
+	// Execute search tests
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := SearchToolsOptions{SearchTerm: tt.searchTerm}
+			foundTools, err := toolService.SearchTools(ctx, opts)
+			qt.Assert(t, err, qt.IsNil, qt.Commentf("SearchTools failed with term: %s", tt.searchTerm))
+
+			// Extract IDs from found tools
+			var foundIDs []int64
+			for _, tool := range foundTools {
+				foundIDs = append(foundIDs, tool.ID)
+			}
+
+			// Verify expected results
+			qt.Assert(t, foundIDs, qt.DeepEquals, tt.expectedIDs, qt.Commentf("SearchTerm: %s", tt.searchTerm))
+		})
+	}
+}

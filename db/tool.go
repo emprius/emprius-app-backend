@@ -74,8 +74,7 @@ type Tool struct {
 	ReservedDates    []DateRange        `bson:"reservedDates" json:"reservedDates"`
 }
 
-// SanitizeString removes all non-alphanumeric characters from a string,
-// except commas, dots, minus signs, underscores, and whitespace.
+// SanitizeString ensures the search term is safe for use in regex.
 func SanitizeString(s string) string {
 	reg := regexp.MustCompile(`[^a-zA-Z0-9,._\s-]+`)
 	return reg.ReplaceAllString(s, "")
@@ -223,90 +222,89 @@ type SearchToolsOptions struct {
 	TransportOptions []int
 }
 
-// SearchTools finds tools by title, categories, cost, distance, etc.
+// SearchTools finds tools by title, description, categories, cost, distance, etc.
 func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) ([]*Tool, error) {
-	filter := bson.M{}
+	filter := bson.D{}
 
-	// Title search
+	// Title and Description Search (Case-Insensitive, Partial Word Matching)
 	if opts.SearchTerm != "" {
-		sanitizedTerm := SanitizeString(opts.SearchTerm)
-		filter["title"] = bson.M{"$regex": sanitizedTerm}
+		term := "(?i).*" + regexp.QuoteMeta(SanitizeString(opts.SearchTerm)) + ".*"
+		regex := primitive.Regex{Pattern: term, Options: "i"} // Case insensitive search
+
+		filter = append(filter, bson.E{Key: "$or", Value: bson.A{
+			bson.D{{Key: "title", Value: regex}},
+			bson.D{{Key: "description", Value: regex}},
+		}})
 	}
 
-	// Category filter
+	// Category Filter
 	if len(opts.Categories) > 0 {
-		filter["toolCategory"] = bson.M{"$in": opts.Categories}
+		filter = append(filter, bson.E{Key: "toolCategory", Value: bson.D{{Key: "$in", Value: opts.Categories}}})
 	}
 
-	// mayBeFree filter
+	// MayBeFree Filter
 	if opts.MayBeFree != nil {
-		filter["mayBeFree"] = *opts.MayBeFree
+		filter = append(filter, bson.E{Key: "mayBeFree", Value: *opts.MayBeFree})
 	}
 
-	// maxCost filter
+	// MaxCost Filter
 	if opts.MaxCost != nil && *opts.MaxCost > 0 {
-		filter["cost"] = bson.M{"$lte": *opts.MaxCost}
+		filter = append(filter, bson.E{Key: "cost", Value: bson.D{{Key: "$lte", Value: *opts.MaxCost}}})
 	}
 
-	// transportOptions filter
+	// Transport Options Filter
 	if len(opts.TransportOptions) > 0 {
-		filter["transportOptions.id"] = bson.M{"$in": opts.TransportOptions}
+		filter = append(filter, bson.E{Key: "transportOptions.id", Value: bson.D{{Key: "$in", Value: opts.TransportOptions}}})
 	}
 
-	// Only show available tools
-	filter["isAvailable"] = true
+	// Only Available Tools
+	filter = append(filter, bson.E{Key: "isAvailable", Value: true})
 
-	// If distance + location => use $geoNear
+	// Distance + Location Handling using $geoNear
 	if opts.Distance > 0 && opts.Location != nil {
-		pipeline := []bson.D{{
-			{Key: "$geoNear", Value: bson.D{
-				{Key: "near", Value: opts.Location},
-				{Key: "distanceField", Value: "distance"},
-				{Key: "maxDistance", Value: float64(opts.Distance)}, // meters
-				{Key: "spherical", Value: true},
-				{Key: "distanceMultiplier", Value: 0.001}, // meters => km in output
-				{Key: "query", Value: filter},
-			}},
-		}}
+		pipeline := mongo.Pipeline{
+			bson.D{
+				{Key: "$geoNear", Value: bson.D{
+					{Key: "near", Value: opts.Location},
+					{Key: "distanceField", Value: "distance"},
+					{Key: "maxDistance", Value: float64(opts.Distance)}, // meters
+					{Key: "spherical", Value: true},
+					{Key: "distanceMultiplier", Value: 0.001}, // meters -> km
+					{Key: "query", Value: filter},
+				}},
+			},
+		}
 
-		log.Debug().Interface("pipeline", pipeline).Msg("executing geoNear pipeline")
+		log.Debug().Interface("pipeline", pipeline).Msg("Executing geoNear pipeline")
 
 		cursor, err := s.Collection.Aggregate(ctx, pipeline)
 		if err != nil {
 			return nil, err
 		}
-		defer func() {
-			if closeErr := cursor.Close(ctx); closeErr != nil {
-				log.Warn().Err(closeErr).Msg("could not close db cursor")
-			}
-		}()
+		defer cursor.Close(ctx) //nolint:errcheck
 
 		var tools []*Tool
 		if err := cursor.All(ctx, &tools); err != nil {
 			return nil, err
 		}
-		log.Debug().Int("total_tools", len(tools)).Msg("search completed")
+		log.Debug().Int("total_tools", len(tools)).Msg("Search completed with geoNear")
 		return tools, nil
 	}
 
-	// Otherwise, do a normal Find
-	log.Debug().Interface("filter", filter).Msg("executing search with filter")
+	// Otherwise, perform a normal Find query
+	log.Debug().Interface("filter", filter).Msg("Executing search with filter")
 
 	cursor, err := s.Collection.Find(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		if closeErr := cursor.Close(ctx); closeErr != nil {
-			log.Warn().Err(closeErr).Msg("could not close db cursor")
-		}
-	}()
+	defer cursor.Close(ctx) //nolint:errcheck
 
 	var tools []*Tool
 	if err := cursor.All(ctx, &tools); err != nil {
 		return nil, err
 	}
-	log.Debug().Int("total_tools", len(tools)).Msg("search completed")
+	log.Debug().Int("total_tools", len(tools)).Msg("Search completed")
 	return tools, nil
 }
 

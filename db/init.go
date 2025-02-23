@@ -133,7 +133,10 @@ func createUniqueIndexes(db *Database, ctx context.Context) error {
 			Options: options.Index(),
 		},
 		{
-			Keys:    bson.D{{Key: "title", Value: "text"}},
+			Keys: bson.D{
+				{Key: "title", Value: "text"},
+				{Key: "description", Value: "text"},
+			},
 			Options: options.Index().SetDefaultLanguage("none").SetLanguageOverride("none"),
 		},
 		{
