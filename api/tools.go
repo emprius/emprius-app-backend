@@ -111,7 +111,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	}
 
 	dbTool := db.Tool{
-		ID:               toolID(userID, t.Title),
+		ID:               toolID(userID),
 		UserID:           user.ObjectID(),
 		Title:            db.SanitizeString(t.Title),
 		Description:      t.Description,
@@ -139,9 +139,9 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	return dbTool.ID, nil
 }
 
-func toolID(ownerID string, title string) int64 {
+func toolID(ownerID string) int64 {
 	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("%s-%s", ownerID, title)))
+	hasher.Write([]byte(fmt.Sprintf("%s%d", ownerID, time.Now().UnixNano())))
 	hash := hasher.Sum(nil)
 	// Convert the first 4 bytes of the hash to an absolute int64
 	return int64(math.Abs(float64(int64(binary.BigEndian.Uint32(hash[:4])))))
@@ -182,7 +182,7 @@ func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
 	return result, nil
 }
 
-func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
+func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 	tool, err := a.toolFromDB(id)
 	if err != nil {
 		return 0, err
@@ -197,8 +197,6 @@ func (a *API) editTool(id int64, newTool *Tool, userID string) (int64, error) {
 	// Update all provided fields
 	if newTool.Title != "" {
 		tool.Title = db.SanitizeString(newTool.Title)
-		// Calculate new ID based on new title
-		tool.ID = toolID(userID, tool.Title)
 	}
 	if newTool.Description != "" {
 		tool.Description = newTool.Description
@@ -566,7 +564,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &t); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
-	newID, err := a.editTool(id, &t, r.UserID)
+	newID, err := a.editTool(id, &t)
 	if err != nil {
 		return nil, err
 	}
