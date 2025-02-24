@@ -207,9 +207,9 @@ func (a *API) router() http.Handler {
 		// POST /bookings/petitions/{petitionId}/deny
 		log.Info().Msg("register route POST /bookings/petitions/{petitionId}/deny")
 		r.Post("/bookings/petitions/{petitionId}/deny", a.routerHandler(a.HandleDenyPetition))
-		// POST /bookings/request/{petitionId}/cancel
-		log.Info().Msg("register route POST /bookings/request/{petitionId}/cancel")
-		r.Post("/bookings/request/{petitionId}/cancel", a.routerHandler(a.HandleCancelRequest))
+		// POST /bookings/requests/{petitionId}/cancel
+		log.Info().Msg("register route POST /bookings/requests/{petitionId}/cancel")
+		r.Post("/bookings/requests/{petitionId}/cancel", a.routerHandler(a.HandleCancelRequest))
 	})
 
 	// Public routes

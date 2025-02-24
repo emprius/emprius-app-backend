@@ -859,7 +859,7 @@ paths:
         '400':
           description: Can only deny pending petitions
 
-  /bookings/request/{petitionId}/cancel:
+  /bookings/requests/{petitionId}/cancel:
     post:
       tags:
         - Bookings
