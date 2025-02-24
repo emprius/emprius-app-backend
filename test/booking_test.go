@@ -327,15 +327,15 @@ func TestBookings(t *testing.T) {
 			cancelBookingID := response.Data.ID
 
 			// Try to cancel without auth
-			_, code = c.Request(http.MethodPost, "", nil, "bookings", "request", cancelBookingID, "cancel")
+			_, code = c.Request(http.MethodPost, "", nil, "bookings", "requests", cancelBookingID, "cancel")
 			qt.Assert(t, code, qt.Equals, 401)
 
 			// Try to cancel as owner (should fail)
-			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "request", cancelBookingID, "cancel")
+			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "requests", cancelBookingID, "cancel")
 			qt.Assert(t, code, qt.Equals, 403)
 
 			// Cancel as renter
-			_, code = c.Request(http.MethodPost, renterJWT, nil, "bookings", "request", cancelBookingID, "cancel")
+			_, code = c.Request(http.MethodPost, renterJWT, nil, "bookings", "requests", cancelBookingID, "cancel")
 			qt.Assert(t, code, qt.Equals, 200)
 
 			// Verify booking status is CANCELLED
