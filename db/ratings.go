@@ -71,7 +71,11 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 	var bookings []*Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
 		return nil, err
@@ -112,7 +116,11 @@ func (s *BookingService) GetSubmittedRatings(ctx context.Context, userID primiti
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 	var ratings []*BookingRating
 	if err = cursor.All(ctx, &ratings); err != nil {
 		return nil, err
@@ -129,7 +137,11 @@ func (s *BookingService) GetReceivedRatings(ctx context.Context, userID primitiv
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 	var ratings []*BookingRating
 	if err = cursor.All(ctx, &ratings); err != nil {
 		return nil, err
@@ -222,7 +234,9 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 		return fmt.Errorf("failed to calculate tool average rating: %w", err)
 	}
 	defer func() {
-		_ = toolCursor.Close(ctx)
+		if err := toolCursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing tool cursor")
+		}
 	}()
 	var toolResults []struct {
 		AvgRating float64 `bson:"avgRating"`
@@ -262,7 +276,9 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 		return fmt.Errorf("failed to calculate user average rating: %w", err)
 	}
 	defer func() {
-		_ = userCursor.Close(ctx)
+		if err := userCursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing user cursor")
+		}
 	}()
 	var userResults []struct {
 		AvgRating float64 `bson:"avgRating"`
@@ -287,7 +303,10 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 // CountPendingActions counts the number of pending actions for a user. This includes:
 // - Ratings pending submission by the user.
 // - Requests pending approval by the user.
-func (s *BookingService) CountPendingActions(ctx context.Context, userID primitive.ObjectID) (*CountPendingActionsResponse, error) {
+func (s *BookingService) CountPendingActions(
+	ctx context.Context,
+	userID primitive.ObjectID,
+) (*CountPendingActionsResponse, error) {
 	pipeline := mongo.Pipeline{
 		{{
 			Key: "$facet", Value: bson.D{

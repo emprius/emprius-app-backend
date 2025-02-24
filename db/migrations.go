@@ -90,7 +90,11 @@ func migrateBookingRatingsToNewCollection(ctx context.Context, db *mongo.Databas
 	if err != nil {
 		return err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	for cursor.Next(ctx) {
 		var booking bson.M

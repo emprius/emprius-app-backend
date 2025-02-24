@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -161,7 +162,11 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var results []BookingWithRatings
 	if err = cursor.All(ctx, &results); err != nil {
@@ -174,7 +179,11 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 }
 
 // GetUserBookings returns paginated bookings for a user along with their associated ratings.
-func (s *BookingService) GetUserBookings(ctx context.Context, userID primitive.ObjectID, page int) ([]*BookingWithRatings, error) {
+func (s *BookingService) GetUserBookings(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	page int,
+) ([]*BookingWithRatings, error) {
 	if page < 0 {
 		page = 0
 	}
@@ -202,7 +211,11 @@ func (s *BookingService) GetUserBookings(ctx context.Context, userID primitive.O
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var results []BookingWithRatings
 	if err = cursor.All(ctx, &results); err != nil {
@@ -233,7 +246,11 @@ func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.O
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var results []BookingWithRatings
 	if err = cursor.All(ctx, &results); err != nil {
@@ -263,7 +280,11 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var results []BookingWithRatings
 	if err = cursor.All(ctx, &results); err != nil {
