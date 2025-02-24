@@ -213,16 +213,11 @@ type BookingResponse struct {
 	Comments      string              `json:"comments"`
 	BookingStatus string              `json:"bookingStatus"`
 	IsRated       bool                `json:"isRated"`
-	Ratings       []*db.BookingRating `json:"ratings,omitempty"`
+	Ratings       []*db.BookingRating `json:"ratings"`
 
 	// Legacy fields for backward compatibility
 	Rating        *int      `json:"rating,omitempty"`
 	RatingComment string    `json:"ratingComment,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
-}
-
-// RatingResponse represents the API response for ratings
-type RatingResponse struct {
-	Ratings []*db.BookingRating `json:"ratings"`
 }

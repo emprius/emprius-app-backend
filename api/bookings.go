@@ -366,8 +366,11 @@ func (a *API) HandleGetSubmittedRatings(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
-
-	return &RatingResponse{Ratings: ratings}, nil
+	if ratings == nil {
+		// do not return nil, return empty array instead
+		ratings = make([]*db.BookingRating, 0)
+	}
+	return ratings, nil
 }
 
 // HandleGetReceivedRatings handles GET /bookings/rates/received
@@ -386,8 +389,11 @@ func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
-
-	return &RatingResponse{Ratings: ratings}, nil
+	if ratings == nil {
+		// do not return nil, return empty array instead
+		ratings = make([]*db.BookingRating, 0)
+	}
+	return ratings, nil
 }
 
 // RateRequest represents the request body for rating a booking
