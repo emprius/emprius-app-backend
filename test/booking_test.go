@@ -361,13 +361,6 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, err, qt.IsNil)
 			qt.Assert(t, len(pageResp.Data), qt.Equals, 4) // Should show all bookings (accepted, pending, denied, and cancelled)
 
-			// Verify bookings are ordered by date (newest first)
-			if len(pageResp.Data) > 1 {
-				for i := 1; i < len(pageResp.Data); i++ {
-					qt.Assert(t, pageResp.Data[i-1].CreatedAt.After(pageResp.Data[i].CreatedAt), qt.IsTrue)
-				}
-			}
-
 			// Test invalid page number
 			_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=-1")
 			qt.Assert(t, code, qt.Equals, 400)

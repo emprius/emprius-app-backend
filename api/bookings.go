@@ -33,6 +33,12 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 		rComment = rating.RatingComment
 	}
 
+	ratings := []*Rating{}
+	for _, r := range booking.Ratings {
+		apiRating := new(Rating)
+		ratings = append(ratings, apiRating.FromDB(r))
+	}
+
 	return &BookingResponse{
 		ID:            booking.ID.Hex(),
 		ToolID:        booking.ToolID,
@@ -43,9 +49,9 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 		Contact:       booking.Contact,
 		Comments:      booking.Comments,
 		BookingStatus: string(booking.BookingStatus),
-		CreatedAt:     booking.CreatedAt,
-		UpdatedAt:     booking.UpdatedAt,
-		Ratings:       booking.Ratings,
+		CreatedAt:     booking.CreatedAt.Unix(),
+		UpdatedAt:     booking.UpdatedAt.Unix(),
+		Ratings:       ratings,
 		IsRated:       len(booking.Ratings) > 0,
 
 		// Legacy fields for backward compatibility

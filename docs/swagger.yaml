@@ -220,17 +220,17 @@ components:
           minimum: 1
           maximum: 5
           description: Rating value between 1 and 5
-        ratingComment:
+        comment:
           type: string
           description: Optional comment about the rating
-        ratingHashImages:
+        images:
           type: array
           items:
             type: string
           description: Optional array of image hashes associated with the rating
         ratedAt:
-          type: string
-          format: date-time
+          type: integer
+          format: int64
           description: When the rating was submitted
 
     BookingResponse:

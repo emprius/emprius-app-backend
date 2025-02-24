@@ -203,21 +203,49 @@ type CreateBookingRequest struct {
 
 // BookingResponse represents the API response for a booking
 type BookingResponse struct {
-	ID            string              `json:"id"`
-	ToolID        string              `json:"toolId"`
-	FromUserID    string              `json:"fromUserId"`
-	ToUserID      string              `json:"toUserId"`
-	StartDate     int64               `json:"startDate"`
-	EndDate       int64               `json:"endDate"`
-	Contact       string              `json:"contact"`
-	Comments      string              `json:"comments"`
-	BookingStatus string              `json:"bookingStatus"`
-	IsRated       bool                `json:"isRated"`
-	Ratings       []*db.BookingRating `json:"ratings"`
+	ID            string    `json:"id"`
+	ToolID        string    `json:"toolId"`
+	FromUserID    string    `json:"fromUserId"`
+	ToUserID      string    `json:"toUserId"`
+	StartDate     int64     `json:"startDate"`
+	EndDate       int64     `json:"endDate"`
+	Contact       string    `json:"contact"`
+	Comments      string    `json:"comments"`
+	BookingStatus string    `json:"bookingStatus"`
+	IsRated       bool      `json:"isRated"`
+	Ratings       []*Rating `json:"ratings"`
 
 	// Legacy fields for backward compatibility
-	Rating        *int      `json:"rating,omitempty"`
-	RatingComment string    `json:"ratingComment,omitempty"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	Rating        *int   `json:"rating,omitempty"`
+	RatingComment string `json:"ratingComment,omitempty"`
+	CreatedAt     int64  `json:"createdAt"`
+	UpdatedAt     int64  `json:"updatedAt"`
+}
+
+// Rating represents a rating for a booking
+type Rating struct {
+	ID         string   `json:"id"`
+	BookingID  string   `json:"bookingId"`
+	ToolID     string   `json:"toolId"`
+	Rating     int      `json:"rating"`
+	Comment    string   `json:"comment"`
+	Images     []string `json:"images"`
+	FromUserID string   `json:"fromUserId"`
+	ToUserID   string   `json:"toUserId"`
+	RatedAt    int64    `json:"ratedAt"`
+}
+
+func (r *Rating) FromDB(b *db.BookingRating) *Rating {
+	if b == nil {
+		return new(Rating)
+	}
+	r.ID = b.ID.Hex()
+	r.BookingID = b.BookingID.Hex()
+	r.Rating = b.Rating
+	r.Comment = b.RatingComment
+	r.Images = b.RatingHashImages
+	r.FromUserID = b.FromUserID.Hex()
+	r.ToUserID = b.ToUserID.Hex()
+	r.RatedAt = b.RatedAt.Unix()
+	return r
 }
