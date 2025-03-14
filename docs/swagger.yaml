@@ -129,6 +129,12 @@ components:
         avatar:
           type: string
           format: byte
+        password:
+          type: string
+          description: "New password. Provide if you want to change the password."
+        actualPassword:
+          type: string
+          description: "Current password. Required if changing the password."
 
     LoginRequest:
       type: object

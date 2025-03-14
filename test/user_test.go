@@ -129,8 +129,70 @@ func TestUser(t *testing.T) {
 		_, code = c.Request(http.MethodGet, user1JWT, nil, "users", "999999")
 		qt.Assert(t, code, qt.Equals, 404)
 
+		// Test password change functionality
+
+		// Attempt to change password without providing actualPassword
+		resp, code = c.Request(http.MethodPost, user1JWT,
+			api.UserProfile{
+				Password: "newpassword",
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 400) // Should return 400 Bad Request
+
+		// Verify the error message
+		err = json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Equals, "actual password is required")
+
+		// Attempt to change password with incorrect actualPassword
+		resp, code = c.Request(http.MethodPost, user1JWT,
+			api.UserProfile{
+				Password:       "newpassword",
+				ActualPassword: "wrongpassword",
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 403) // Should return 403 Forbidden
+
+		// Verify the error message
+		err = json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Equals, "invalid actual password")
+
+		// Successfully change password with correct actualPassword
+		_, code = c.Request(http.MethodPost, user1JWT,
+			api.UserProfile{
+				Password:       "newpassword",
+				ActualPassword: "user1pass",
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 200) // Should return 200 OK
+
+		// Verify we can login with the new password
+		resp, code = c.Request(http.MethodPost, "",
+			&api.Login{
+				Email:    "user1@test.com",
+				Password: "newpassword",
+			},
+			"login",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Parse the JWT token from the response
+		var loginResp struct {
+			Data api.LoginResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &loginResp)
+		qt.Assert(t, err, qt.IsNil)
+		newUser1JWT := loginResp.Data.Token
+		qt.Assert(t, newUser1JWT, qt.Not(qt.Equals), "")
+
 		// Get refresh token
-		resp, code = c.Request(http.MethodGet, user1JWT, nil, "refresh")
+		resp, code = c.Request(http.MethodGet, newUser1JWT, nil, "refresh")
 		qt.Assert(t, code, qt.Equals, 200)
 		var refreshResp struct {
 			Data *api.LoginResponse `json:"data"`

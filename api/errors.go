@@ -56,6 +56,14 @@ var (
 		Code:    http.StatusBadRequest,
 		Message: "invalid request body data",
 	}
+	ErrActualPasswordRequired = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "actual password is required",
+	}
+	ErrInvalidActualPassword = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "invalid actual password",
+	}
 	ErrInvalidJSON = &HTTPError{
 		Code:    http.StatusBadRequest,
 		Message: "invalid JSON body",

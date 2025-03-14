@@ -70,12 +70,13 @@ func (l *Location) FromDBLocation(dbloc db.DBLocation) *Location {
 }
 
 type UserProfile struct {
-	Name      string    `json:"name"`
-	Community string    `json:"community"`
-	Location  *Location `json:"location,omitempty"`
-	Active    *bool     `json:"active,omitempty"`
-	Avatar    []byte    `json:"avatar,omitempty"`
-	Password  string    `json:"password,omitempty"`
+	Name           string    `json:"name"`
+	Community      string    `json:"community"`
+	Location       *Location `json:"location,omitempty"`
+	Active         *bool     `json:"active,omitempty"`
+	Avatar         []byte    `json:"avatar,omitempty"`
+	Password       string    `json:"password,omitempty"`
+	ActualPassword string    `json:"actualPassword,omitempty"`
 }
 
 // User represents the user type

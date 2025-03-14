@@ -208,6 +208,16 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		user.Active = *newUserInfo.Active
 	}
 	if newUserInfo.Password != "" {
+		// If password is being changed, require the actual password
+		if newUserInfo.ActualPassword == "" {
+			return nil, ErrActualPasswordRequired
+		}
+
+		// Verify the actual password matches the stored password
+		if !bytes.Equal(user.Password, hashPassword(newUserInfo.ActualPassword)) {
+			return nil, ErrInvalidActualPassword
+		}
+
 		user.Password = hashPassword(newUserInfo.Password)
 	}
 	update := bson.M{
