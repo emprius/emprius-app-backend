@@ -102,6 +102,9 @@ func (a *API) router() http.Handler {
 		// GET /tools/{id}
 		log.Info().Msg("register route GET /tools/{id}")
 		r.Get("/tools/{id}", a.routerHandler(a.toolHandler))
+		// GET /tools/{id}/rates
+		log.Info().Msg("register route GET /tools/{id}/rates")
+		r.Get("/tools/{id}/rates", a.routerHandler(a.HandleGetToolRatings))
 		// POST /tools
 		log.Info().Msg("register route POST /tools")
 		r.Post("/tools", a.routerHandler(a.addToolHandler))

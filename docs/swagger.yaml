@@ -732,6 +732,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Tool'
+
+  /tools/{id}/rates:
+    get:
+      tags:
+        - Tools
+      summary: Get ratings for a tool
+      description: Get all ratings associated with a tool's bookings
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: List of unified ratings for the tool
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UnifiedRating'
+        '400':
+          description: Invalid tool ID
+        '401':
+          description: Unauthorized
+        '404':
+          description: Tool not found
+        '500':
+          description: Internal server error
     put:
       tags:
         - Tools

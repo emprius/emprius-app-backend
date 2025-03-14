@@ -219,19 +219,11 @@ func TestBookingService_GetPendingRatings(t *testing.T) {
 
 	// Create test users
 	fromUser := &User{
-		ID:       primitive.NewObjectID(),
-		Email:    "renter@test.com",
-		Name:     "Renter",
-		Active:   true,
-		Verified: true,
+		ID: primitive.NewObjectID(),
 	}
 
 	toUser := &User{
-		ID:       primitive.NewObjectID(),
-		Email:    "owner@test.com",
-		Name:     "Owner",
-		Active:   true,
-		Verified: true,
+		ID: primitive.NewObjectID(),
 	}
 
 	// Create test booking

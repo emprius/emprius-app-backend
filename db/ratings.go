@@ -166,6 +166,115 @@ func (s *BookingService) GetReceivedRatings(ctx context.Context, userID primitiv
 	return ratings, nil
 }
 
+// GetRatingsByToolID retrieves all ratings associated with a specific tool ID
+func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) ([]*UnifiedRating, error) {
+	// Get all bookings for this tool
+	filter := bson.M{"toolId": toolID}
+	cursor, err := s.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var bookings []*Booking
+	if err = cursor.All(ctx, &bookings); err != nil {
+		return nil, err
+	}
+
+	// If no bookings found, return empty array
+	if len(bookings) == 0 {
+		return []*UnifiedRating{}, nil
+	}
+
+	// Create a map of booking IDs for efficient lookup
+	bookingMap := make(map[primitive.ObjectID]*Booking)
+	var bookingIDs []primitive.ObjectID
+	for _, booking := range bookings {
+		bookingMap[booking.ID] = booking
+		bookingIDs = append(bookingIDs, booking.ID)
+	}
+
+	// Get all ratings for these bookings
+	ratingFilter := bson.M{
+		"bookingId": bson.M{"$in": bookingIDs},
+	}
+
+	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := ratingCursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing rating cursor")
+		}
+	}()
+
+	var ratings []*BookingRating
+	if err = ratingCursor.All(ctx, &ratings); err != nil {
+		return nil, err
+	}
+
+	// Group ratings by booking ID
+	ratingsByBooking := make(map[primitive.ObjectID][]*BookingRating)
+	for _, rating := range ratings {
+		ratingsByBooking[rating.BookingID] = append(ratingsByBooking[rating.BookingID], rating)
+	}
+
+	// Create unified ratings
+	var unifiedRatings []*UnifiedRating
+	for bookingID, booking := range bookingMap {
+		unified := &UnifiedRating{
+			ID:        bookingID,
+			BookingID: bookingID,
+		}
+
+		// Determine who is the owner and who is the requester
+		ownerID := booking.ToUserID
+		requesterID := booking.FromUserID
+
+		// Initialize owner and requester
+		unified.Owner = &RatingParty{
+			ID: ownerID,
+		}
+		unified.Requester = &RatingParty{
+			ID: requesterID,
+		}
+
+		// Add ratings if they exist
+		if bookingRatings, ok := ratingsByBooking[bookingID]; ok {
+			for _, r := range bookingRatings {
+				if r.FromUserID == ownerID {
+					// Owner rating the requester
+					ratedAt := r.RatedAt.Unix()
+					comment := r.RatingComment
+					rating := r.Rating
+					unified.Owner.Rating = &rating
+					unified.Owner.RatingComment = &comment
+					unified.Owner.RatedAt = &ratedAt
+					unified.Owner.Images = r.RatingHashImages
+				} else if r.FromUserID == requesterID {
+					// Requester rating the owner
+					ratedAt := r.RatedAt.Unix()
+					comment := r.RatingComment
+					rating := r.Rating
+					unified.Requester.Rating = &rating
+					unified.Requester.RatingComment = &comment
+					unified.Requester.RatedAt = &ratedAt
+					unified.Requester.Images = r.RatingHashImages
+				}
+			}
+		}
+
+		unifiedRatings = append(unifiedRatings, unified)
+	}
+
+	return unifiedRatings, nil
+}
+
 // GetRatingsByBookingID retrieves all ratings associated with a specific booking ID
 func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID primitive.ObjectID) ([]*BookingRating, error) {
 	filter := bson.M{

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/emprius/emprius-app-backend/api"
+	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/test/utils"
 	qt "github.com/frankban/quicktest"
 )
@@ -418,5 +419,107 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		_, code = c.Request(http.MethodGet, userJWT, nil, "tools", fmt.Sprint(updatedToolID))
 		qt.Assert(t, code, qt.Equals, 404)
+	})
+
+	t.Run("Tool Ratings", func(t *testing.T) {
+		// Create a tool
+		resp, code := c.Request(http.MethodPost, userJWT,
+			api.Tool{
+				Title:          "Tool for Rating",
+				Description:    "Tool to test ratings",
+				MayBeFree:      boolPtr(true),
+				AskWithFee:     boolPtr(false),
+				Category:       1,
+				EstimatedValue: uint64Ptr(10000),
+				Height:         30,
+				Weight:         40,
+				Location: api.Location{
+					Latitude:  41920384,
+					Longitude: 2492793,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &toolResp)
+		qt.Assert(t, err, qt.IsNil)
+		toolID := toolResp.Data.ID
+
+		// Create another user to book and rate the tool
+		renterJWT := c.RegisterAndLogin("renter@test.com", "renter", "renterpass")
+
+		// Create a booking
+		resp, code = c.Request(http.MethodPost, renterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: 1710633600, // 2024-03-17
+				EndDate:   1710720000, // 2024-03-18
+				Contact:   "contact info",
+				Comments:  "booking comments",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Owner accepts the booking
+		_, code = c.Request(http.MethodPost, userJWT, nil, "bookings", "petitions", bookingID, "accept")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Owner marks the tool as returned
+		_, code = c.Request(http.MethodPost, userJWT, nil, "bookings", bookingID, "return")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Renter rates the booking
+		_, code = c.Request(http.MethodPost, renterJWT,
+			api.RateRequest{
+				Rating:  5,
+				Comment: "Great tool!",
+			},
+			"bookings", bookingID, "rate",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Owner rates the booking
+		_, code = c.Request(http.MethodPost, userJWT,
+			api.RateRequest{
+				Rating:  4,
+				Comment: "Good renter",
+			},
+			"bookings", bookingID, "rate",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get tool ratings
+		resp, code = c.Request(http.MethodGet, userJWT, nil, "tools", fmt.Sprint(toolID), "rates")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var ratesResp struct {
+			Data []*db.UnifiedRating `json:"data"`
+		}
+		err = json.Unmarshal(resp, &ratesResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(ratesResp.Data), qt.Equals, 1)
+
+		// Verify rating values
+		rating := ratesResp.Data[0]
+		qt.Assert(t, *rating.Owner.Rating, qt.Equals, 4)
+		qt.Assert(t, *rating.Owner.RatingComment, qt.Equals, "Good renter")
+		qt.Assert(t, *rating.Requester.Rating, qt.Equals, 5)
+		qt.Assert(t, *rating.Requester.RatingComment, qt.Equals, "Great tool!")
 	})
 }

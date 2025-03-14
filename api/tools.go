@@ -536,6 +536,32 @@ func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 	return nil, nil
 }
 
+// HandleGetToolRatings handles GET /tools/{id}/rates
+func (a *API) HandleGetToolRatings(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get tool ID from URL
+	idParam := r.Context.URLParam("id")
+	if idParam == nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
+	}
+
+	// Get unified ratings for the tool
+	unifiedRatings, err := a.database.BookingService.GetRatingsByToolID(r.Context.Request.Context(), idParam[0])
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	if unifiedRatings == nil {
+		// Return empty array instead of nil
+		unifiedRatings = make([]*db.UnifiedRating, 0)
+	}
+
+	return unifiedRatings, nil
+}
+
 func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
