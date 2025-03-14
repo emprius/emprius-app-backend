@@ -142,6 +142,10 @@ var (
 
 // Conflict errors
 var (
+	ErrEmailChangeNotAllowed = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "email change not allowed",
+	}
 	ErrBookingDatesConflict = &HTTPError{
 		Code:    http.StatusBadRequest,
 		Message: "booking dates conflict with existing booking",

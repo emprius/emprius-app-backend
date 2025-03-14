@@ -174,6 +174,15 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &newUserInfo); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
+
+	// Check if the request contains an email field
+	var requestMap map[string]interface{}
+	if err := json.Unmarshal(r.Data, &requestMap); err == nil {
+		if email, ok := requestMap["email"]; ok && email != "" {
+			// Email change attempt detected
+			return nil, ErrEmailChangeNotAllowed
+		}
+	}
 	user, err := a.getDBUserByID(r.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user profile: %w", err)

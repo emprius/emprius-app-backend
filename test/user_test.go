@@ -72,6 +72,29 @@ func TestUser(t *testing.T) {
 		)
 		qt.Assert(t, code, qt.Equals, 200)
 
+		// Attempt to update profile with a different email
+		resp, code = c.Request(http.MethodPost, user1JWT,
+			map[string]interface{}{
+				"name":  "Updated User1",
+				"email": "user2@test.com", // Attempt to use another user's email
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 400) // Should return 400 Bad Request
+
+		// Verify the error message
+		var errorResp struct {
+			Header struct {
+				Success   bool   `json:"success"`
+				Message   string `json:"message"`
+				ErrorCode int    `json:"errorCode"`
+			} `json:"header"`
+		}
+		err = json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Equals, "email change not allowed")
+
 		// Verify profile update
 		resp, code = c.Request(http.MethodGet, user1JWT, nil, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
