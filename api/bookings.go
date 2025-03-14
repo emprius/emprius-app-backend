@@ -357,6 +357,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 }
 
 // HandleGetSubmittedRatings handles GET /bookings/rates/submitted
+// Deprecated: Use HandleGetUserRatings instead
 func (a *API) HandleGetSubmittedRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -380,6 +381,7 @@ func (a *API) HandleGetSubmittedRatings(r *Request) (interface{}, error) {
 }
 
 // HandleGetReceivedRatings handles GET /bookings/rates/received
+// Deprecated: Use HandleGetUserRatings instead
 func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -400,6 +402,33 @@ func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
 		ratings = make([]*db.BookingRating, 0)
 	}
 	return ratings, nil
+}
+
+// HandleGetUserRatings handles GET /user/{id}/rates
+// Returns a unified list of all ratings (both submitted and received) for a user
+func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get user ID from URL
+	userID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "id"))
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get unified ratings
+	unifiedRatings, err := a.database.BookingService.GetUnifiedRatings(r.Context.Request.Context(), userID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	if unifiedRatings == nil {
+		// Return empty array instead of nil
+		unifiedRatings = make([]*db.UnifiedRating, 0)
+	}
+
+	return unifiedRatings, nil
 }
 
 // HandleGetBookingRatings handles GET /bookings/{bookingId}/rate

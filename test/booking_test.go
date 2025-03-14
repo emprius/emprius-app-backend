@@ -606,5 +606,132 @@ func TestBookings(t *testing.T) {
 				qt.Assert(t, profileResp.Data.Rating, qt.Equals, 100)
 			}
 		})
+
+		// Test the unified ratings endpoint
+		t.Run("Unified Ratings", func(t *testing.T) {
+			// Create a new booking
+			resp, code := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(toolID),
+					StartDate: time.Now().Add(200 * time.Hour).Unix(),
+					EndDate:   time.Now().Add(224 * time.Hour).Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Test booking for unified ratings",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var bookingResp struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			bookingID := bookingResp.Data.ID
+
+			// Owner accepts the booking
+			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID, "accept")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Mark booking as returned
+			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingID, "return")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Renter submits a rating
+			_, code = c.Request(http.MethodPost, renterJWT,
+				api.RateRequest{
+					Rating:  4,
+					Comment: "Good experience with the tool",
+				},
+				"bookings", bookingID, "rate",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Owner submits a rating
+			_, code = c.Request(http.MethodPost, ownerJWT,
+				api.RateRequest{
+					Rating:  5,
+					Comment: "Great renter, returned the tool in perfect condition",
+				},
+				"bookings", bookingID, "rate",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Get unified ratings for the renter
+			resp, code = c.Request(http.MethodGet, renterJWT, nil, "user", renterID, "rates")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var unifiedResp struct {
+				Data []*db.UnifiedRating `json:"data"`
+			}
+			err = json.Unmarshal(resp, &unifiedResp)
+			qt.Assert(t, err, qt.IsNil)
+
+			// Verify we have at least one unified rating
+			qt.Assert(t, len(unifiedResp.Data) > 0, qt.IsTrue)
+
+			// Find the rating for our test booking
+			var testBookingRating *db.UnifiedRating
+			for _, rating := range unifiedResp.Data {
+				if rating.BookingID.Hex() == bookingID {
+					testBookingRating = rating
+					break
+				}
+			}
+
+			// Verify the unified rating contains both owner and requester ratings
+			qt.Assert(t, testBookingRating, qt.Not(qt.IsNil))
+			qt.Assert(t, testBookingRating.Owner, qt.Not(qt.IsNil))
+			qt.Assert(t, testBookingRating.Requester, qt.Not(qt.IsNil))
+
+			// Verify owner rating
+			qt.Assert(t, testBookingRating.Owner.Rating, qt.Not(qt.IsNil))
+			qt.Assert(t, *testBookingRating.Owner.Rating, qt.Equals, 5)
+			qt.Assert(t, testBookingRating.Owner.RatingComment, qt.Not(qt.IsNil))
+			qt.Assert(t, *testBookingRating.Owner.RatingComment, qt.Equals, "Great renter, returned the tool in perfect condition")
+
+			// Verify requester rating
+			qt.Assert(t, testBookingRating.Requester.Rating, qt.Not(qt.IsNil))
+			qt.Assert(t, *testBookingRating.Requester.Rating, qt.Equals, 4)
+			qt.Assert(t, testBookingRating.Requester.RatingComment, qt.Not(qt.IsNil))
+			qt.Assert(t, *testBookingRating.Requester.RatingComment, qt.Equals, "Good experience with the tool")
+
+			// Get unified ratings for the owner
+			ownerID := bookingResp.Data.ToUserID
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "user", ownerID, "rates")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			err = json.Unmarshal(resp, &unifiedResp)
+			qt.Assert(t, err, qt.IsNil)
+
+			// Verify we have at least one unified rating
+			qt.Assert(t, len(unifiedResp.Data) > 0, qt.IsTrue)
+
+			// Find the rating for our test booking
+			testBookingRating = nil
+			for _, rating := range unifiedResp.Data {
+				if rating.BookingID.Hex() == bookingID {
+					testBookingRating = rating
+					break
+				}
+			}
+
+			// Verify the unified rating contains both owner and requester ratings
+			qt.Assert(t, testBookingRating, qt.Not(qt.IsNil))
+			qt.Assert(t, testBookingRating.Owner, qt.Not(qt.IsNil))
+			qt.Assert(t, testBookingRating.Requester, qt.Not(qt.IsNil))
+
+			// Verify owner rating
+			qt.Assert(t, testBookingRating.Owner.Rating, qt.Not(qt.IsNil))
+			qt.Assert(t, *testBookingRating.Owner.Rating, qt.Equals, 5)
+			qt.Assert(t, testBookingRating.Owner.RatingComment, qt.Not(qt.IsNil))
+			qt.Assert(t, *testBookingRating.Owner.RatingComment, qt.Equals, "Great renter, returned the tool in perfect condition")
+
+			// Verify requester rating
+			qt.Assert(t, testBookingRating.Requester.Rating, qt.Not(qt.IsNil))
+			qt.Assert(t, *testBookingRating.Requester.Rating, qt.Equals, 4)
+			qt.Assert(t, testBookingRating.Requester.RatingComment, qt.Not(qt.IsNil))
+			qt.Assert(t, *testBookingRating.Requester.RatingComment, qt.Equals, "Good experience with the tool")
+		})
 	})
 }

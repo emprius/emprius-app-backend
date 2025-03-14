@@ -326,6 +326,53 @@ components:
           type: string
           description: Optional comment about the rating
           maxLength: 500
+          
+    RatingParty:
+      type: object
+      properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the user
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          nullable: true
+          description: Rating value between 1 and 5, null if not rated
+        ratingComment:
+          type: string
+          nullable: true
+          description: Optional comment about the rating, null if not rated
+        ratedAt:
+          type: integer
+          format: int64
+          nullable: true
+          description: When the rating was submitted, null if not rated
+        images:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Optional array of image hashes associated with the rating, null if not rated
+          
+    UnifiedRating:
+      type: object
+      properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the booking
+        bookingId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the booking (same as id)
+        owner:
+          $ref: '#/components/schemas/RatingParty'
+          description: Rating information for the tool owner
+        requester:
+          $ref: '#/components/schemas/RatingParty'
+          description: Rating information for the requester
 
 paths:
   /ping:
@@ -974,7 +1021,8 @@ paths:
       tags:
         - Bookings
       summary: Get submitted ratings
-      description: Get ratings submitted by the user (excluding self-ratings)
+      description: Get ratings submitted by the user (excluding self-ratings). Deprecated, use /user/{id}/rates instead.
+      deprecated: true
       security:
         - bearerAuth: [ ]
       responses:
@@ -994,7 +1042,8 @@ paths:
       tags:
         - Bookings
       summary: Get received ratings
-      description: Get ratings received by the user (excluding self-ratings)
+      description: Get ratings received by the user (excluding self-ratings). Deprecated, use /user/{id}/rates instead.
+      deprecated: true
       security:
         - bearerAuth: [ ]
       responses:
@@ -1004,6 +1053,38 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RatingResponse'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+          
+  /user/{id}/rates:
+    get:
+      tags:
+        - Bookings
+      summary: Get unified ratings for a user
+      description: Get all ratings (both submitted and received) for a user, grouped by booking
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the user
+      responses:
+        '200':
+          description: List of unified ratings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UnifiedRating'
+        '400':
+          description: Invalid user ID
         '401':
           description: Unauthorized
         '500':
