@@ -257,6 +257,43 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, err, qt.IsNil)
 			qt.Assert(t, len(receivedResp.Data), qt.Equals, 1)
 			qt.Assert(t, receivedResp.Data[0].Rating, qt.Equals, 5)
+
+			// Test the new GET /bookings/{bookingId}/rate endpoint
+			// Get ratings for the booking
+			resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID, "rate")
+			qt.Assert(t, code, qt.Equals, 200)
+			var bookingRatingsResp struct {
+				Data struct {
+					Ratings []*api.Rating `json:"ratings"`
+				} `json:"data"`
+			}
+			err = json.Unmarshal(resp, &bookingRatingsResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, len(bookingRatingsResp.Data.Ratings), qt.Equals, 2) // Should have 2 ratings (one from renter, one from owner)
+
+			// Verify ratings content
+			var hasRenterRating, hasOwnerRating bool
+			for _, rating := range bookingRatingsResp.Data.Ratings {
+				if rating.FromUserID == renterID {
+					hasRenterRating = true
+					qt.Assert(t, rating.Rating, qt.Equals, 5)
+					qt.Assert(t, rating.Comment, qt.Equals, "Great experience!")
+				} else {
+					hasOwnerRating = true
+					qt.Assert(t, rating.Rating, qt.Equals, 4)
+					qt.Assert(t, rating.Comment, qt.Equals, "Self rating test")
+				}
+			}
+			qt.Assert(t, hasRenterRating, qt.IsTrue)
+			qt.Assert(t, hasOwnerRating, qt.IsTrue)
+
+			// Try to get ratings for non-existent booking
+			_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "nonexistentid", "rate")
+			qt.Assert(t, code, qt.Equals, 400) // Invalid ID format
+
+			// Try to get ratings without auth
+			_, code = c.Request(http.MethodGet, "", nil, "bookings", bookingID, "rate")
+			qt.Assert(t, code, qt.Equals, 401)
 		})
 
 		// Test deny petition

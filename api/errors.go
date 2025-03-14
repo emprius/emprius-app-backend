@@ -110,6 +110,10 @@ var (
 		Code:    http.StatusNotFound,
 		Message: "booking not found",
 	}
+	ErrRatingNotFound = &HTTPError{
+		Code:    http.StatusNotFound,
+		Message: "rating not found",
+	}
 	ErrUserNotFound = &HTTPError{
 		Code:    http.StatusNotFound,
 		Message: "user not found",

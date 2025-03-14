@@ -149,6 +149,27 @@ func (s *BookingService) GetReceivedRatings(ctx context.Context, userID primitiv
 	return ratings, nil
 }
 
+// GetRatingsByBookingID retrieves all ratings associated with a specific booking ID
+func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID primitive.ObjectID) ([]*BookingRating, error) {
+	filter := bson.M{
+		"bookingId": bookingID,
+	}
+	cursor, err := s.ratingsCollection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+	var ratings []*BookingRating
+	if err = cursor.All(ctx, &ratings); err != nil {
+		return nil, err
+	}
+	return ratings, nil
+}
+
 func (s *BookingService) RateBooking(
 	ctx context.Context,
 	bookingID primitive.ObjectID,

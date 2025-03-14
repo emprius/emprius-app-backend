@@ -1044,6 +1044,40 @@ paths:
           description: Booking not found
         '500':
           description: Internal server error
+    get:
+      tags:
+        - Bookings
+      summary: Get ratings for a booking
+      description: Get all ratings associated with a specific booking
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the booking
+      responses:
+        '200':
+          description: Ratings for the booking
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ratings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BookingRating'
+                    description: Array of ratings associated with this booking
+        '401':
+          description: Unauthorized
+        '404':
+          description: Booking not found
+        '500':
+          description: Internal server error
 
   /bookings/pendings:
     get:

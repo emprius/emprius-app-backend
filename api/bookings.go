@@ -402,6 +402,56 @@ func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
 	return ratings, nil
 }
 
+// HandleGetBookingRatings handles GET /bookings/{bookingId}/rate
+func (a *API) HandleGetBookingRatings(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get booking ID from URL
+	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Check if booking exists
+	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	if booking == nil {
+		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
+	}
+
+	// Get ratings for the booking
+	ratings, err := a.database.BookingService.GetRatingsByBookingID(r.Context.Request.Context(), bookingID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Convert DB ratings to API ratings
+	apiRatings := make([]*Rating, len(ratings))
+	for i, dbRating := range ratings {
+		apiRating := new(Rating)
+		apiRatings[i] = apiRating.FromDB(dbRating)
+	}
+
+	if len(apiRatings) == 0 {
+		// Return empty array instead of nil
+		return &struct {
+			Ratings []*Rating `json:"ratings"`
+		}{
+			Ratings: []*Rating{},
+		}, nil
+	}
+
+	return &struct {
+		Ratings []*Rating `json:"ratings"`
+	}{
+		Ratings: apiRatings,
+	}, nil
+}
+
 // RateRequest represents the request body for rating a booking
 type RateRequest struct {
 	Rating  int    `json:"rating"`
