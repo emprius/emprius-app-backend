@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/rs/zerolog/log"
@@ -77,6 +78,15 @@ func (a *API) loginHandler(r *Request) (interface{}, error) {
 		return nil, ErrWrongLogin
 	}
 
+	// Update LastSeen timestamp
+	now := time.Now()
+	update := bson.M{"lastSeen": now}
+	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
+	if err != nil {
+		log.Error().Err(err).Str("userId", user.ID.Hex()).Msg("Failed to update LastSeen timestamp")
+		// Continue even if update fails
+	}
+
 	// Generate a new token with the user's ObjectID
 	token, err := a.makeToken(user.ID.Hex())
 	if err != nil {
@@ -125,12 +135,7 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(fmt.Errorf("invalid user id format: %s", r.Context.URLParam("id")))
 	}
 
-	user, err := a.database.UserService.GetUserByID(context.Background(), userID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	return new(User).FromDBUser(user), nil
+	return a.getUserByID(userID.Hex())
 }
 
 // validateObjectID checks if a string is a valid MongoDB ObjectID
@@ -150,7 +155,26 @@ func (a *API) getUserByID(userID string) (*User, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	return new(User).FromDBUser(user), nil
+
+	// Create API user from DB user
+	apiUser := new(User).FromDBUser(user)
+
+	// Get rating count (number of ratings received by this user)
+	filter := bson.M{
+		"rateeId": objID,
+		"raterId": bson.M{"$ne": objID}, // exclude self-ratings
+	}
+
+	ratingCount, err := a.database.Database.Collection("ratings").CountDocuments(context.Background(), filter)
+	if err != nil {
+		log.Error().Err(err).Str("userId", userID).Msg("Failed to count user ratings")
+		// Continue even if count fails, just set to 0
+		apiUser.RatingCount = 0
+	} else {
+		apiUser.RatingCount = int(ratingCount)
+	}
+
+	return apiUser, nil
 }
 
 func (a *API) getDBUserByID(userID string) (*db.User, error) {
@@ -193,6 +217,10 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if newUserInfo.Community != "" {
 		user.Community = newUserInfo.Community
 	}
+	// Update bio if provided
+	if newUserInfo.Bio != "" {
+		user.Bio = newUserInfo.Bio
+	}
 	var avatar *db.Image
 	if len(newUserInfo.Avatar) > 0 {
 		avatar, err = a.addImage(user.Name+"_avatar", newUserInfo.Avatar)
@@ -227,6 +255,8 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		"active":     user.Active,
 		"password":   user.Password,
 		"community":  user.Community,
+		"bio":        user.Bio,
+		"lastSeen":   time.Now(), // Update lastSeen when profile is updated
 	}
 	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
 	if err != nil {

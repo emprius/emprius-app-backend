@@ -135,6 +135,20 @@ components:
         actualPassword:
           type: string
           description: "Current password. Required if changing the password."
+        bio:
+          type: string
+          description: "User bio or description"
+        createdAt:
+          type: string
+          format: date-time
+          description: "When the user account was created"
+        lastSeen:
+          type: string
+          format: date-time
+          description: "When the user was last active"
+        ratingCount:
+          type: integer
+          description: "Number of ratings received by the user"
 
     LoginRequest:
       type: object

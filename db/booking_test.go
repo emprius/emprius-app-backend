@@ -135,6 +135,7 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 			err = userService.Collection.FindOne(ctx, bson.M{"_id": toUser.ID}).Decode(&updatedUser)
 			qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get updated owner"))
 			qt.Assert(t, updatedUser.Rating, qt.Equals, tc.expectedRating)
+			qt.Assert(t, updatedUser.RatingCount, qt.Equals, 1, qt.Commentf("RatingCount should be 1 after a single rating"))
 		})
 	}
 
@@ -191,6 +192,7 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 		err = userService.Collection.FindOne(ctx, bson.M{"_id": toUser.ID}).Decode(&updatedUser)
 		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get updated owner after multiple ratings"))
 		qt.Assert(t, updatedUser.Rating, qt.Equals, int32(80))
+		qt.Assert(t, updatedUser.RatingCount, qt.Equals, 2, qt.Commentf("RatingCount should be 2 after two ratings"))
 	})
 }
 

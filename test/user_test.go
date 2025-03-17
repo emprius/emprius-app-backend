@@ -54,6 +54,12 @@ func TestUser(t *testing.T) {
 		qt.Assert(t, profileResp.Data.Name, qt.Equals, "user1")
 		qt.Assert(t, profileResp.Data.Email, qt.Equals, "user1@test.com")
 
+		// Verify new fields are present
+		qt.Assert(t, profileResp.Data.CreatedAt.IsZero(), qt.Equals, false, qt.Commentf("CreatedAt should not be zero"))
+		qt.Assert(t, profileResp.Data.LastSeen.IsZero(), qt.Equals, false, qt.Commentf("LastSeen should not be zero"))
+		qt.Assert(t, profileResp.Data.Bio, qt.Equals, "")
+		qt.Assert(t, profileResp.Data.RatingCount >= 0, qt.IsTrue, qt.Commentf("RatingCount should be >= 0"))
+
 		// Try to get profile without auth
 		_, code = c.Request(http.MethodGet, "", nil, "profile")
 		qt.Assert(t, code, qt.Equals, 401)
@@ -63,6 +69,7 @@ func TestUser(t *testing.T) {
 			api.UserProfile{
 				Name:      "Updated User1",
 				Community: "Updated Community",
+				Bio:       "This is my bio",
 				Location: &api.Location{
 					Latitude:  41695384000,
 					Longitude: 2492793000,
@@ -102,6 +109,8 @@ func TestUser(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, profileResp.Data.Name, qt.Equals, "Updated User1")
 		qt.Assert(t, profileResp.Data.Community, qt.Equals, "Updated Community")
+		qt.Assert(t, profileResp.Data.Bio, qt.Equals, "This is my bio")
+		qt.Assert(t, profileResp.Data.LastSeen.IsZero(), qt.Equals, false, qt.Commentf("LastSeen should be updated"))
 
 		// Get other user's profile
 		var user1ID string

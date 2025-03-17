@@ -702,7 +702,10 @@ func (s *BookingService) updateUserRating(ctx context.Context, booking *Booking)
 
 		userService := s.database.Collection("users")
 		_, err = userService.UpdateOne(ctx, bson.M{"_id": booking.ToUserID}, bson.M{
-			"$set": bson.M{"rating": overall},
+			"$set": bson.M{
+				"rating":      overall,
+				"ratingCount": count,
+			},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to update user rating in database: %w", err)

@@ -77,20 +77,25 @@ type UserProfile struct {
 	Avatar         []byte    `json:"avatar,omitempty"`
 	Password       string    `json:"password,omitempty"`
 	ActualPassword string    `json:"actualPassword,omitempty"`
+	Bio            string    `json:"bio,omitempty"`
 }
 
 // User represents the user type
 type User struct {
-	ID         string         `json:"id"`
-	Email      string         `json:"email"`
-	Name       string         `json:"name"`
-	Community  string         `json:"community"`
-	Tokens     uint64         `json:"tokens"`
-	Active     bool           `json:"active"`
-	Rating     int            `json:"rating"`
-	AvatarHash types.HexBytes `json:"avatarHash"`
-	Location   Location       `json:"location"`
-	Verified   bool           `json:"verified"`
+	ID          string         `json:"id"`
+	Email       string         `json:"email"`
+	Name        string         `json:"name"`
+	Community   string         `json:"community"`
+	Tokens      uint64         `json:"tokens"`
+	Active      bool           `json:"active"`
+	Rating      int            `json:"rating"`
+	AvatarHash  types.HexBytes `json:"avatarHash"`
+	Location    Location       `json:"location"`
+	Verified    bool           `json:"verified"`
+	CreatedAt   time.Time      `json:"createdAt"`
+	LastSeen    time.Time      `json:"lastSeen"`
+	Bio         string         `json:"bio"`
+	RatingCount int            `json:"ratingCount"`
 }
 
 // FromDBUser converts a DB User to an API User
@@ -105,6 +110,13 @@ func (u *User) FromDBUser(dbu *db.User) *User {
 	u.AvatarHash = dbu.AvatarHash
 	u.Location.FromDBLocation(dbu.Location)
 	u.Verified = dbu.Verified
+
+	// Set new fields from DB user or defaults if not present
+	u.Bio = dbu.Bio
+	u.CreatedAt = dbu.CreatedAt
+	u.LastSeen = dbu.LastSeen
+	u.RatingCount = dbu.RatingCount
+
 	return u
 }
 

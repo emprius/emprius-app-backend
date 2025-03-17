@@ -190,11 +190,11 @@ func (a *API) router() http.Handler {
 		// GET /bookings/rates
 		log.Info().Msg("register route GET /bookings/rates")
 		r.Get("/bookings/rates", a.routerHandler(a.HandleGetPendingRatings))
-		// GET /bookings/rates/submitted
-		log.Info().Msg("register route GET /bookings/rates/submitted")
+		// GET /bookings/rates/submitted (DEPRECATED)
+		log.Info().Msg("register route GET /bookings/rates/submitted (DEPRECATED)")
 		r.Get("/bookings/rates/submitted", a.routerHandler(a.HandleGetSubmittedRatings))
-		// GET /bookings/rates/received
-		log.Info().Msg("register route GET /bookings/rates/received")
+		// GET /bookings/rates/received (DEPRECATED)
+		log.Info().Msg("register route GET /bookings/rates/received (DEPRECATED)")
 		r.Get("/bookings/rates/received", a.routerHandler(a.HandleGetReceivedRatings))
 		// GET /user/{id}/rates
 		log.Info().Msg("register route GET /user/{id}/rates")
