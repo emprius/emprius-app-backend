@@ -340,7 +340,7 @@ components:
           type: string
           description: Optional comment about the rating
           maxLength: 500
-          
+
     RatingParty:
       type: object
       properties:
@@ -369,7 +369,7 @@ components:
             type: string
           nullable: true
           description: Optional array of image hashes associated with the rating, null if not rated
-          
+
     UnifiedRating:
       type: object
       properties:
@@ -532,7 +532,7 @@ paths:
   /users/{id}/rates:
     get:
       tags:
-        - User
+        - Users
       summary: Get unified ratings for a user
       description: Get all ratings (both submitted and received) for a user, grouped by booking
       security:
@@ -768,7 +768,7 @@ paths:
         - name: id
           in: path
           required: true
-          schema:rate
+          schema:
             type: integer
             format: int64
       responses:
