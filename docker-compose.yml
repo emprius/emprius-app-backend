@@ -10,7 +10,10 @@ services:
       - EMPRIUS_PORT=3333
       - EMPRIUS_DEBUG=true
       - EMPRIUS_REGISTERAUTHTOKEN=comunals
+      - WEBAPPDIR=/webapp
     restart: always
+    volumes:
+      - ./webapp:/webapp
 
   mongo:
     image: mongo
@@ -32,3 +35,4 @@ services:
       ME_CONFIG_MONGODB_URL: mongodb://root:emprius@mongo:27017/
     depends_on:
       - mongo
+

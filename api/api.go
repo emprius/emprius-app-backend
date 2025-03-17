@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
@@ -27,14 +30,20 @@ type API struct {
 	auth              *jwtauth.JWTAuth
 	registerAuthToken string
 	database          *db.Database
+	webappdir         string
 }
 
 // New creates a new API HTTP server. It does not start the server. Use Start() for that.
 func New(secret, registerAuthToken string, database *db.Database) *API {
+	webappdir := os.Getenv("WEBAPPDIR")
+	if webappdir == "" {
+		log.Warn().Msg("WEBAPPDIR not set, static files will not be served")
+	}
 	return &API{
 		auth:              jwtauth.New("HS256", []byte(secret), nil),
 		database:          database,
 		registerAuthToken: registerAuthToken,
+		webappdir:         webappdir,
 	}
 }
 
@@ -237,9 +246,28 @@ func (a *API) router() http.Handler {
 		// GET /images/{hash}
 		log.Info().Msg("register route GET /images/{hash}")
 		r.Get("/images/{hash}", a.routerHandler(a.imageHandler))
+		// Static handler for webappdir (testing)
+		log.Info().Msg("register route GET /app/*")
+		r.Get("/app*", a.staticHandler)
 	})
 
 	return r
+}
+
+// staticHandler serves the static files from the webappdir directory, for testing purposes.
+func (a *API) staticHandler(w http.ResponseWriter, r *http.Request) {
+	if a.webappdir == "" {
+		http.Error(w, "webappdir not set", http.StatusInternalServerError)
+		return
+	}
+	var filePath string
+	if r.URL.Path == "/app" || r.URL.Path == "/app/" {
+		filePath = path.Join(a.webappdir, "index.html")
+	} else {
+		filePath = path.Join(a.webappdir, strings.TrimPrefix(path.Clean(r.URL.Path), "/app"))
+	}
+	// Serve the file using http.ServeFile
+	http.ServeFile(w, r, filePath)
 }
 
 // info handler returns the basic info about the API.
