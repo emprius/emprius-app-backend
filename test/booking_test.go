@@ -658,7 +658,7 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 200)
 
 			// Get unified ratings for the renter
-			resp, code = c.Request(http.MethodGet, renterJWT, nil, "user", renterID, "rates")
+			resp, code = c.Request(http.MethodGet, renterJWT, nil, "users", renterID, "rates")
 			qt.Assert(t, code, qt.Equals, 200)
 
 			var unifiedResp struct {
@@ -698,7 +698,7 @@ func TestBookings(t *testing.T) {
 
 			// Get unified ratings for the owner
 			ownerID := bookingResp.Data.ToUserID
-			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "user", ownerID, "rates")
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "users", ownerID, "rates")
 			qt.Assert(t, code, qt.Equals, 200)
 
 			err = json.Unmarshal(resp, &unifiedResp)
