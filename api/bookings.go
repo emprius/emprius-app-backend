@@ -404,7 +404,7 @@ func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
 	return ratings, nil
 }
 
-// HandleGetUserRatings handles GET /user/{id}/rates
+// HandleGetUserRatings handles GET /users/{id}/rates
 // Returns a unified list of all ratings (both submitted and received) for a user
 func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
