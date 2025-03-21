@@ -179,7 +179,10 @@ func (s *BookingService) GetSubmittedRatings(ctx context.Context, userID primiti
 		"rateeId": bson.M{"$ne": userID}, // exclude self-ratings
 	}
 
-	cursor, err := s.ratingsCollection.Find(ctx, filter)
+	// Use options to sort by createdAt in descending order (newest first)
+	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	
+	cursor, err := s.ratingsCollection.Find(ctx, filter, findOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +208,10 @@ func (s *BookingService) GetReceivedRatings(ctx context.Context, userID primitiv
 		"raterId": bson.M{"$ne": userID}, // exclude self-ratings
 	}
 
-	cursor, err := s.ratingsCollection.Find(ctx, filter)
+	// Use options to sort by createdAt in descending order (newest first)
+	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	
+	cursor, err := s.ratingsCollection.Find(ctx, filter, findOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +267,10 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 		"bookingId": bson.M{"$in": bookingIDs},
 	}
 
-	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter)
+	// Use options to sort by createdAt in descending order (newest first)
+	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	
+	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter, findOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +347,11 @@ func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID pr
 	filter := bson.M{
 		"bookingId": bookingID,
 	}
-	cursor, err := s.ratingsCollection.Find(ctx, filter)
+	
+	// Use options to sort by createdAt in descending order (newest first)
+	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	
+	cursor, err := s.ratingsCollection.Find(ctx, filter, findOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +413,10 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 		"bookingId": bson.M{"$in": bookingIDs},
 	}
 
-	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter)
+	// Use options to sort by createdAt in descending order (newest first)
+	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	
+	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter, findOptions)
 	if err != nil {
 		return nil, err
 	}
