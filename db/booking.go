@@ -231,10 +231,25 @@ func (s *BookingService) GetUserBookings(
 
 // GetUserRequests returns all bookings where the given user is the owner (toUserId)
 // along with their associated ratings.
+// Bookings are ordered with PENDING status first, then sorted by createdAt date (newest first).
 func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.ObjectID) ([]*BookingWithRatings, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{"toUserId": userID}}},
-		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
+		// Add a field to use for sorting (1 for PENDING status, 0 for others)
+		{{Key: "$addFields", Value: bson.M{
+			"isPending": bson.M{
+				"$cond": bson.M{
+					"if":   bson.M{"$eq": []interface{}{"$bookingStatus", BookingStatusPending}},
+					"then": 1,
+					"else": 0,
+				},
+			},
+		}}},
+		// Sort by isPending (descending to put PENDING first), then by createdAt (newest first)
+		{{Key: "$sort", Value: bson.D{
+			{Key: "isPending", Value: -1},
+			{Key: "createdAt", Value: -1},
+		}}},
 		{{Key: "$lookup", Value: bson.M{
 			"from":         s.ratingsCollection.Name(),
 			"localField":   "_id",
@@ -265,10 +280,25 @@ func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.O
 
 // GetUserPetitions returns all bookings where the given user is the requester (fromUserId)
 // along with their associated ratings.
+// Bookings are ordered with PENDING status first, then sorted by createdAt date (newest first).
 func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.ObjectID) ([]*BookingWithRatings, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{"fromUserId": userID}}},
-		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
+		// Add a field to use for sorting (1 for PENDING status, 0 for others)
+		{{Key: "$addFields", Value: bson.M{
+			"isPending": bson.M{
+				"$cond": bson.M{
+					"if":   bson.M{"$eq": []interface{}{"$bookingStatus", BookingStatusPending}},
+					"then": 1,
+					"else": 0,
+				},
+			},
+		}}},
+		// Sort by isPending (descending to put PENDING first), then by createdAt (newest first)
+		{{Key: "$sort", Value: bson.D{
+			{Key: "isPending", Value: -1},
+			{Key: "createdAt", Value: -1},
+		}}},
 		{{Key: "$lookup", Value: bson.M{
 			"from":         s.ratingsCollection.Name(),
 			"localField":   "_id",
