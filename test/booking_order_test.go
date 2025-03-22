@@ -8,12 +8,15 @@ import (
 	"time"
 
 	"github.com/emprius/emprius-app-backend/api"
+	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/test/utils"
 	qt "github.com/frankban/quicktest"
 )
 
 func TestBookingOrder(t *testing.T) {
 	c := utils.NewTestService(t)
+	var resp []byte
+	var code int
 
 	// Create two users: tool owner and renter
 	ownerJWT := c.RegisterAndLogin("order-owner@test.com", "owner", "ownerpass")
@@ -30,7 +33,7 @@ func TestBookingOrder(t *testing.T) {
 		Contact:   "test@example.com",
 		Comments:  "Pending booking 1",
 	}
-	resp, code := c.Request(http.MethodPost, renterJWT, req1, "bookings")
+	_, code = c.Request(http.MethodPost, renterJWT, req1, "bookings")
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Create a second booking that will be accepted
@@ -58,7 +61,7 @@ func TestBookingOrder(t *testing.T) {
 		Contact:   "test@example.com",
 		Comments:  "Pending booking 3",
 	}
-	resp, code = c.Request(http.MethodPost, renterJWT, req3, "bookings")
+	_, code = c.Request(http.MethodPost, renterJWT, req3, "bookings")
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Accept the second booking
@@ -79,9 +82,9 @@ func TestBookingOrder(t *testing.T) {
 	pendingCount := 0
 	acceptedCount := 0
 	for _, booking := range bookingsResp.Data {
-		if booking.BookingStatus == "PENDING" {
+		if booking.BookingStatus == string(db.BookingStatusPending) {
 			pendingCount++
-		} else if booking.BookingStatus == "ACCEPTED" {
+		} else if booking.BookingStatus == string(db.BookingStatusAccepted) {
 			acceptedCount++
 		}
 	}
@@ -93,7 +96,7 @@ func TestBookingOrder(t *testing.T) {
 
 	// The first bookings should all be PENDING
 	for i := 0; i < pendingCount; i++ {
-		qt.Assert(t, bookingsResp.Data[i].BookingStatus, qt.Equals, "PENDING",
+		qt.Assert(t, bookingsResp.Data[i].BookingStatus, qt.Equals, string(db.BookingStatusPending),
 			qt.Commentf("Expected booking at index %d to be PENDING, got %s",
 				i, bookingsResp.Data[i].BookingStatus))
 	}
@@ -112,9 +115,9 @@ func TestBookingOrder(t *testing.T) {
 	pendingCount = 0
 	acceptedCount = 0
 	for _, booking := range petitionsResp.Data {
-		if booking.BookingStatus == "PENDING" {
+		if booking.BookingStatus == string(db.BookingStatusPending) {
 			pendingCount++
-		} else if booking.BookingStatus == "ACCEPTED" {
+		} else if booking.BookingStatus == string(db.BookingStatusAccepted) {
 			acceptedCount++
 		}
 	}
@@ -124,7 +127,7 @@ func TestBookingOrder(t *testing.T) {
 
 	// The first bookings should all be PENDING
 	for i := 0; i < pendingCount; i++ {
-		qt.Assert(t, petitionsResp.Data[i].BookingStatus, qt.Equals, "PENDING",
+		qt.Assert(t, petitionsResp.Data[i].BookingStatus, qt.Equals, string(db.BookingStatusPending),
 			qt.Commentf("Expected booking at index %d to be PENDING, got %s",
 				i, petitionsResp.Data[i].BookingStatus))
 	}
@@ -134,7 +137,7 @@ func TestBookingOrder(t *testing.T) {
 		// Find the first accepted booking index
 		firstAcceptedIdx := -1
 		for i, booking := range petitionsResp.Data {
-			if booking.BookingStatus == "ACCEPTED" {
+			if booking.BookingStatus == string(db.BookingStatusAccepted) {
 				firstAcceptedIdx = i
 				break
 			}
