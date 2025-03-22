@@ -281,6 +281,123 @@ func TestBookingService_GetPendingRatings(t *testing.T) {
 	assert.Len(t, toUserPending, 0, "Owner should not see pending rating after both rated")
 }
 
+func TestBookingService_GetUnifiedRatings(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	db := client.Database(dbName)
+
+	bookingService := NewBookingService(db)
+	userService := NewUserService(&Database{Database: db})
+
+	// Create test users
+	fromUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "renter@test.com",
+		Name:     "Renter",
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, fromUser)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert renter"))
+
+	toUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "owner@test.com",
+		Name:     "Owner",
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, toUser)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert owner"))
+
+	now := time.Now()
+
+	// Create a booking in RETURNED state (pending rating)
+	pendingRatingBooking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "1",
+		FromUserID:    fromUser.ID,
+		ToUserID:      toUser.ID,
+		StartDate:     now,
+		EndDate:       now.Add(24 * time.Hour),
+		Contact:       "test contact",
+		Comments:      "test comments",
+		BookingStatus: BookingStatusReturned,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	_, err = bookingService.collection.InsertOne(ctx, pendingRatingBooking)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert pending rating booking"))
+
+	// Create a booking in ACCEPTED state (not pending rating)
+	acceptedBooking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "1",
+		FromUserID:    fromUser.ID,
+		ToUserID:      toUser.ID,
+		StartDate:     now.Add(48 * time.Hour),
+		EndDate:       now.Add(72 * time.Hour),
+		Contact:       "test contact",
+		Comments:      "test comments",
+		BookingStatus: BookingStatusAccepted,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	_, err = bookingService.collection.InsertOne(ctx, acceptedBooking)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert accepted booking"))
+
+	// Create a rating for the accepted booking
+	rating := &Rating{
+		BookingID: acceptedBooking.ID,
+		RaterID:   fromUser.ID,
+		RateeID:   toUser.ID,
+		Score:     5,
+		Comment:   "Great tool!",
+		CreatedAt: now,
+	}
+	_, err = bookingService.ratingsCollection.InsertOne(ctx, rating)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert rating"))
+
+	// Test 1: Verify that GetPendingRatings returns the pending rating booking
+	pendingRatings, err := bookingService.GetPendingRatings(ctx, fromUser.ID)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
+	qt.Assert(t, len(pendingRatings), qt.Equals, 1, qt.Commentf("Expected 1 pending rating"))
+	qt.Assert(t, pendingRatings[0].ID, qt.Equals, pendingRatingBooking.ID, qt.Commentf("Expected pending rating booking ID to match"))
+
+	// Test 2: Verify that GetUnifiedRatings excludes the pending rating booking
+	unifiedRatings, err := bookingService.GetUnifiedRatings(ctx, fromUser.ID)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get unified ratings"))
+
+	// We should only see the accepted booking, not the pending rating booking
+	qt.Assert(t, len(unifiedRatings), qt.Equals, 1, qt.Commentf("Expected 1 unified rating (only the accepted booking)"))
+
+	// Verify that the unified rating is for the accepted booking
+	qt.Assert(t, unifiedRatings[0].BookingID, qt.Equals, acceptedBooking.ID, qt.Commentf("Expected unified rating booking ID to match accepted booking ID"))
+
+	// Verify that the pending rating booking is not included
+	for _, ur := range unifiedRatings {
+		qt.Assert(t, ur.BookingID, qt.Not(qt.Equals), pendingRatingBooking.ID, qt.Commentf("Pending rating booking should not be included in unified ratings"))
+	}
+}
+
 func TestBookingService_TokenCalculation(t *testing.T) {
 	ctx := context.Background()
 
