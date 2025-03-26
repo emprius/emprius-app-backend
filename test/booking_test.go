@@ -740,7 +740,7 @@ func TestBookings(t *testing.T) {
 		yesterday := time.Now().Add(-24 * time.Hour)
 		tomorrow := time.Now().Add(24 * time.Hour)
 
-		data, code := c.Request(http.MethodPost, renterJWT,
+		_, code := c.Request(http.MethodPost, renterJWT,
 			api.CreateBookingRequest{
 				ToolID:    fmt.Sprint(toolID),
 				StartDate: yesterday.Unix(),
@@ -754,7 +754,7 @@ func TestBookings(t *testing.T) {
 
 		// Test case 2: End date before start date (should fail)
 		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
-		data, code = c.Request(http.MethodPost, renterJWT,
+		_, code = c.Request(http.MethodPost, renterJWT,
 			api.CreateBookingRequest{
 				ToolID:    fmt.Sprint(toolID),
 				StartDate: dayAfterTomorrow.Unix(),
@@ -767,7 +767,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 400)
 
 		// Test case 3: Valid dates (should succeed)
-		data, code = c.Request(http.MethodPost, renterJWT,
+		data, code := c.Request(http.MethodPost, renterJWT,
 			api.CreateBookingRequest{
 				ToolID:    fmt.Sprint(toolID),
 				StartDate: tomorrow.Unix(),
