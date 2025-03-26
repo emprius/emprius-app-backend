@@ -2,12 +2,10 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -127,60 +125,7 @@ func (a *API) router() http.Handler {
 		// Bookings
 		// POST /bookings
 		log.Info().Msg("register route POST /bookings")
-		r.Post("/bookings", a.routerHandler(func(r *Request) (interface{}, error) {
-			if r.UserID == "" {
-				return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-			}
-
-			var req CreateBookingRequest
-			if err := json.Unmarshal(r.Data, &req); err != nil {
-				return nil, ErrInvalidRequestBodyData.WithErr(err)
-			}
-
-			// Get tool to verify it exists and get owner ID
-			toolID, err := strconv.ParseInt(req.ToolID, 10, 64)
-			if err != nil {
-				return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID format: %s", req.ToolID))
-			}
-
-			tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
-			if err != nil {
-				return nil, err
-			}
-			if tool == nil {
-				return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
-			}
-
-			// Get user IDs from database
-			fromUser, err := a.getUserByID(r.UserID)
-			if err != nil {
-				return nil, ErrUserNotFound.WithErr(err)
-			}
-
-			toUser, err := a.database.UserService.GetUserByID(r.Context.Request.Context(), tool.UserID)
-			if err != nil {
-				return nil, ErrUserNotFound.WithErr(fmt.Errorf("tool owner not found: %w", err))
-			}
-
-			// Convert tool ID to string
-			toolIDStr := fmt.Sprintf("%d", tool.ID)
-
-			// Create booking request
-			dbReq := &db.CreateBookingRequest{
-				ToolID:    toolIDStr,
-				StartDate: time.Unix(req.StartDate, 0),
-				EndDate:   time.Unix(req.EndDate, 0),
-				Contact:   req.Contact,
-				Comments:  req.Comments,
-			}
-
-			booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ObjectID(), toUser.ID)
-			if err != nil {
-				return nil, err
-			}
-
-			return convertBookingToResponse(&db.BookingWithRatings{Booking: *booking}), nil
-		}))
+		r.Post("/bookings", a.routerHandler(a.HandleCreateBooking))
 		// GET /bookings/requests
 		log.Info().Msg("register route GET /bookings/requests")
 		r.Get("/bookings/requests", a.routerHandler(a.HandleGetBookingRequests))

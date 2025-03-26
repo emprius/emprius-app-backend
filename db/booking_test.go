@@ -380,7 +380,8 @@ func TestBookingService_GetUnifiedRatings(t *testing.T) {
 	pendingRatings, err := bookingService.GetPendingRatings(ctx, fromUser.ID)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
 	qt.Assert(t, len(pendingRatings), qt.Equals, 1, qt.Commentf("Expected 1 pending rating"))
-	qt.Assert(t, pendingRatings[0].ID, qt.Equals, pendingRatingBooking.ID, qt.Commentf("Expected pending rating booking ID to match"))
+	qt.Assert(t, pendingRatings[0].ID, qt.Equals, pendingRatingBooking.ID,
+		qt.Commentf("Expected pending rating booking ID to match"))
 
 	// Test 2: Verify that GetUnifiedRatings excludes the pending rating booking
 	unifiedRatings, err := bookingService.GetUnifiedRatings(ctx, fromUser.ID)
@@ -390,11 +391,13 @@ func TestBookingService_GetUnifiedRatings(t *testing.T) {
 	qt.Assert(t, len(unifiedRatings), qt.Equals, 1, qt.Commentf("Expected 1 unified rating (only the accepted booking)"))
 
 	// Verify that the unified rating is for the accepted booking
-	qt.Assert(t, unifiedRatings[0].BookingID, qt.Equals, acceptedBooking.ID, qt.Commentf("Expected unified rating booking ID to match accepted booking ID"))
+	qt.Assert(t, unifiedRatings[0].BookingID, qt.Equals, acceptedBooking.ID,
+		qt.Commentf("Expected unified rating booking ID to match accepted booking ID"))
 
 	// Verify that the pending rating booking is not included
 	for _, ur := range unifiedRatings {
-		qt.Assert(t, ur.BookingID, qt.Not(qt.Equals), pendingRatingBooking.ID, qt.Commentf("Pending rating booking should not be included in unified ratings"))
+		qt.Assert(t, ur.BookingID, qt.Not(qt.Equals), pendingRatingBooking.ID,
+			qt.Commentf("Pending rating booking should not be included in unified ratings"))
 	}
 }
 
