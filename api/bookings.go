@@ -523,11 +523,24 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
+	// Validate dates
+	startDate := time.Unix(req.StartDate, 0)
+	endDate := time.Unix(req.EndDate, 0)
+	now := time.Now().Truncate(24 * time.Hour) // Truncate to start of day for comparison
+
+	if startDate.Before(now) {
+		return nil, ErrInvalidBookingDates.WithErr(fmt.Errorf("start date must not be before today"))
+	}
+
+	if endDate.Before(startDate) {
+		return nil, ErrInvalidBookingDates.WithErr(fmt.Errorf("end date must not be before start date"))
+	}
+
 	// Create booking request
 	dbReq := &db.CreateBookingRequest{
 		ToolID:    fmt.Sprintf("%d", toolID),
-		StartDate: time.Unix(req.StartDate, 0),
-		EndDate:   time.Unix(req.EndDate, 0),
+		StartDate: startDate,
+		EndDate:   endDate,
 		Contact:   req.Contact,
 		Comments:  req.Comments,
 	}
