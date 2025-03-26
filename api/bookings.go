@@ -506,7 +506,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 
 	toolID, err := strconv.ParseInt(req.ToolID, 10, 64)
 	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID format: %s", req.ToolID))
 	}
 
 	// Get tool to verify it exists and get owner ID
@@ -520,7 +520,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 
 	toUser, err := a.database.UserService.GetUserByID(r.Context.Request.Context(), tool.UserID)
 	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
+		return nil, ErrUserNotFound.WithErr(fmt.Errorf("tool owner not found: %w", err))
 	}
 
 	// Validate dates
