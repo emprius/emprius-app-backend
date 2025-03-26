@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/db"
@@ -454,12 +455,15 @@ func TestTools(t *testing.T) {
 		// Create another user to book and rate the tool
 		renterJWT := c.RegisterAndLogin("renter@test.com", "renter", "renterpass")
 
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
 		// Create a booking
 		resp, code = c.Request(http.MethodPost, renterJWT,
 			api.CreateBookingRequest{
 				ToolID:    fmt.Sprint(toolID),
-				StartDate: 1710633600, // 2024-03-17
-				EndDate:   1710720000, // 2024-03-18
+				StartDate: tomorrow.Unix(),         // 2024-03-17
+				EndDate:   dayAfterTomorrow.Unix(), // 2024-03-18
 				Contact:   "contact info",
 				Comments:  "booking comments",
 			},
