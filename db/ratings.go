@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"time"
 
@@ -108,6 +109,8 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 				{"toUserId": userID},
 			},
 		}}},
+		// Sort by createdAt in descending order (newest first)
+		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
 		// Stage 2: Add fields to determine the counterparty ID
 		{{Key: "$addFields", Value: bson.M{
 			"counterpartyId": bson.M{
@@ -293,7 +296,21 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 
 	// Create unified ratings
 	var unifiedRatings []*UnifiedRating
-	for bookingID, booking := range bookingMap {
+
+	// Sort bookings by createdAt in descending order (newest first)
+	var sortedBookings []*Booking
+	for _, booking := range bookingMap {
+		sortedBookings = append(sortedBookings, booking)
+	}
+
+	// Sort the bookings by createdAt in descending order
+	sort.Slice(sortedBookings, func(i, j int) bool {
+		return sortedBookings[i].CreatedAt.After(sortedBookings[j].CreatedAt)
+	})
+
+	// Process bookings in sorted order
+	for _, booking := range sortedBookings {
+		bookingID := booking.ID
 		unified := &UnifiedRating{
 			ID:        bookingID,
 			BookingID: bookingID,
@@ -451,11 +468,25 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 
 	// Create unified ratings
 	var unifiedRatings []*UnifiedRating
-	for bookingID, booking := range bookingMap {
+
+	// Sort bookings by createdAt in descending order (newest first)
+	var sortedBookings []*Booking
+	for _, booking := range bookingMap {
 		// Skip bookings that are in the pending ratings list for this user
-		if pendingBookingIDs[bookingID] {
+		if pendingBookingIDs[booking.ID] {
 			continue
 		}
+		sortedBookings = append(sortedBookings, booking)
+	}
+
+	// Sort the bookings by createdAt in descending order
+	sort.Slice(sortedBookings, func(i, j int) bool {
+		return sortedBookings[i].CreatedAt.After(sortedBookings[j].CreatedAt)
+	})
+
+	// Process bookings in sorted order
+	for _, booking := range sortedBookings {
+		bookingID := booking.ID
 
 		unified := &UnifiedRating{
 			ID:        bookingID,
