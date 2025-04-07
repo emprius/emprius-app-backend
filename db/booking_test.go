@@ -401,6 +401,186 @@ func TestBookingService_GetUnifiedRatings(t *testing.T) {
 	}
 }
 
+func TestNomadicTool(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB container endpoint"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to connect to MongoDB"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	db := client.Database(dbName)
+
+	// Create services
+	bookingService := NewBookingService(db)
+	userService := NewUserService(&Database{Database: db})
+	toolService := NewToolService(&Database{Database: db})
+
+	// Create test users: owner, first borrower, and second borrower
+	owner := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "owner@test.com",
+		Name:     "Owner",
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, owner)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert owner"))
+
+	firstBorrower := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "borrower1@test.com",
+		Name:     "First Borrower",
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, firstBorrower)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert first borrower"))
+
+	secondBorrower := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "borrower2@test.com",
+		Name:     "Second Borrower",
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, secondBorrower)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert second borrower"))
+
+	// Create a nomadic test tool
+	nomadicTool := &Tool{
+		ID:             1,
+		Title:          "Nomadic Tool",
+		Description:    "This is a nomadic tool",
+		IsAvailable:    true,
+		UserID:         owner.ID,
+		EstimatedValue: 10000,
+		Nomadic:        true,          // This is a nomadic tool
+		ReservedDates:  []DateRange{}, // Initialize empty reserved dates array
+		Location: DBLocation{
+			Type:        "Point",
+			Coordinates: []float64{2.1, 41.1}, // Initially at owner's location
+		},
+	}
+	_, err = toolService.InsertTool(ctx, nomadicTool)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert nomadic tool"))
+
+	now := time.Now()
+
+	// First booking: first borrower requests the tool from the owner
+	firstBooking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "1",
+		FromUserID:    firstBorrower.ID,
+		ToUserID:      owner.ID,
+		StartDate:     now,
+		EndDate:       now.Add(24 * time.Hour),
+		Contact:       "test contact",
+		Comments:      "test comments",
+		BookingStatus: BookingStatusPending,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	_, err = bookingService.collection.InsertOne(ctx, firstBooking)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert first booking"))
+
+	// Verify the booking has the correct user IDs
+	qt.Assert(t, firstBooking.FromUserID, qt.Equals, firstBorrower.ID, qt.Commentf("First booking FromUserID should be first borrower"))
+	qt.Assert(t, firstBooking.ToUserID, qt.Equals, owner.ID, qt.Commentf("First booking ToUserID should be owner"))
+
+	// Accept the booking
+	err = bookingService.UpdateStatus(ctx, firstBooking.ID, BookingStatusAccepted)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to accept first booking"))
+
+	// Simulate picking up the tool - update tool location and actualUserId
+	firstBorrowerLocation := DBLocation{
+		Type:        "Point",
+		Coordinates: []float64{2.2, 41.2}, // First borrower location
+	}
+	updates := map[string]interface{}{
+		"location":     firstBorrowerLocation,
+		"actualUserId": firstBorrower.ID,
+	}
+	err = toolService.UpdateToolFields(ctx, 1, updates)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to update tool location and actualUserId"))
+
+	// Update booking status to PICKED
+	err = bookingService.UpdateStatus(ctx, firstBooking.ID, BookingStatusPicked)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to update first booking status to PICKED"))
+
+	// Verify tool location and actualUserId have been updated
+	updatedTool, err := toolService.GetToolByID(ctx, 1)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get updated tool"))
+	qt.Assert(t, updatedTool.Location.Coordinates[0], qt.Equals, firstBorrowerLocation.Coordinates[0], qt.Commentf("Tool location should be updated to first borrower's location"))
+	qt.Assert(t, updatedTool.Location.Coordinates[1], qt.Equals, firstBorrowerLocation.Coordinates[1], qt.Commentf("Tool location should be updated to first borrower's location"))
+	qt.Assert(t, updatedTool.ActualUserID, qt.Equals, firstBorrower.ID, qt.Commentf("Tool actualUserId should be updated to first borrower"))
+
+	// Second booking: second borrower requests the tool from the first borrower
+	secondBooking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "1",
+		FromUserID:    secondBorrower.ID,
+		ToUserID:      firstBorrower.ID, // Important: ToUserID is the current holder (first borrower), not the owner
+		StartDate:     now.Add(48 * time.Hour),
+		EndDate:       now.Add(72 * time.Hour),
+		Contact:       "test contact 2",
+		Comments:      "test comments 2",
+		BookingStatus: BookingStatusPending,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	_, err = bookingService.collection.InsertOne(ctx, secondBooking)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert second booking"))
+
+	// Verify the second booking has the correct user IDs
+	qt.Assert(t, secondBooking.FromUserID, qt.Equals, secondBorrower.ID, qt.Commentf("Second booking FromUserID should be second borrower"))
+	qt.Assert(t, secondBooking.ToUserID, qt.Equals, firstBorrower.ID, qt.Commentf("Second booking ToUserID should be first borrower (current holder), not the owner"))
+
+	// Accept the second booking
+	err = bookingService.UpdateStatus(ctx, secondBooking.ID, BookingStatusAccepted)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to accept second booking"))
+
+	// Simulate picking up the tool by the second borrower
+	secondBorrowerLocation := DBLocation{
+		Type:        "Point",
+		Coordinates: []float64{2.3, 41.3}, // Second borrower location
+	}
+	updates = map[string]interface{}{
+		"location":     secondBorrowerLocation,
+		"actualUserId": secondBorrower.ID,
+	}
+	err = toolService.UpdateToolFields(ctx, 1, updates)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to update tool location and actualUserId for second borrower"))
+
+	// Update second booking status to PICKED
+	err = bookingService.UpdateStatus(ctx, secondBooking.ID, BookingStatusPicked)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to update second booking status to PICKED"))
+
+	// Verify tool location and actualUserId have been updated to second borrower
+	finalTool, err := toolService.GetToolByID(ctx, 1)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get final tool"))
+	qt.Assert(t, finalTool.Location.Coordinates[0], qt.Equals, secondBorrowerLocation.Coordinates[0], qt.Commentf("Tool location should be updated to second borrower's location"))
+	qt.Assert(t, finalTool.Location.Coordinates[1], qt.Equals, secondBorrowerLocation.Coordinates[1], qt.Commentf("Tool location should be updated to second borrower's location"))
+	qt.Assert(t, finalTool.ActualUserID, qt.Equals, secondBorrower.ID, qt.Commentf("Tool actualUserId should be updated to second borrower"))
+
+	// Verify the nomadic attribute is correctly set in the tool
+	qt.Assert(t, finalTool.Nomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
+}
+
 func TestBookingService_TokenCalculation(t *testing.T) {
 	ctx := context.Background()
 
