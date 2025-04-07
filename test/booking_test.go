@@ -746,6 +746,139 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, testBookingRating.Requester.RatingComment, qt.Not(qt.IsNil))
 			qt.Assert(t, *testBookingRating.Requester.RatingComment, qt.Equals, "Good experience with the tool")
 		})
+
+		// Test nomadic tool feature
+		t.Run("Nomadic Tool", func(t *testing.T) {
+			// Create a new user for this test
+			ownerJWT := c.RegisterAndLogin("nomadic-owner@test.com", "nomadic-owner", "ownerpass")
+			renterJWT, renterID := c.RegisterAndLoginWithID("nomadic-renter@test.com", "nomadic-renter", "renterpass")
+
+			// Create a nomadic tool
+			createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
+				"title":          "Nomadic Tool",
+				"description":    "This tool changes location when rented",
+				"toolCategory":   1,
+				"estimatedValue": 100,
+				"nomadic":        true,
+			}, "tools")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var toolIDResp struct {
+				Data struct {
+					ID int64 `json:"id"`
+				} `json:"data"`
+			}
+			err := json.Unmarshal(createToolResp, &toolIDResp)
+			qt.Assert(t, err, qt.IsNil)
+			nomadicToolID := toolIDResp.Data.ID
+
+			// Get the tool to verify it's nomadic
+			getToolResp, code := c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(nomadicToolID))
+			qt.Assert(t, code, qt.Equals, 200)
+			var toolDetails struct {
+				Data api.Tool `json:"data"`
+			}
+			err = json.Unmarshal(getToolResp, &toolDetails)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, toolDetails.Data.Nomadic, qt.IsTrue)
+
+			// Create a booking for the nomadic tool
+			resp, code = c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(nomadicToolID),
+					StartDate: time.Now().Add(24 * time.Hour).Unix(),
+					EndDate:   time.Now().Add(48 * time.Hour).Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Booking for nomadic tool test",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var bookingResp struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			bookingID := bookingResp.Data.ID
+
+			// Owner accepts the booking
+			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID, "accept")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to mark as picked without auth
+			_, code = c.Request(http.MethodPost, "", nil, "bookings", bookingID, "picked")
+			qt.Assert(t, code, qt.Equals, 401)
+
+			// Try to mark as picked by renter (should fail)
+			_, code = c.Request(http.MethodPost, renterJWT, nil, "bookings", bookingID, "picked")
+			qt.Assert(t, code, qt.Equals, 403)
+
+			// Mark as picked by owner
+			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingID, "picked")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Get the booking to verify it's marked as PICKED
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "PICKED")
+
+			// Get the tool to verify actualUserId is set to the renter
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(nomadicToolID))
+			qt.Assert(t, code, qt.Equals, 200)
+			var toolDetailsAfterPick struct {
+				Data api.Tool `json:"data"`
+			}
+			err = json.Unmarshal(resp, &toolDetailsAfterPick)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, toolDetailsAfterPick.Data.ActualUserID, qt.Equals, renterID)
+
+			// Create a non-nomadic tool for comparison
+			regularToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
+				"title":          "Regular Tool",
+				"description":    "This is a regular non-nomadic tool",
+				"toolCategory":   1,
+				"estimatedValue": 100,
+				"nomadic":        false,
+			}, "tools")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var regularToolIDResp struct {
+				Data struct {
+					ID int64 `json:"id"`
+				} `json:"data"`
+			}
+			err = json.Unmarshal(regularToolResp, &regularToolIDResp)
+			qt.Assert(t, err, qt.IsNil)
+			regularToolID := regularToolIDResp.Data.ID
+
+			// Create a booking for the regular tool
+			resp, code = c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(regularToolID),
+					StartDate: time.Now().Add(72 * time.Hour).Unix(),
+					EndDate:   time.Now().Add(96 * time.Hour).Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Booking for regular tool test",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			regularBookingID := bookingResp.Data.ID
+
+			// Owner accepts the booking
+			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", regularBookingID, "accept")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to mark regular tool as picked (should fail because it's not nomadic)
+			resp, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", regularBookingID, "picked")
+			qt.Assert(t, code, qt.Equals, 400) // Unprocessable Entity - tool is not nomadic
+		})
 	})
 
 	t.Run("IsRated Attribute", func(t *testing.T) {
