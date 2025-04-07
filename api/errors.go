@@ -266,4 +266,8 @@ var (
 		Code:    http.StatusUnprocessableEntity,
 		Message: "tool is not nomadic",
 	}
+	ErrToolNomadic = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "tool is nomadic",
+	}
 )

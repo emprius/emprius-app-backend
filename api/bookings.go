@@ -198,6 +198,24 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if booking.BookingStatus != db.BookingStatusAccepted {
 			return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking must be in ACCEPTED state to be returned"))
 		}
+
+		// Get the tool to check if it is not nomadic
+		toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+		if err != nil {
+			return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID: %s", booking.ToolID))
+		}
+
+		tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
+		if err != nil {
+			return nil, ErrInternalServerError.WithErr(err)
+		}
+		if tool == nil {
+			return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
+		}
+		// Check if the tool is nomadic
+		if tool.Nomadic {
+			return nil, ErrToolNomadic
+		}
 	default:
 		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("invalid status: %s", statusUpdate.Status))
 	}
