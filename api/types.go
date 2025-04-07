@@ -200,6 +200,7 @@ type UsersWrapper struct {
 type Tool struct {
 	ID               int64            `json:"id"`
 	UserID           string           `json:"userId"`
+	ActualUserID     string           `json:"actualUserId,omitempty"`
 	Title            string           `json:"title"`
 	Description      string           `json:"description"`
 	IsAvailable      *bool            `json:"isAvailable"`
@@ -216,12 +217,16 @@ type Tool struct {
 	MaxDistance      uint32           `json:"maxDistance"`
 	ReservedDates    []db.DateRange   `json:"reservedDates"`
 	Communities      []string         `json:"communities,omitempty"`
+	Nomadic          bool             `json:"nomadic"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
 func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.ID = dbt.ID
 	t.UserID = dbt.UserID.Hex()
+	if !dbt.ActualUserID.IsZero() {
+		t.ActualUserID = dbt.ActualUserID.Hex()
+	}
 	t.Title = dbt.Title
 	t.Description = dbt.Description
 	t.IsAvailable = &dbt.IsAvailable
@@ -241,6 +246,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.Weight = dbt.Weight
 	t.MaxDistance = dbt.MaxDistance
 	t.ReservedDates = dbt.ReservedDates
+	t.Nomadic = dbt.Nomadic
 
 	// Convert communities
 	if len(dbt.Communities) > 0 {

@@ -22,6 +22,7 @@ const (
 	BookingStatusRejected  BookingStatus = "REJECTED"
 	BookingStatusCancelled BookingStatus = "CANCELLED"
 	BookingStatusReturned  BookingStatus = "RETURNED"
+	BookingStatusPicked    BookingStatus = "PICKED"
 )
 
 // Booking represents a tool booking in the system.
