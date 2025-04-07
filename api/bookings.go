@@ -18,6 +18,7 @@ import (
 // The IsRated field is set based on whether the authenticated user has rated the booking.
 func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID ...string) *BookingResponse {
 	isRated := false
+	var nomadic bool
 
 	// Check if the booking is rated by the authenticated user
 	if len(authenticatedUserID) > 0 && authenticatedUserID[0] != "" &&
@@ -39,6 +40,15 @@ func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID 
 		}
 	}
 
+	// Tool lookup to get nomadic status
+	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+	if err == nil {
+		tool, err := a.database.ToolService.GetToolByID(ctx, toolID)
+		if err == nil && tool != nil {
+			nomadic = tool.Nomadic
+		}
+	}
+
 	return &BookingResponse{
 		ID:            booking.ID.Hex(),
 		ToolID:        booking.ToolID,
@@ -52,6 +62,7 @@ func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID 
 		CreatedAt:     booking.CreatedAt.Unix(),
 		UpdatedAt:     booking.UpdatedAt.Unix(),
 		IsRated:       &isRated, // This field indicates if the booking is rated by the authenticated user
+		Nomadic:       nomadic,
 	}
 }
 
