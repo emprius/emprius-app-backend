@@ -320,6 +320,25 @@ func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 		return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 	}
 
+	// Get the tool to check if it is not nomadic
+	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID: %s", booking.ToolID))
+	}
+
+	tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	if tool == nil {
+		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
+	}
+
+	// Check if the tool is nomadic
+	if tool.Nomadic {
+		return nil, ErrToolNomadic
+	}
+
 	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusReturned)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
