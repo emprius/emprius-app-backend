@@ -280,9 +280,10 @@ func TestTools(t *testing.T) {
 			found5km := false
 			foundUpdated := false
 			for _, tool := range searchResp.Data.Tools {
-				if tool.Title == "Tool at 5km" {
+				switch tool.Title {
+				case "Tool at 5km":
 					found5km = true
-				} else if tool.Title == "Updated Tool" {
+				case "Updated Tool":
 					foundUpdated = true
 				}
 			}
@@ -305,9 +306,10 @@ func TestTools(t *testing.T) {
 			found15km := false
 			foundAnother := false
 			for _, tool := range searchResp.Data.Tools {
-				if tool.Title == "Tool at 15km" {
+				switch tool.Title {
+				case "Tool at 15km":
 					found15km = true
-				} else if tool.Title == "Another Tool" {
+				case "Another Tool":
 					foundAnother = true
 				}
 			}
@@ -324,7 +326,8 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 5)
 			found25km := false
 			for _, tool := range searchResp.Data.Tools {
-				if tool.Title == "Tool at 25km" {
+				switch tool.Title {
+				case "Tool at 25km":
 					found25km = true
 				}
 			}
