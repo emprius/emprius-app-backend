@@ -144,7 +144,10 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 
 func toolID(ownerID string) int64 {
 	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("%s%d", ownerID, time.Now().UnixNano())))
+	_, err := fmt.Fprintf(hasher, "%s%d", ownerID, time.Now().UnixNano())
+	if err != nil {
+		log.Error().Err(err).Msg("Error writing to hasher")
+	}
 	hash := hasher.Sum(nil)
 	// Convert the first 4 bytes of the hash to an absolute int64
 	return int64(math.Abs(float64(int64(binary.BigEndian.Uint32(hash[:4])))))

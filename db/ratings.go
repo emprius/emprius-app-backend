@@ -543,7 +543,7 @@ func (s *BookingService) RateBooking(
 	}
 
 	// Verify that the user is involved in the booking
-	if !(booking.FromUserID == raterID || booking.ToUserID == raterID) {
+	if booking.FromUserID != raterID && booking.ToUserID != raterID {
 		return fmt.Errorf("user is not involved in this booking")
 	}
 

@@ -109,9 +109,10 @@ func TestBookings(t *testing.T) {
 		// Verify one booking is accepted and one is pending
 		var hasAccepted, hasPending bool
 		for _, booking := range requestsResp.Data {
-			if booking.BookingStatus == "ACCEPTED" {
+			switch booking.BookingStatus {
+			case "ACCEPTED":
 				hasAccepted = true
-			} else if booking.BookingStatus == "PENDING" {
+			case "PENDING":
 				hasPending = true
 			}
 		}
@@ -132,9 +133,10 @@ func TestBookings(t *testing.T) {
 		hasAccepted = false
 		hasPending = false
 		for _, booking := range petitionsResp.Data {
-			if booking.BookingStatus == "ACCEPTED" {
+			switch booking.BookingStatus {
+			case "ACCEPTED":
 				hasAccepted = true
-			} else if booking.BookingStatus == "PENDING" {
+			case "PENDING":
 				hasPending = true
 			}
 		}

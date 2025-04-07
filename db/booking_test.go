@@ -499,7 +499,8 @@ func TestNomadicTool(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert first booking"))
 
 	// Verify the booking has the correct user IDs
-	qt.Assert(t, firstBooking.FromUserID, qt.Equals, firstBorrower.ID, qt.Commentf("First booking FromUserID should be first borrower"))
+	qt.Assert(t, firstBooking.FromUserID, qt.Equals, firstBorrower.ID,
+		qt.Commentf("First booking FromUserID should be first borrower"))
 	qt.Assert(t, firstBooking.ToUserID, qt.Equals, owner.ID, qt.Commentf("First booking ToUserID should be owner"))
 
 	// Accept the booking
@@ -525,9 +526,12 @@ func TestNomadicTool(t *testing.T) {
 	// Verify tool location and actualUserId have been updated
 	updatedTool, err := toolService.GetToolByID(ctx, 1)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get updated tool"))
-	qt.Assert(t, updatedTool.Location.Coordinates[0], qt.Equals, firstBorrowerLocation.Coordinates[0], qt.Commentf("Tool location should be updated to first borrower's location"))
-	qt.Assert(t, updatedTool.Location.Coordinates[1], qt.Equals, firstBorrowerLocation.Coordinates[1], qt.Commentf("Tool location should be updated to first borrower's location"))
-	qt.Assert(t, updatedTool.ActualUserID, qt.Equals, firstBorrower.ID, qt.Commentf("Tool actualUserId should be updated to first borrower"))
+	qt.Assert(t, updatedTool.Location.Coordinates[0], qt.Equals, firstBorrowerLocation.Coordinates[0],
+		qt.Commentf("Tool location should be updated to first borrower's location"))
+	qt.Assert(t, updatedTool.Location.Coordinates[1], qt.Equals, firstBorrowerLocation.Coordinates[1],
+		qt.Commentf("Tool location should be updated to first borrower's location"))
+	qt.Assert(t, updatedTool.ActualUserID, qt.Equals, firstBorrower.ID,
+		qt.Commentf("Tool actualUserId should be updated to first borrower"))
 
 	// Second booking: second borrower requests the tool from the first borrower
 	secondBooking := &Booking{
@@ -547,8 +551,10 @@ func TestNomadicTool(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert second booking"))
 
 	// Verify the second booking has the correct user IDs
-	qt.Assert(t, secondBooking.FromUserID, qt.Equals, secondBorrower.ID, qt.Commentf("Second booking FromUserID should be second borrower"))
-	qt.Assert(t, secondBooking.ToUserID, qt.Equals, firstBorrower.ID, qt.Commentf("Second booking ToUserID should be first borrower (current holder), not the owner"))
+	qt.Assert(t, secondBooking.FromUserID, qt.Equals, secondBorrower.ID,
+		qt.Commentf("Second booking FromUserID should be second borrower"))
+	qt.Assert(t, secondBooking.ToUserID, qt.Equals, firstBorrower.ID,
+		qt.Commentf("Second booking ToUserID should be first borrower (current holder), not the owner"))
 
 	// Accept the second booking
 	err = bookingService.UpdateStatus(ctx, secondBooking.ID, BookingStatusAccepted)
@@ -573,9 +579,12 @@ func TestNomadicTool(t *testing.T) {
 	// Verify tool location and actualUserId have been updated to second borrower
 	finalTool, err := toolService.GetToolByID(ctx, 1)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get final tool"))
-	qt.Assert(t, finalTool.Location.Coordinates[0], qt.Equals, secondBorrowerLocation.Coordinates[0], qt.Commentf("Tool location should be updated to second borrower's location"))
-	qt.Assert(t, finalTool.Location.Coordinates[1], qt.Equals, secondBorrowerLocation.Coordinates[1], qt.Commentf("Tool location should be updated to second borrower's location"))
-	qt.Assert(t, finalTool.ActualUserID, qt.Equals, secondBorrower.ID, qt.Commentf("Tool actualUserId should be updated to second borrower"))
+	qt.Assert(t, finalTool.Location.Coordinates[0], qt.Equals, secondBorrowerLocation.Coordinates[0],
+		qt.Commentf("Tool location should be updated to second borrower's location"))
+	qt.Assert(t, finalTool.Location.Coordinates[1], qt.Equals, secondBorrowerLocation.Coordinates[1],
+		qt.Commentf("Tool location should be updated to second borrower's location"))
+	qt.Assert(t, finalTool.ActualUserID, qt.Equals, secondBorrower.ID,
+		qt.Commentf("Tool actualUserId should be updated to second borrower"))
 
 	// Verify the nomadic attribute is correctly set in the tool
 	qt.Assert(t, finalTool.Nomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
@@ -785,12 +794,14 @@ func TestBookingService_CountPendingActions(t *testing.T) {
 	// Test 1: Owner should see only the non-nomadic tool booking
 	ownerPending, err := bookingService.CountPendingActions(ctx, owner.ID)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to count pending actions for owner"))
-	qt.Assert(t, ownerPending.PendingRequestsCount, qt.Equals, int64(1), qt.Commentf("Owner should see 1 pending request (non-nomadic tool)"))
+	qt.Assert(t, ownerPending.PendingRequestsCount, qt.Equals, int64(1),
+		qt.Commentf("Owner should see 1 pending request (non-nomadic tool)"))
 
 	// Test 2: Actual user should see the nomadic tool booking
 	actualUserPending, err := bookingService.CountPendingActions(ctx, actualUser.ID)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to count pending actions for actual user"))
-	qt.Assert(t, actualUserPending.PendingRequestsCount, qt.Equals, int64(1), qt.Commentf("Actual user should see 1 pending request (nomadic tool)"))
+	qt.Assert(t, actualUserPending.PendingRequestsCount, qt.Equals, int64(1),
+		qt.Commentf("Actual user should see 1 pending request (nomadic tool)"))
 
 	// Test 3: Requester should see no pending requests
 	requesterPending, err := bookingService.CountPendingActions(ctx, requester.ID)
