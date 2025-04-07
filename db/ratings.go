@@ -812,9 +812,45 @@ func (s *BookingService) CountPendingActions(
 					bson.D{{Key: "$count", Value: "count"}},
 				}},
 				{Key: "pendingRequests", Value: bson.A{
+					// First, get all pending bookings
 					bson.D{{Key: "$match", Value: bson.M{
-						"toUserId":      userID,
 						"bookingStatus": BookingStatusPending,
+					}}},
+					// Lookup the tool for each booking to check if it's nomadic
+					bson.D{{Key: "$addFields", Value: bson.M{
+						"toolIdInt": bson.M{
+							"$toLong": "$toolId",
+						},
+					}}},
+					bson.D{{Key: "$lookup", Value: bson.M{
+						"from":         "tools",
+						"localField":   "toolIdInt",
+						"foreignField": "_id",
+						"as":           "tool",
+					}}},
+					bson.D{{Key: "$unwind", Value: bson.M{
+						"path":                       "$tool",
+						"preserveNullAndEmptyArrays": true,
+					}}},
+					// Match bookings where:
+					// 1. User is the tool owner (toUserId) AND the tool is not nomadic, OR
+					// 2. User is the tool owner (toUserId) AND the tool is nomadic but has no actualUserId, OR
+					// 3. User is the actual user of a nomadic tool
+					bson.D{{Key: "$match", Value: bson.M{
+						"$or": []bson.M{
+							{
+								"toUserId": userID,
+								"$or": []bson.M{
+									{"tool.nomadic": bson.M{"$ne": true}},
+									{"tool.actualUserId": bson.M{"$exists": false}},
+									{"tool.actualUserId": primitive.NilObjectID},
+								},
+							},
+							{
+								"tool.nomadic":      true,
+								"tool.actualUserId": userID,
+							},
+						},
 					}}},
 					bson.D{{Key: "$count", Value: "count"}},
 				}},
