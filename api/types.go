@@ -233,6 +233,7 @@ type BookingResponse struct {
 	BookingStatus string    `json:"bookingStatus"`
 	IsRated       bool      `json:"isRated"`
 	Ratings       []*Rating `json:"ratings"`
+	Nomadic       bool      `json:"nomadic"`
 
 	// Legacy fields for backward compatibility
 	Rating        *int   `json:"rating,omitempty"`

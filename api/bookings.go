@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -14,13 +15,13 @@ import (
 
 // convertBookingToResponse converts a db.Booking and an associated db.BookingRating
 // into a BookingResponse. If rating is nil, the booking is considered not yet rated.
-func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
+func (a *API) convertBookingToResponse(ctx context.Context, booking *db.BookingWithRatings) *BookingResponse {
 	var rVal *int
 	var rComment string
 	var rating *db.BookingRating
+	var nomadic bool
 
-	// Find the rating for the user, we only consider the rating that received FromUserID here.
-	// This is legacy code to be removed
+	// Legacy rating logic
 	if len(booking.Ratings) > 0 {
 		if booking.Ratings[0].ToUserID == booking.FromUserID {
 			rating = booking.Ratings[0]
@@ -31,6 +32,15 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 	if rating != nil {
 		rVal = &rating.Rating
 		rComment = rating.RatingComment
+	}
+
+	// Tool lookup to get nomadic status
+	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+	if err == nil {
+		tool, err := a.database.ToolService.GetToolByID(ctx, toolID)
+		if err == nil && tool != nil {
+			nomadic = tool.Nomadic
+		}
 	}
 
 	ratings := []*Rating{}
@@ -53,8 +63,7 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 		UpdatedAt:     booking.UpdatedAt.Unix(),
 		Ratings:       ratings,
 		IsRated:       len(booking.Ratings) > 0,
-
-		// Legacy fields for backward compatibility
+		Nomadic:       nomadic,
 		Rating:        rVal,
 		RatingComment: rComment,
 	}
@@ -79,7 +88,7 @@ func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
+		response[i] = a.convertBookingToResponse(r.Context.Request.Context(), booking)
 	}
 
 	return response, nil
@@ -104,7 +113,7 @@ func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
+		response[i] = a.convertBookingToResponse(r.Context.Request.Context(), booking)
 	}
 
 	return response, nil
@@ -137,7 +146,7 @@ func (a *API) HandleGetUserBookings(r *Request) (interface{}, error) {
 	// Convert to response format
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
+		response[i] = a.convertBookingToResponse(r.Context.Request.Context(), booking)
 	}
 
 	return response, nil
@@ -157,8 +166,7 @@ func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 	if booking == nil {
 		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
 	}
-
-	return convertBookingToResponse(booking), nil
+	return a.convertBookingToResponse(r.Context.Request.Context(), booking), nil
 }
 
 // HandleAcceptPetition handles POST /bookings/petitions/{petitionId}/accept
@@ -449,7 +457,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(&db.BookingWithRatings{Booking: *booking})
+		response[i] = a.convertBookingToResponse(r.Context.Request.Context(), &db.BookingWithRatings{Booking: *booking})
 	}
 
 	return response, nil
@@ -651,7 +659,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return convertBookingToResponse(&db.BookingWithRatings{Booking: *booking, Ratings: nil}), nil
+	return a.convertBookingToResponse(r.Context.Request.Context(), &db.BookingWithRatings{Booking: *booking, Ratings: nil}), nil
 }
 
 // HandleRateBooking handles POST /bookings/{bookingId}/rate
