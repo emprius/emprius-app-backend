@@ -864,7 +864,7 @@ func TestBookings(t *testing.T) {
 
 			// Try to mark regular tool as picked (should fail because it's not nomadic)
 			resp, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", regularBookingID, "picked")
-			qt.Assert(t, code, qt.Equals, 400) // Unprocessable Entity - tool is not nomadic
+			qt.Assert(t, code, qt.Equals, 422) // Unprocessable Entity - tool is not nomadic
 		})
 	})
 
