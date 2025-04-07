@@ -269,7 +269,7 @@ func (a *API) HandlePickedBooking(r *Request) (interface{}, error) {
 
 	// Check if the tool is nomadic
 	if !tool.Nomadic {
-		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("tool with id %d is not nomadic", toolID))
+		return nil, ErrToolNotNomadic
 	}
 
 	// Get the renter user to update the tool location
