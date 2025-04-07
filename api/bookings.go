@@ -360,7 +360,7 @@ func (a *API) HandlePickedBooking(r *Request) (interface{}, error) {
 
 	// Verify booking is in ACCEPTED state
 	if booking.BookingStatus != db.BookingStatusAccepted {
-		return nil, ErrCanOnlyPickAccepted.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
+		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking status is %s, must be ACCEPTED", booking.BookingStatus))
 	}
 
 	// Get the tool to check if it's nomadic
@@ -379,7 +379,7 @@ func (a *API) HandlePickedBooking(r *Request) (interface{}, error) {
 
 	// Check if the tool is nomadic
 	if !tool.Nomadic {
-		return nil, ErrToolNotNomadic.WithErr(fmt.Errorf("tool with id %d is not nomadic", toolID))
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("tool with id %d is not nomadic", toolID))
 	}
 
 	// Get the renter user to update the tool location
