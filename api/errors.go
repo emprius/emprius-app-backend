@@ -182,6 +182,10 @@ var (
 		Code:    http.StatusBadRequest,
 		Message: "can only cancel pending requests",
 	}
+	ErrCanOnlyPickAccepted = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "can only pick accepted bookings",
+	}
 )
 
 // Server errors
@@ -229,5 +233,9 @@ var (
 	ErrInvalidTransportOption = &HTTPError{
 		Code:    http.StatusUnprocessableEntity,
 		Message: "invalid transport option",
+	}
+	ErrToolNotNomadic = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "tool is not nomadic",
 	}
 )

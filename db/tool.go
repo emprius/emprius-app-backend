@@ -63,6 +63,7 @@ type Tool struct {
 	AskWithFee       bool               `bson:"askWithFee" json:"askWithFee"`
 	Cost             uint64             `bson:"cost" json:"cost"`
 	UserID           primitive.ObjectID `bson:"userId" json:"userId"`
+	ActualUserID     primitive.ObjectID `bson:"actualUserId,omitempty" json:"actualUserId,omitempty"`
 	Images           []Image            `bson:"images" json:"images"`
 	TransportOptions []Transport        `bson:"transportOptions" json:"transportOptions"`
 	ToolCategory     int                `bson:"toolCategory" json:"toolCategory"`
@@ -72,6 +73,7 @@ type Tool struct {
 	Height           uint32             `bson:"height" json:"height"`
 	Weight           uint32             `bson:"weight" json:"weight"`
 	ReservedDates    []DateRange        `bson:"reservedDates" json:"reservedDates"`
+	Nomadic          bool               `bson:"nomadic" json:"nomadic"`
 }
 
 // SanitizeString ensures the search term is safe for use in regex.
