@@ -653,3 +653,147 @@ func TestBookingService_TokenCalculation(t *testing.T) {
 		})
 	}
 }
+
+func TestBookingService_CountPendingActions(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	db := client.Database(dbName)
+
+	// Create services
+	bookingService := NewBookingService(db)
+	userService := NewUserService(&Database{Database: db})
+	toolService := NewToolService(&Database{Database: db})
+
+	// Create test users: owner, actual user, and requester
+	owner := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "owner@test.com",
+		Name:     "Owner",
+		Active:   true,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, owner)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert owner"))
+
+	actualUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "actual@test.com",
+		Name:     "Actual User",
+		Active:   true,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, actualUser)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert actual user"))
+
+	requester := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "requester@test.com",
+		Name:     "Requester",
+		Active:   true,
+		Verified: true,
+	}
+	_, err = userService.InsertUser(ctx, requester)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert requester"))
+
+	// Create a nomadic tool
+	nomadicTool := &Tool{
+		ID:             1,
+		Title:          "Nomadic Tool",
+		Description:    "This is a nomadic tool",
+		IsAvailable:    true,
+		UserID:         owner.ID,
+		ActualUserID:   actualUser.ID, // The actual user has the tool
+		EstimatedValue: 10000,
+		Nomadic:        true,
+		Location: DBLocation{
+			Type:        "Point",
+			Coordinates: []float64{2.1, 41.1},
+		},
+	}
+	_, err = toolService.InsertTool(ctx, nomadicTool)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert nomadic tool"))
+
+	// Create a non-nomadic tool
+	nonNomadicTool := &Tool{
+		ID:             2,
+		Title:          "Regular Tool",
+		Description:    "This is a regular tool",
+		IsAvailable:    true,
+		UserID:         owner.ID,
+		EstimatedValue: 5000,
+		Nomadic:        false,
+		Location: DBLocation{
+			Type:        "Point",
+			Coordinates: []float64{2.2, 41.2},
+		},
+	}
+	_, err = toolService.InsertTool(ctx, nonNomadicTool)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert non-nomadic tool"))
+
+	now := time.Now()
+
+	// Create a pending booking for the nomadic tool
+	nomadicBooking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "1", // Nomadic tool
+		FromUserID:    requester.ID,
+		ToUserID:      owner.ID, // Note: ToUserID is the owner, but the actual user should receive the request
+		StartDate:     now,
+		EndDate:       now.Add(24 * time.Hour),
+		Contact:       "test contact",
+		Comments:      "test comments",
+		BookingStatus: BookingStatusPending,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	_, err = bookingService.collection.InsertOne(ctx, nomadicBooking)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert nomadic booking"))
+
+	// Create a pending booking for the non-nomadic tool
+	nonNomadicBooking := &Booking{
+		ID:            primitive.NewObjectID(),
+		ToolID:        "2", // Non-nomadic tool
+		FromUserID:    requester.ID,
+		ToUserID:      owner.ID,
+		StartDate:     now,
+		EndDate:       now.Add(24 * time.Hour),
+		Contact:       "test contact",
+		Comments:      "test comments",
+		BookingStatus: BookingStatusPending,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	_, err = bookingService.collection.InsertOne(ctx, nonNomadicBooking)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert non-nomadic booking"))
+
+	// Test 1: Owner should see only the non-nomadic tool booking
+	ownerPending, err := bookingService.CountPendingActions(ctx, owner.ID)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to count pending actions for owner"))
+	qt.Assert(t, ownerPending.PendingRequestsCount, qt.Equals, int64(1), qt.Commentf("Owner should see 1 pending request (non-nomadic tool)"))
+
+	// Test 2: Actual user should see the nomadic tool booking
+	actualUserPending, err := bookingService.CountPendingActions(ctx, actualUser.ID)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to count pending actions for actual user"))
+	qt.Assert(t, actualUserPending.PendingRequestsCount, qt.Equals, int64(1), qt.Commentf("Actual user should see 1 pending request (nomadic tool)"))
+
+	// Test 3: Requester should see no pending requests
+	requesterPending, err := bookingService.CountPendingActions(ctx, requester.ID)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to count pending actions for requester"))
+	qt.Assert(t, requesterPending.PendingRequestsCount, qt.Equals, int64(0), qt.Commentf("Requester should see 0 pending requests"))
+}
