@@ -19,7 +19,6 @@ func (a *API) convertBookingToResponse(ctx context.Context, booking *db.BookingW
 	var rVal *int
 	var rComment string
 	var rating *db.BookingRating
-	var nomadic bool
 
 	// Legacy rating logic
 	if len(booking.Ratings) > 0 {
@@ -32,15 +31,6 @@ func (a *API) convertBookingToResponse(ctx context.Context, booking *db.BookingW
 	if rating != nil {
 		rVal = &rating.Rating
 		rComment = rating.RatingComment
-	}
-
-	// Tool lookup to get nomadic status
-	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
-	if err == nil {
-		tool, err := a.database.ToolService.GetToolByID(ctx, toolID)
-		if err == nil && tool != nil {
-			nomadic = tool.Nomadic
-		}
 	}
 
 	ratings := []*Rating{}
@@ -63,7 +53,7 @@ func (a *API) convertBookingToResponse(ctx context.Context, booking *db.BookingW
 		UpdatedAt:     booking.UpdatedAt.Unix(),
 		Ratings:       ratings,
 		IsRated:       len(booking.Ratings) > 0,
-		Nomadic:       nomadic,
+		Nomadic:       booking.Nomadic,
 		Rating:        rVal,
 		RatingComment: rComment,
 	}
@@ -731,6 +721,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		EndDate:   endDate,
 		Contact:   req.Contact,
 		Comments:  req.Comments,
+		Nomadic:   tool.Nomadic,
 	}
 	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ObjectID(), toUser.ID)
 	if err != nil {
