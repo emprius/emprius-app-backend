@@ -344,7 +344,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 
 	// If accepting booking or returning, we need the tool information
 	var tool *Tool
-	if status == BookingStatusAccepted || status == BookingStatusReturned {
+	if status == BookingStatusAccepted || status == BookingStatusReturned || status == BookingStatusPicked {
 		toolService := NewToolService(&Database{Database: s.database})
 
 		// Convert tool ID from string to int64
@@ -386,8 +386,8 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 			}
 		}
 
-		// If returning, add tokens to lending user
-		if status == BookingStatusReturned {
+		// If returning or picking, add tokens to lending user
+		if status == BookingStatusReturned || status == BookingStatusPicked {
 			userService := s.database.Collection("users")
 			tokenCost := s.calculateTokenCost(booking, tool)
 
@@ -417,6 +417,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		return ErrBookingNotFound
 	}
 
+	// todo(kon): should be handle BookingStatusPicked dates somehow?
 	// Handle tool's reserved dates based on status
 	if status == BookingStatusAccepted || status == BookingStatusReturned {
 		toolService := s.database.Collection("tools")
