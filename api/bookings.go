@@ -617,6 +617,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		EndDate:   endDate,
 		Contact:   req.Contact,
 		Comments:  req.Comments,
+		Nomadic:   tool.Nomadic,
 	}
 	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ObjectID(), toUser.ID)
 	if err != nil {
