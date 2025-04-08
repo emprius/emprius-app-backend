@@ -104,9 +104,9 @@ func newRatingCollection(db *mongo.Database) *mongo.Collection {
 func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
 	// Use an aggregation pipeline to efficiently find bookings that need to be rated
 	pipeline := mongo.Pipeline{
-		// Stage 1: Match returned bookings where the user is involved
+		// Stage 1: Match returned or picked bookings where the user is involved
 		{{Key: "$match", Value: bson.M{
-			"bookingStatus": BookingStatusReturned,
+			"bookingStatus": bson.M{"$in": []BookingStatus{BookingStatusReturned, BookingStatusPicked}},
 			"$or": []bson.M{
 				{"fromUserId": userID},
 				{"toUserId": userID},
