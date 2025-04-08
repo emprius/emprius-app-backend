@@ -538,8 +538,8 @@ func (s *BookingService) RateBooking(
 	}
 
 	// Verify booking is in RETURNED state
-	if booking.BookingStatus != BookingStatusReturned {
-		return fmt.Errorf("booking must be in RETURNED state to be rated")
+	if booking.BookingStatus != BookingStatusReturned && booking.BookingStatus != BookingStatusPicked {
+		return fmt.Errorf("booking must be in RETURNED or PICKED state to be rated")
 	}
 
 	// Verify that the user is involved in the booking
@@ -782,7 +782,7 @@ func (s *BookingService) CountPendingActions(
 			Key: "$facet", Value: bson.D{
 				{Key: "pendingRatings", Value: bson.A{
 					bson.D{{Key: "$match", Value: bson.M{
-						"bookingStatus": BookingStatusReturned,
+						"bookingStatus": bson.M{"$in": []BookingStatus{BookingStatusReturned, BookingStatusPicked}},
 						"$or": []bson.M{
 							{"fromUserId": userID},
 							{"toUserId": userID},

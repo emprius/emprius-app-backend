@@ -683,7 +683,7 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		switch {
 		case err == db.ErrBookingNotFound:
 			return nil, ErrBookingNotFound.WithErr(err)
-		case err.Error() == "booking must be in RETURNED state to be rated":
+		case err.Error() == "booking must be in RETURNED or PICKED state to be rated":
 			return nil, ErrInvalidBookingStatus.WithErr(err)
 		case err.Error() == "user has already rated this booking":
 			return nil, ErrAlreadyRated.WithErr(err)
