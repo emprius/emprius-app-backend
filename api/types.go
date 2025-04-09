@@ -153,7 +153,7 @@ type Tool struct {
 	Height           uint32           `json:"height"`
 	Weight           uint32           `json:"weight"`
 	ReservedDates    []db.DateRange   `json:"reservedDates"`
-	Nomadic          bool             `json:"nomadic"`
+	IsNomadic        bool             `json:"isNomadic"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
@@ -181,7 +181,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
 	t.ReservedDates = dbt.ReservedDates
-	t.Nomadic = dbt.Nomadic
+	t.IsNomadic = dbt.IsNomadic
 	return t
 }
 
@@ -233,7 +233,7 @@ type BookingResponse struct {
 	BookingStatus string    `json:"bookingStatus"`
 	IsRated       bool      `json:"isRated"`
 	Ratings       []*Rating `json:"ratings"`
-	Nomadic       bool      `json:"nomadic"`
+	IsNomadic     bool      `json:"isNomadic"`
 
 	// Legacy fields for backward compatibility
 	Rating        *int   `json:"rating,omitempty"`

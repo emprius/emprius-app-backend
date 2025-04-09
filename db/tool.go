@@ -73,7 +73,7 @@ type Tool struct {
 	Height           uint32             `bson:"height" json:"height"`
 	Weight           uint32             `bson:"weight" json:"weight"`
 	ReservedDates    []DateRange        `bson:"reservedDates" json:"reservedDates"`
-	Nomadic          bool               `bson:"nomadic" json:"nomadic"`
+	IsNomadic        bool               `bson:"isNomadic" json:"isNomadic"`
 }
 
 // SanitizeString ensures the search term is safe for use in regex.

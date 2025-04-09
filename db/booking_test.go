@@ -534,13 +534,13 @@ func TestBookingService_CountPendingActions(t *testing.T) {
 	// Create a nomadic tool
 	nomadicTool := &Tool{
 		ID:             1,
-		Title:          "Nomadic Tool",
+		Title:          "IsNomadic Tool",
 		Description:    "This is a nomadic tool",
 		IsAvailable:    true,
 		UserID:         owner.ID,
 		ActualUserID:   actualUser.ID, // The actual user has the tool
 		EstimatedValue: 10000,
-		Nomadic:        true,
+		IsNomadic:      true,
 		Location: DBLocation{
 			Type:        "Point",
 			Coordinates: []float64{2.1, 41.1},
@@ -557,7 +557,7 @@ func TestBookingService_CountPendingActions(t *testing.T) {
 		IsAvailable:    true,
 		UserID:         owner.ID,
 		EstimatedValue: 5000,
-		Nomadic:        false,
+		IsNomadic:      false,
 		Location: DBLocation{
 			Type:        "Point",
 			Coordinates: []float64{2.2, 41.2},
@@ -571,7 +571,7 @@ func TestBookingService_CountPendingActions(t *testing.T) {
 	// Create a pending booking for the nomadic tool
 	nomadicBooking := &Booking{
 		ID:            primitive.NewObjectID(),
-		ToolID:        "1", // Nomadic tool
+		ToolID:        "1", // IsNomadic tool
 		FromUserID:    requester.ID,
 		ToUserID:      actualUser.ID, // Note: ToUserID is the owner, but the actual user should receive the request
 		StartDate:     now,
@@ -683,12 +683,12 @@ func TestNomadicTool(t *testing.T) {
 	// Create a nomadic test tool
 	nomadicTool := &Tool{
 		ID:             1,
-		Title:          "Nomadic Tool",
+		Title:          "IsNomadic Tool",
 		Description:    "This is a nomadic tool",
 		IsAvailable:    true,
 		UserID:         owner.ID,
 		EstimatedValue: 10000,
-		Nomadic:        true,          // This is a nomadic tool
+		IsNomadic:      true,          // This is a nomadic tool
 		ReservedDates:  []DateRange{}, // Initialize empty reserved dates array
 		Location: DBLocation{
 			Type:        "Point",
@@ -806,5 +806,5 @@ func TestNomadicTool(t *testing.T) {
 		qt.Commentf("Tool actualUserId should be updated to second borrower"))
 
 	// Verify the nomadic attribute is correctly set in the tool
-	qt.Assert(t, finalTool.Nomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
+	qt.Assert(t, finalTool.IsNomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
 }

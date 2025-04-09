@@ -110,7 +110,7 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DateRange'
-        nomadic:
+        isNomadic:
           type: boolean
           description: Whether the tool can be passed from one user to another without returning to the owner
         actualUserId:
@@ -304,7 +304,7 @@ components:
           items:
             $ref: '#/components/schemas/BookingRating'
           description: Array of ratings associated with this booking
-        nomadic:
+        isNomadic:
           type: boolean
           description: Whether this booking is for a nomadic tool
         # Legacy fields marked as deprecated
