@@ -216,8 +216,8 @@ type Tool struct {
 	Weight           uint32           `json:"weight"`
 	MaxDistance      uint32           `json:"maxDistance"`
 	ReservedDates    []db.DateRange   `json:"reservedDates"`
+	IsNomadic        bool             `json:"isNomadic"`
 	Communities      []string         `json:"communities,omitempty"`
-	Nomadic          bool             `json:"nomadic"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
@@ -246,7 +246,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.Weight = dbt.Weight
 	t.MaxDistance = dbt.MaxDistance
 	t.ReservedDates = dbt.ReservedDates
-	t.Nomadic = dbt.Nomadic
+	t.IsNomadic = dbt.IsNomadic
 
 	// Convert communities
 	if len(dbt.Communities) > 0 {
@@ -307,7 +307,7 @@ type BookingResponse struct {
 	Comments      string `json:"comments"`
 	BookingStatus string `json:"bookingStatus"`
 	IsRated       *bool  `json:"isRated"`
-	Nomadic       bool      `json:"nomadic"`
+	IsNomadic     bool   `json:"isNomadic"`
 
 	// Legacy fields for backward compatibility
 	CreatedAt int64 `json:"createdAt"`

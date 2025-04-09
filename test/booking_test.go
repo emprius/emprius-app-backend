@@ -750,18 +750,18 @@ func TestBookings(t *testing.T) {
 		})
 
 		// Test nomadic tool feature
-		t.Run("Nomadic Tool", func(t *testing.T) {
+		t.Run("IsNomadic Tool", func(t *testing.T) {
 			// Create a new user for this test
 			ownerJWT := c.RegisterAndLogin("nomadic-owner@test.com", "nomadic-owner", "ownerpass")
 			renterJWT, renterID := c.RegisterAndLoginWithID("nomadic-renter@test.com", "nomadic-renter", "renterpass")
 
 			// Create a nomadic tool
 			createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
-				"title":          "Nomadic Tool",
+				"title":          "IsNomadic Tool",
 				"description":    "This tool changes location when rented",
 				"toolCategory":   1,
 				"estimatedValue": 100,
-				"nomadic":        true,
+				"isNomadic":      true,
 			}, "tools")
 			qt.Assert(t, code, qt.Equals, 200)
 
@@ -782,7 +782,7 @@ func TestBookings(t *testing.T) {
 			}
 			err = json.Unmarshal(getToolResp, &toolDetails)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, toolDetails.Data.Nomadic, qt.IsTrue)
+			qt.Assert(t, toolDetails.Data.IsNomadic, qt.IsTrue)
 
 			// Create a booking for the nomadic tool
 			resp, code = c.Request(http.MethodPost, renterJWT,
@@ -843,7 +843,7 @@ func TestBookings(t *testing.T) {
 				"description":    "This is a regular non-nomadic tool",
 				"toolCategory":   1,
 				"estimatedValue": 100,
-				"nomadic":        false,
+				"isNomadic":      false,
 			}, "tools")
 			qt.Assert(t, code, qt.Equals, 200)
 

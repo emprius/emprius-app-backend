@@ -130,7 +130,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		Location:         t.Location.ToDBLocation(),
 		TransportOptions: transportOptions,
 		ReservedDates:    []db.DateRange{}, // Initialize empty array
-		Nomadic:          t.Nomadic,
+		IsNomadic:        t.IsNomadic,
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
@@ -214,7 +214,7 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 		tool.AskWithFee = *newTool.AskWithFee
 	}
 	// Update nomadic status
-	tool.Nomadic = newTool.Nomadic
+	tool.IsNomadic = newTool.IsNomadic
 	if newTool.EstimatedValue != nil {
 		tool.EstimatedValue = *newTool.EstimatedValue
 		tool.Cost = *newTool.EstimatedValue / types.FactorCostToPrice
@@ -320,7 +320,7 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 		"images":           tool.Images,
 		"location":         tool.Location,
 		"transportOptions": tool.TransportOptions,
-		"nomadic":          tool.Nomadic,
+		"isNomadic":        tool.IsNomadic,
 	}
 	err = a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 	if err != nil {

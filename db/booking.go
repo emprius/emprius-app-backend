@@ -36,7 +36,7 @@ type Booking struct {
 	Contact       string             `bson:"contact" json:"contact"`
 	Comments      string             `bson:"comments" json:"comments"`
 	BookingStatus BookingStatus      `bson:"bookingStatus" json:"bookingStatus"`
-	Nomadic       bool               `bson:"nomadic" json:"nomadic"`
+	IsNomadic     bool               `bson:"isNomadic" json:"isNomadic"`
 	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
@@ -95,7 +95,7 @@ type CreateBookingRequest struct {
 	EndDate   time.Time `bson:"endDate" json:"endDate"`
 	Contact   string    `bson:"contact" json:"contact"`
 	Comments  string    `bson:"comments" json:"comments"`
-	Nomadic   bool      `bson:"nomadic" json:"nomadic"`
+	IsNomadic bool      `bson:"isNomadic" json:"isNomadic"`
 }
 
 // CountPendingActionsResponse represents the response for CountPendingActions
@@ -122,7 +122,7 @@ func (s *BookingService) Create(
 		Contact:       req.Contact,
 		Comments:      req.Comments,
 		BookingStatus: BookingStatusPending,
-		Nomadic:       req.Nomadic,
+		IsNomadic:     req.IsNomadic,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}

@@ -74,7 +74,7 @@ type Tool struct {
 	Weight           uint32             `bson:"weight" json:"weight"`
 	MaxDistance      uint32             `bson:"maxDistance" json:"maxDistance"`
 	ReservedDates    []DateRange        `bson:"reservedDates" json:"reservedDates"`
-	Nomadic          bool               `bson:"nomadic" json:"nomadic"`
+	IsNomadic        bool               `bson:"isNomadic" json:"isNomadic"`
 	Communities      []primitive.ObjectID `bson:"communities,omitempty" json:"communities,omitempty"`
 }
 
