@@ -22,6 +22,7 @@ const (
 	BookingStatusRejected  BookingStatus = "REJECTED"
 	BookingStatusCancelled BookingStatus = "CANCELLED"
 	BookingStatusReturned  BookingStatus = "RETURNED"
+	BookingStatusPicked    BookingStatus = "PICKED"
 )
 
 // Booking represents a tool booking in the system.
@@ -35,6 +36,7 @@ type Booking struct {
 	Contact       string             `bson:"contact" json:"contact"`
 	Comments      string             `bson:"comments" json:"comments"`
 	BookingStatus BookingStatus      `bson:"bookingStatus" json:"bookingStatus"`
+	IsNomadic     bool               `bson:"isNomadic" json:"isNomadic"`
 	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
@@ -99,6 +101,7 @@ type CreateBookingRequest struct {
 	EndDate   time.Time `bson:"endDate" json:"endDate"`
 	Contact   string    `bson:"contact" json:"contact"`
 	Comments  string    `bson:"comments" json:"comments"`
+	IsNomadic bool      `bson:"isNomadic" json:"isNomadic"`
 }
 
 // CountPendingActionsResponse represents the response for CountPendingActions
@@ -125,6 +128,7 @@ func (s *BookingService) Create(
 		Contact:       req.Contact,
 		Comments:      req.Comments,
 		BookingStatus: BookingStatusPending,
+		IsNomadic:     req.IsNomadic,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -346,7 +350,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 
 	// If accepting booking or returning, we need the tool information
 	var tool *Tool
-	if status == BookingStatusAccepted || status == BookingStatusReturned {
+	if status == BookingStatusAccepted || status == BookingStatusReturned || status == BookingStatusPicked {
 		toolService := NewToolService(&Database{Database: s.database})
 
 		// Convert tool ID from string to int64
@@ -388,8 +392,8 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 			}
 		}
 
-		// If returning, add tokens to lending user
-		if status == BookingStatusReturned {
+		// If returning or picking, add tokens to lending user
+		if status == BookingStatusReturned || status == BookingStatusPicked {
 			userService := s.database.Collection("users")
 			tokenCost := s.calculateTokenCost(&booking.Booking, tool)
 
@@ -419,6 +423,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		return ErrBookingNotFound
 	}
 
+	// todo(kon): should be handle BookingStatusPicked dates somehow?
 	// Handle tool's reserved dates based on status
 	if status == BookingStatusAccepted || status == BookingStatusReturned {
 		toolService := s.database.Collection("tools")

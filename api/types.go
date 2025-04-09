@@ -138,6 +138,7 @@ type UsersWrapper struct {
 type Tool struct {
 	ID               int64            `json:"id"`
 	UserID           string           `json:"userId"`
+	ActualUserID     string           `json:"actualUserId,omitempty"`
 	Title            string           `json:"title"`
 	Description      string           `json:"description"`
 	IsAvailable      *bool            `json:"isAvailable"`
@@ -152,12 +153,16 @@ type Tool struct {
 	Height           uint32           `json:"height"`
 	Weight           uint32           `json:"weight"`
 	ReservedDates    []db.DateRange   `json:"reservedDates"`
+	IsNomadic        bool             `json:"isNomadic"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
 func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.ID = dbt.ID
 	t.UserID = dbt.UserID.Hex()
+	if !dbt.ActualUserID.IsZero() {
+		t.ActualUserID = dbt.ActualUserID.Hex()
+	}
 	t.Title = dbt.Title
 	t.Description = dbt.Description
 	t.IsAvailable = &dbt.IsAvailable
@@ -176,6 +181,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
 	t.ReservedDates = dbt.ReservedDates
+	t.IsNomadic = dbt.IsNomadic
 	return t
 }
 
@@ -227,6 +233,7 @@ type BookingResponse struct {
 	BookingStatus string    `json:"bookingStatus"`
 	IsRated       bool      `json:"isRated"`
 	Ratings       []*Rating `json:"ratings"`
+	IsNomadic     bool      `json:"isNomadic"`
 
 	// Legacy fields for backward compatibility
 	Rating        *int   `json:"rating,omitempty"`

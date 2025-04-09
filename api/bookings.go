@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -14,13 +15,12 @@ import (
 
 // convertBookingToResponse converts a db.Booking and an associated db.BookingRating
 // into a BookingResponse. If rating is nil, the booking is considered not yet rated.
-func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
+func (a *API) convertBookingToResponse(ctx context.Context, booking *db.BookingWithRatings) *BookingResponse {
 	var rVal *int
 	var rComment string
 	var rating *db.BookingRating
 
-	// Find the rating for the user, we only consider the rating that received FromUserID here.
-	// This is legacy code to be removed
+	// Legacy rating logic
 	if len(booking.Ratings) > 0 {
 		if booking.Ratings[0].ToUserID == booking.FromUserID {
 			rating = booking.Ratings[0]
@@ -53,8 +53,7 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 		UpdatedAt:     booking.UpdatedAt.Unix(),
 		Ratings:       ratings,
 		IsRated:       len(booking.Ratings) > 0,
-
-		// Legacy fields for backward compatibility
+		IsNomadic:     booking.IsNomadic,
 		Rating:        rVal,
 		RatingComment: rComment,
 	}
@@ -79,7 +78,7 @@ func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
+		response[i] = a.convertBookingToResponse(r.Context.Request.Context(), booking)
 	}
 
 	return response, nil
@@ -104,7 +103,7 @@ func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
+		response[i] = a.convertBookingToResponse(r.Context.Request.Context(), booking)
 	}
 
 	return response, nil
@@ -137,7 +136,7 @@ func (a *API) HandleGetUserBookings(r *Request) (interface{}, error) {
 	// Convert to response format
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
+		response[i] = a.convertBookingToResponse(r.Context.Request.Context(), booking)
 	}
 
 	return response, nil
@@ -157,8 +156,7 @@ func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 	if booking == nil {
 		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
 	}
-
-	return convertBookingToResponse(booking), nil
+	return a.convertBookingToResponse(r.Context.Request.Context(), booking), nil
 }
 
 // HandleAcceptPetition handles POST /bookings/petitions/{petitionId}/accept
@@ -186,8 +184,36 @@ func (a *API) HandleAcceptPetition(r *Request) (interface{}, error) {
 		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", petitionID.Hex()))
 	}
 
-	// Verify user is the tool owner
-	if booking.ToUserID != user.ObjectID() {
+	// Get the tool to check if it's nomadic and who is the actual user
+	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID: %s", booking.ToolID))
+	}
+
+	tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	if tool == nil {
+		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
+	}
+
+	// Check if the user is authorized to accept the petition
+	// For nomadic tools with an actual user set, the actual user should accept
+	// For non-nomadic tools or nomadic tools without an actual user, the owner should accept
+	isAuthorized := false
+	if tool.IsNomadic && !tool.ActualUserID.IsZero() {
+		// For nomadic tools with an actual user, the actual user should accept
+		isAuthorized = tool.ActualUserID == user.ObjectID()
+	} else {
+		// For non-nomadic tools or nomadic tools without an actual user, the owner should accept
+		isAuthorized = booking.ToUserID == user.ObjectID()
+	}
+
+	if !isAuthorized {
+		if tool.IsNomadic && !tool.ActualUserID.IsZero() {
+			return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the actual user of this nomadic tool", user.ID))
+		}
 		return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 	}
 
@@ -229,8 +255,36 @@ func (a *API) HandleDenyPetition(r *Request) (interface{}, error) {
 		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", petitionID.Hex()))
 	}
 
-	// Verify user is the tool owner
-	if booking.ToUserID != user.ObjectID() {
+	// Get the tool to check if it's nomadic and who is the actual user
+	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID: %s", booking.ToolID))
+	}
+
+	tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	if tool == nil {
+		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
+	}
+
+	// Check if the user is authorized to deny the petition
+	// For nomadic tools with an actual user set, the actual user should deny
+	// For non-nomadic tools or nomadic tools without an actual user, the owner should deny
+	isAuthorized := false
+	if tool.IsNomadic && !tool.ActualUserID.IsZero() {
+		// For nomadic tools with an actual user, the actual user should deny
+		isAuthorized = tool.ActualUserID == user.ObjectID()
+	} else {
+		// For non-nomadic tools or nomadic tools without an actual user, the owner should deny
+		isAuthorized = booking.ToUserID == user.ObjectID()
+	}
+
+	if !isAuthorized {
+		if tool.IsNomadic && !tool.ActualUserID.IsZero() {
+			return nil, ErrOnlyOwnerCanDeny.WithErr(fmt.Errorf("user %s is not the actual user of this nomadic tool", user.ID))
+		}
 		return nil, ErrOnlyOwnerCanDeny.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 	}
 
@@ -320,7 +374,120 @@ func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 		return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 	}
 
+	// Get the tool to check if it is not nomadic
+	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID: %s", booking.ToolID))
+	}
+
+	tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	if tool == nil {
+		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
+	}
+
+	// Check if the tool is nomadic
+	if tool.IsNomadic {
+		return nil, ErrToolNomadic
+	}
+
 	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusReturned)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	return nil, nil
+}
+
+// HandlePickedBooking handles POST /bookings/{bookingId}/picked
+func (a *API) HandlePickedBooking(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get user from database
+	user, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	if booking == nil {
+		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
+	}
+
+	// Get the tool to check if it's nomadic and who is the actual user
+	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID: %s", booking.ToolID))
+	}
+
+	tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	if tool == nil {
+		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
+	}
+
+	// Check if the tool is nomadic
+	if !tool.IsNomadic {
+		return nil, ErrToolNotNomadic
+	}
+
+	// Check if the user is authorized to mark the booking as picked
+	// For nomadic tools with an actual user set, the actual user should mark as picked
+	// For nomadic tools without an actual user, the owner should mark as picked
+	isAuthorized := false
+	if !tool.ActualUserID.IsZero() {
+		// For nomadic tools with an actual user, the actual user should mark as picked
+		isAuthorized = tool.ActualUserID == user.ObjectID()
+	} else {
+		// For nomadic tools without an actual user, the owner should mark as picked
+		isAuthorized = booking.ToUserID == user.ObjectID()
+	}
+
+	if !isAuthorized {
+		if !tool.ActualUserID.IsZero() {
+			return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the actual user of this nomadic tool", user.ID))
+		}
+		return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
+	}
+
+	// Verify booking is in ACCEPTED state
+	if booking.BookingStatus != db.BookingStatusAccepted {
+		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking status is %s, must be ACCEPTED", booking.BookingStatus))
+	}
+
+	// Get the renter user to update the tool location
+	renter, err := a.getUserByID(booking.FromUserID.Hex())
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	// Update the tool's location and actualUserId
+	updates := map[string]interface{}{
+		"location":     renter.Location.ToDBLocation(),
+		"actualUserId": booking.FromUserID,
+	}
+
+	err = a.database.ToolService.UpdateToolFields(r.Context.Request.Context(), toolID, updates)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Update booking status to PICKED
+	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusPicked)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -350,7 +517,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(&db.BookingWithRatings{Booking: *booking})
+		response[i] = a.convertBookingToResponse(r.Context.Request.Context(), &db.BookingWithRatings{Booking: *booking})
 	}
 
 	return response, nil
@@ -518,9 +685,20 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
 	}
 
-	toUser, err := a.database.UserService.GetUserByID(r.Context.Request.Context(), tool.UserID)
+	// Determine the recipient of the booking
+	var toUserID primitive.ObjectID
+	if tool.IsNomadic && !tool.ActualUserID.IsZero() {
+		// For nomadic tools with an actual user, send the booking to the actual user
+		toUserID = tool.ActualUserID
+	} else {
+		// For non-nomadic tools or nomadic tools without an actual user, send the booking to the owner
+		toUserID = tool.UserID
+	}
+
+	// Get the recipient user
+	toUser, err := a.database.UserService.GetUserByID(r.Context.Request.Context(), toUserID)
 	if err != nil {
-		return nil, ErrUserNotFound.WithErr(fmt.Errorf("tool owner not found: %w", err))
+		return nil, ErrUserNotFound.WithErr(fmt.Errorf("recipient user not found: %w", err))
 	}
 
 	// Validate dates
@@ -543,6 +721,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		EndDate:   endDate,
 		Contact:   req.Contact,
 		Comments:  req.Comments,
+		IsNomadic: tool.IsNomadic,
 	}
 	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ObjectID(), toUser.ID)
 	if err != nil {
@@ -552,7 +731,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return convertBookingToResponse(&db.BookingWithRatings{Booking: *booking, Ratings: nil}), nil
+	return a.convertBookingToResponse(r.Context.Request.Context(), &db.BookingWithRatings{Booking: *booking, Ratings: nil}), nil
 }
 
 // HandleRateBooking handles POST /bookings/{bookingId}/rate
@@ -594,7 +773,7 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		switch {
 		case err == db.ErrBookingNotFound:
 			return nil, ErrBookingNotFound.WithErr(err)
-		case err.Error() == "booking must be in RETURNED state to be rated":
+		case err.Error() == "booking must be in RETURNED or PICKED state to be rated":
 			return nil, ErrInvalidBookingStatus.WithErr(err)
 		case err.Error() == "user has already rated this booking":
 			return nil, ErrAlreadyRated.WithErr(err)

@@ -141,6 +141,9 @@ func (a *API) router() http.Handler {
 		// POST /bookings/{bookingId}/return
 		log.Info().Msg("register route POST /bookings/{bookingId}/return")
 		r.Post("/bookings/{bookingId}/return", a.routerHandler(a.HandleReturnBooking))
+		// POST /bookings/{bookingId}/picked
+		log.Info().Msg("register route POST /bookings/{bookingId}/picked")
+		r.Post("/bookings/{bookingId}/picked", a.routerHandler(a.HandlePickedBooking))
 		// GET /bookings/rates
 		log.Info().Msg("register route GET /bookings/rates")
 		r.Get("/bookings/rates", a.routerHandler(a.HandleGetPendingRatings))

@@ -110,6 +110,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DateRange'
+        isNomadic:
+          type: boolean
+          description: Whether the tool can be passed from one user to another without returning to the owner
+        actualUserId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the current user holding the nomadic tool
 
     UserProfile:
       type: object
@@ -287,7 +294,7 @@ components:
           description: Additional comments about the booking
         bookingStatus:
           type: string
-          enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, RETURNED]
+          enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, RETURNED, PICKED]
           description: Current status of the booking
         isRated:
           type: boolean
@@ -297,6 +304,9 @@ components:
           items:
             $ref: '#/components/schemas/BookingRating'
           description: Array of ratings associated with this booking
+        isNomadic:
+          type: boolean
+          description: Whether this booking is for a nomadic tool
         # Legacy fields marked as deprecated
         rating:
           type: integer
@@ -1022,6 +1032,7 @@ paths:
       tags:
         - Bookings
       summary: Return a booking
+      description: Mark a non-nomadic tool as returned to its owner
       security:
         - bearerAuth: [ ]
       parameters:
@@ -1035,6 +1046,36 @@ paths:
       responses:
         '200':
           description: Booking returned successfully
+        '422':
+          description: Tool is nomadic and cannot be returned
+
+  /bookings/{bookingId}/picked:
+    post:
+      tags:
+        - Bookings
+      summary: Mark a nomadic tool as picked up
+      description: Mark a nomadic tool as picked up by the requester. Updates the tool's location and actual user.
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the booking
+      responses:
+        '200':
+          description: Tool marked as picked up successfully
+        '400':
+          description: Booking must be in ACCEPTED state
+        '403':
+          description: Only the tool owner or actual user can mark as picked
+        '404':
+          description: Booking not found
+        '422':
+          description: Tool is not nomadic
 
   /bookings/user/{id}:
     get:

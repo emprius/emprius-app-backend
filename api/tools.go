@@ -128,6 +128,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		Location:         t.Location.ToDBLocation(),
 		TransportOptions: transportOptions,
 		ReservedDates:    []db.DateRange{}, // Initialize empty array
+		IsNomadic:        t.IsNomadic,
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
@@ -141,7 +142,10 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 
 func toolID(ownerID string) int64 {
 	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("%s%d", ownerID, time.Now().UnixNano())))
+	_, err := fmt.Fprintf(hasher, "%s%d", ownerID, time.Now().UnixNano())
+	if err != nil {
+		log.Error().Err(err).Msg("Error writing to hasher")
+	}
 	hash := hasher.Sum(nil)
 	// Convert the first 4 bytes of the hash to an absolute int64
 	return int64(math.Abs(float64(int64(binary.BigEndian.Uint32(hash[:4])))))
@@ -207,6 +211,8 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 	if newTool.AskWithFee != nil {
 		tool.AskWithFee = *newTool.AskWithFee
 	}
+	// Update nomadic status
+	tool.IsNomadic = newTool.IsNomadic
 	if newTool.EstimatedValue != nil {
 		tool.EstimatedValue = *newTool.EstimatedValue
 		tool.Cost = *newTool.EstimatedValue / types.FactorCostToPrice
@@ -308,6 +314,7 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 		"images":           tool.Images,
 		"location":         tool.Location,
 		"transportOptions": tool.TransportOptions,
+		"isNomadic":        tool.IsNomadic,
 	}
 	err = a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 	if err != nil {
