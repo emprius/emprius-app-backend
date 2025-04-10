@@ -493,6 +493,25 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInvalidBookingDates.WithErr(fmt.Errorf("end date must not be before start date"))
 	}
 
+	// Check if the tool has a maximum distance restriction
+	if tool.MaxDistance > 0 {
+		// Convert API Location to DB Location
+		userDBLocation := fromUser.Location.ToDBLocation()
+
+		// Check if the distance between the user and the tool is within the maximum distance
+		withinDistance := db.WithinCircumference(
+			userDBLocation,
+			tool.Location,
+			int(tool.MaxDistance*1000), // Convert km to meters
+		)
+
+		if !withinDistance {
+			return nil, ErrToolLocationTooFar.WithErr(
+				fmt.Errorf("tool is too far away (max distance: %d km)", tool.MaxDistance),
+			)
+		}
+	}
+
 	// Create booking request
 	dbReq := &db.CreateBookingRequest{
 		ToolID:    fmt.Sprintf("%d", toolID),

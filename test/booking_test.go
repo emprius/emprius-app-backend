@@ -900,6 +900,92 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in incoming requests"))
 	})
 
+	t.Run("MaxDistance Validation", func(t *testing.T) {
+		// Create a new tool owner with a specific location
+		ownerWithLocationJWT := c.RegisterAndLogin("owner_location@test.com", "owner_location", "ownerpass")
+
+		// Create a tool
+		toolWithMaxDistanceID := c.CreateTool(ownerWithLocationJWT, "Distance Limited Tool")
+
+		// Update the tool to set MaxDistance
+		c.Request(http.MethodPut, ownerWithLocationJWT,
+			map[string]interface{}{
+				"maxDistance": 50, // 50 km max distance
+			},
+			"tools", fmt.Sprint(toolWithMaxDistanceID),
+		)
+
+		// Create a renter with a location within the max distance (Toledo - about 70 km from Madrid)
+		nearRenterJWT := c.RegisterAndLogin("near_renter@test.com", "near_renter", "renterpass")
+		c.Request(http.MethodPost, nearRenterJWT,
+			api.UserProfile{
+				Location: &api.Location{
+					Latitude:  41385064, // Barcelona latitude in microdegrees
+					Longitude: 2173404,  // Barcelona longitude in microdegrees
+				},
+			},
+			"profile",
+		)
+
+		// Create a renter with a location beyond the max distance (Barcelona - about 600 km from Madrid)
+		farRenterJWT := c.RegisterAndLogin("far_renter@test.com", "far_renter", "renterpass")
+		c.Request(http.MethodPost, farRenterJWT,
+			api.UserProfile{
+				Location: &api.Location{
+					Latitude:  39868164, // Toledo latitude in microdegrees
+					Longitude: -4027348, // Toledo longitude in microdegrees
+				},
+			},
+			"profile",
+		)
+
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+		// Test case 1: Renter too far away (should fail)
+		data, code := c.Request(http.MethodPost, farRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolWithMaxDistanceID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking from too far away",
+			},
+			"bookings",
+		)
+
+		qt.Assert(t, code, qt.Equals, 422) // Unprocessable Entity
+
+		// Verify error message
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err := json.Unmarshal(data, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "tool location is too far away")
+
+		// Test case 2: Renter within max distance (should succeed)
+		data, code = c.Request(http.MethodPost, nearRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolWithMaxDistanceID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking within max distance",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var response struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(data, &response)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, response.Data.ToolID, qt.Equals, fmt.Sprint(toolWithMaxDistanceID))
+	})
+
 	t.Run("Date Validation", func(t *testing.T) {
 		// Test case 1: Start date before today (should fail)
 		yesterday := time.Now().Add(-24 * time.Hour)
