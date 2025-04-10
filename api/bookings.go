@@ -110,39 +110,6 @@ func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 	return response, nil
 }
 
-// HandleGetUserBookings handles GET /bookings/user/{id}
-func (a *API) HandleGetUserBookings(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get user ID from URL
-	userID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "id"))
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
-	}
-
-	// Get page number
-	page, err := r.Context.GetPage()
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
-	}
-
-	// Get bookings
-	bookings, err := a.database.BookingService.GetUserBookings(r.Context.Request.Context(), userID, page)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-
-	// Convert to response format
-	response := make([]*BookingResponse, len(bookings))
-	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
-	}
-
-	return response, nil
-}
-
 // HandleGetBooking handles GET /bookings/{bookingId}
 func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
