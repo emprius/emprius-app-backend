@@ -106,6 +106,9 @@ components:
         weight:
           type: integer
           format: uint32
+        maxDistance:
+          type: integer
+          format: uint32
         reservedDates:
           type: array
           items:
