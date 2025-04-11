@@ -44,11 +44,18 @@ func TestRatingOrder(t *testing.T) {
 	bookingIDs = append(bookingIDs, createResp.Data.ID)
 
 	// Owner accepts the booking
-	_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingIDs[0], "accept")
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "ACCEPTED",
+		},
+		"bookings", bookingIDs[0])
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Mark as returned
-	_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingIDs[0], "return")
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "RETURNED",
+		}, "bookings", bookingIDs[0])
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Submit rating
@@ -57,7 +64,7 @@ func TestRatingOrder(t *testing.T) {
 			Rating:  5,
 			Comment: "First rating",
 		},
-		"bookings", bookingIDs[0], "rate",
+		"bookings", bookingIDs[0], "ratings",
 	)
 	qt.Assert(t, code, qt.Equals, 200)
 
@@ -79,11 +86,17 @@ func TestRatingOrder(t *testing.T) {
 	bookingIDs = append(bookingIDs, createResp.Data.ID)
 
 	// Owner accepts the booking
-	_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingIDs[1], "accept")
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "ACCEPTED",
+		}, "bookings", bookingIDs[1])
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Mark as returned
-	_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingIDs[1], "return")
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "RETURNED",
+		}, "bookings", bookingIDs[1])
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Submit rating
@@ -92,7 +105,7 @@ func TestRatingOrder(t *testing.T) {
 			Rating:  4,
 			Comment: "Second rating",
 		},
-		"bookings", bookingIDs[1], "rate",
+		"bookings", bookingIDs[1], "ratings",
 	)
 	qt.Assert(t, code, qt.Equals, 200)
 
@@ -114,11 +127,17 @@ func TestRatingOrder(t *testing.T) {
 	bookingIDs = append(bookingIDs, createResp.Data.ID)
 
 	// Owner accepts the booking
-	_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingIDs[2], "accept")
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "ACCEPTED",
+		}, "bookings", bookingIDs[2])
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Mark as returned
-	_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingIDs[2], "return")
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "RETURNED",
+		}, "bookings", bookingIDs[2])
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Submit rating
@@ -127,13 +146,13 @@ func TestRatingOrder(t *testing.T) {
 			Rating:  3,
 			Comment: "Third rating",
 		},
-		"bookings", bookingIDs[2], "rate",
+		"bookings", bookingIDs[2], "ratings",
 	)
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Test 1: GET /tools/{id}/rates - should return ratings ordered by newest first
 	t.Run("Tool Ratings Order", func(t *testing.T) {
-		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID), "rates")
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID), "ratings")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var ratesResp struct {
@@ -159,7 +178,7 @@ func TestRatingOrder(t *testing.T) {
 
 	// Test 2: GET /users/{id}/rates - should return ratings ordered by newest first
 	t.Run("User Ratings Order", func(t *testing.T) {
-		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "users", renterID, "rates")
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "users", renterID, "ratings")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var ratesResp struct {
@@ -192,13 +211,13 @@ func TestRatingOrder(t *testing.T) {
 					Rating:  5 - i, // 5, 4, 3
 					Comment: fmt.Sprintf("Owner rating %d", i+1),
 				},
-				"bookings", bookingID, "rate",
+				"bookings", bookingID, "ratings",
 			)
 			qt.Assert(t, code, qt.Equals, 200)
 		}
 
 		// Check the third booking (newest)
-		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingIDs[2], "rate")
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingIDs[2], "ratings")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var ratingResp struct {
@@ -244,11 +263,17 @@ func TestRatingOrder(t *testing.T) {
 		pendingBookingIDs = append(pendingBookingIDs, createResp.Data.ID)
 
 		// Owner accepts the booking
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", pendingBookingIDs[0], "accept")
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", pendingBookingIDs[0])
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Mark as returned
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", pendingBookingIDs[0], "return")
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "RETURNED",
+			}, "bookings", pendingBookingIDs[0])
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Wait a bit to ensure different timestamps
@@ -269,15 +294,21 @@ func TestRatingOrder(t *testing.T) {
 		pendingBookingIDs = append(pendingBookingIDs, createResp.Data.ID)
 
 		// Owner accepts the booking
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", pendingBookingIDs[1], "accept")
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", pendingBookingIDs[1])
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Mark as returned
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", pendingBookingIDs[1], "return")
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "RETURNED",
+			}, "bookings", pendingBookingIDs[1])
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Get pending ratings
-		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "rates")
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "ratings", "pending")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var pendingResp struct {

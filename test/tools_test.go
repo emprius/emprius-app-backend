@@ -481,11 +481,17 @@ func TestTools(t *testing.T) {
 		bookingID := bookingResp.Data.ID
 
 		// Owner accepts the booking
-		_, code = c.Request(http.MethodPost, userJWT, nil, "bookings", "petitions", bookingID, "accept")
+		_, code = c.Request(http.MethodPut, userJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Owner marks the tool as returned
-		_, code = c.Request(http.MethodPost, userJWT, nil, "bookings", bookingID, "return")
+		_, code = c.Request(http.MethodPut, userJWT,
+			&api.BookingStatusUpdate{
+				Status: "RETURNED",
+			}, "bookings", bookingID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Renter rates the booking
@@ -494,7 +500,7 @@ func TestTools(t *testing.T) {
 				Rating:  5,
 				Comment: "Great tool!",
 			},
-			"bookings", bookingID, "rate",
+			"bookings", bookingID, "ratings",
 		)
 		qt.Assert(t, code, qt.Equals, 200)
 
@@ -504,12 +510,12 @@ func TestTools(t *testing.T) {
 				Rating:  4,
 				Comment: "Good renter",
 			},
-			"bookings", bookingID, "rate",
+			"bookings", bookingID, "ratings",
 		)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Get tool ratings
-		resp, code = c.Request(http.MethodGet, userJWT, nil, "tools", fmt.Sprint(toolID), "rates")
+		resp, code = c.Request(http.MethodGet, userJWT, nil, "tools", fmt.Sprint(toolID), "ratings")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var ratesResp struct {

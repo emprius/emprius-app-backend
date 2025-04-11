@@ -235,6 +235,11 @@ type BookingResponse struct {
 	UpdatedAt     int64  `json:"updatedAt"`
 }
 
+// BookingStatusUpdate represents a request to update a booking's status
+type BookingStatusUpdate struct {
+	Status string `json:"status"`
+}
+
 // Rating represents a rating for a booking
 type Rating struct {
 	ID         string   `json:"id"`
