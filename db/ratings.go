@@ -268,7 +268,6 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 	// Get all ratings for these bookings that have a score
 	ratingFilter := bson.M{
 		"bookingId": bson.M{"$in": bookingIDs},
-		"score":     bson.M{"$gt": 0}, // Only get ratings with a score
 	}
 
 	// Use options to sort by createdAt in descending order (newest first)
@@ -369,7 +368,6 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID primitive.ObjectID) ([]*BookingRating, error) {
 	filter := bson.M{
 		"bookingId": bookingID,
-		"score":     bson.M{"$gt": 0}, // Only get ratings with a score
 	}
 
 	// Use options to sort by createdAt in descending order (newest first)
@@ -447,7 +445,6 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 	// Get all ratings for these bookings that have a score
 	ratingFilter := bson.M{
 		"bookingId": bson.M{"$in": bookingIDs},
-		"score":     bson.M{"$gt": 0}, // Only get ratings with a score
 	}
 
 	// Use options to sort by createdAt in descending order (newest first)
@@ -480,10 +477,6 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 	// Sort bookings by createdAt in descending order (newest first)
 	var sortedBookings []*Booking
 	for _, booking := range bookingMap {
-		// Skip bookings that are in the pending ratings list for this user
-		if pendingBookingIDs[booking.ID] {
-			continue
-		}
 		sortedBookings = append(sortedBookings, booking)
 	}
 
