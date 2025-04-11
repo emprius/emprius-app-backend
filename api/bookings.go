@@ -110,61 +110,6 @@ func (a *API) HandleGetIncomingRequests(r *Request) (interface{}, error) {
 	return response, nil
 }
 
-//// HandleGetBookingRequests handles GET /bookings/requests (deprecated)
-//func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
-//	// This is now a deprecated endpoint, redirecting to the new handler
-//	return a.HandleGetIncomingRequests(r)
-//}
-//
-//// HandleGetBookingPetitions handles GET /bookings/petitions (deprecated)
-//func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
-//	// This is now a deprecated endpoint, redirecting to the new handler
-//	return a.HandleGetOutgoingRequests(r)
-//}
-//
-//// HandleReturnBooking handles POST /bookings/{bookingId}/return (deprecated)
-//func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
-//	if r.UserID == "" {
-//		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-//	}
-//
-//	// Get user from database
-//	user, err := a.getUserByID(r.UserID)
-//	if err != nil {
-//		return nil, ErrUserNotFound.WithErr(err)
-//	}
-//
-//	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
-//	if err != nil {
-//		return nil, ErrInvalidRequestBodyData.WithErr(err)
-//	}
-//
-//	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
-//	if err != nil {
-//		return nil, ErrInternalServerError.WithErr(err)
-//	}
-//	if booking == nil {
-//		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
-//	}
-//
-//	// Verify user is the tool owner
-//	if booking.ToUserID != user.ObjectID() {
-//		return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
-//	}
-//
-//	// Verify booking is in ACCEPTED state
-//	if booking.BookingStatus != db.BookingStatusAccepted {
-//		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking must be in ACCEPTED state to be returned"))
-//	}
-//
-//	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusReturned)
-//	if err != nil {
-//		return nil, ErrInternalServerError.WithErr(err)
-//	}
-//
-//	return nil, nil
-//}
-
 // HandleGetBooking handles GET /bookings/{bookingId}
 func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
@@ -432,54 +377,6 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 	}
 
 	return response, nil
-}
-
-// HandleGetSubmittedRatings handles GET /bookings/rates/submitted
-// Deprecated: Use HandleGetUserRatings instead
-func (a *API) HandleGetSubmittedRatings(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get user from database
-	user, err := a.getUserByID(r.UserID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	ratings, err := a.database.BookingService.GetSubmittedRatings(r.Context.Request.Context(), user.ObjectID())
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if ratings == nil {
-		// do not return nil, return empty array instead
-		ratings = make([]*db.BookingRating, 0)
-	}
-	return ratings, nil
-}
-
-// HandleGetReceivedRatings handles GET /bookings/rates/received
-// Deprecated: Use HandleGetUserRatings instead
-func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get user from database
-	user, err := a.getUserByID(r.UserID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	ratings, err := a.database.BookingService.GetReceivedRatings(r.Context.Request.Context(), user.ObjectID())
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if ratings == nil {
-		// do not return nil, return empty array instead
-		ratings = make([]*db.BookingRating, 0)
-	}
-	return ratings, nil
 }
 
 // HandleGetUserRatings handles GET /users/{id}/ratings
