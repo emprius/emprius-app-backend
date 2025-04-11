@@ -171,8 +171,8 @@ func TestBookings(t *testing.T) {
 
 		// Test rating functionality
 		t.Run("Rating Tests", func(t *testing.T) {
-			//First test: Basic rating functionality
-			//Try to rate without auth
+			// First test: Basic rating functionality
+			// Try to rate without auth
 			_, code = c.Request(http.MethodPost, "",
 				api.RateRequest{
 					Rating:  5,
@@ -516,8 +516,7 @@ func TestBookings(t *testing.T) {
 				Data []api.BookingResponse `json:"data"`
 			}
 			err = json.Unmarshal(resp, &petitionsResp)
-			//err = json.Unmarshal(resp, &countResp)
-			//qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, err, qt.IsNil)
 			qt.Assert(t, countResp.Data.PendingRequestsCount, qt.Equals, int64(0))
 			qt.Assert(t, countResp.Data.PendingRatingsCount, qt.Equals, int64(1))
 		})
