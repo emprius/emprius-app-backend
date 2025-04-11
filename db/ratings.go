@@ -265,7 +265,7 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 		bookingIDs = append(bookingIDs, booking.ID)
 	}
 
-	// Get all ratings for these bookings that have a score
+	// Get all ratings for these bookings
 	ratingFilter := bson.M{
 		"bookingId": bson.M{"$in": bookingIDs},
 	}
@@ -442,7 +442,7 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 		bookingIDs = append(bookingIDs, booking.ID)
 	}
 
-	// Get all ratings for these bookings that have a score
+	// Get all ratings for these bookings
 	ratingFilter := bson.M{
 		"bookingId": bson.M{"$in": bookingIDs},
 	}
