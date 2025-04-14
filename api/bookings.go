@@ -60,33 +60,8 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 	}
 }
 
-// HandleGetBookingRequests handles GET /bookings/requests
-func (a *API) HandleGetBookingRequests(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get user from database
-	user, err := a.getUserByID(r.UserID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), user.ObjectID())
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-
-	response := make([]*BookingResponse, len(bookings))
-	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
-	}
-
-	return response, nil
-}
-
-// HandleGetBookingPetitions handles GET /bookings/petitions
-func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
+// HandleGetOutgoingRequests handles GET /bookings/requests/outgoing
+func (a *API) HandleGetOutgoingRequests(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
@@ -110,31 +85,23 @@ func (a *API) HandleGetBookingPetitions(r *Request) (interface{}, error) {
 	return response, nil
 }
 
-// HandleGetUserBookings handles GET /bookings/user/{id}
-func (a *API) HandleGetUserBookings(r *Request) (interface{}, error) {
+// HandleGetIncomingRequests handles GET /bookings/requests/incoming
+func (a *API) HandleGetIncomingRequests(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
 
-	// Get user ID from URL
-	userID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "id"))
+	// Get user from database
+	user, err := a.getUserByID(r.UserID)
 	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
+		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	// Get page number
-	page, err := r.Context.GetPage()
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
-	}
-
-	// Get bookings
-	bookings, err := a.database.BookingService.GetUserBookings(r.Context.Request.Context(), userID, page)
+	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), user.ObjectID())
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// Convert to response format
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
 		response[i] = convertBookingToResponse(booking)
@@ -290,8 +257,9 @@ func (a *API) HandleCancelRequest(r *Request) (interface{}, error) {
 	return nil, nil
 }
 
-// HandleReturnBooking handles POST /bookings/{bookingId}/return
-func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
+// HandleUpdateBookingStatus handles POST /bookings/{bookingId}
+// This replaces the individual verb-based endpoints (accept, deny, cancel, return)
+func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
@@ -315,20 +283,75 @@ func (a *API) HandleReturnBooking(r *Request) (interface{}, error) {
 		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
 	}
 
-	// Verify user is the tool owner
-	if booking.ToUserID != user.ObjectID() {
-		return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
+	// Parse the status update request
+	var statusUpdate BookingStatusUpdate
+	if err := json.Unmarshal(r.Data, &statusUpdate); err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusReturned)
+	// Validate the requested status
+	var newStatus db.BookingStatus
+	switch statusUpdate.Status {
+	case "ACCEPTED":
+		newStatus = db.BookingStatusAccepted
+		// Verify user is the tool owner
+		if booking.ToUserID != user.ObjectID() {
+			return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
+		}
+		// Verify booking is in PENDING state
+		if booking.BookingStatus != db.BookingStatusPending {
+			return nil, ErrCanOnlyAcceptPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
+		}
+	case "REJECTED":
+		newStatus = db.BookingStatusRejected
+		// Verify user is the tool owner
+		if booking.ToUserID != user.ObjectID() {
+			return nil, ErrOnlyOwnerCanDeny.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
+		}
+		// Verify booking is in PENDING state
+		if booking.BookingStatus != db.BookingStatusPending {
+			return nil, ErrCanOnlyDenyPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
+		}
+	case "CANCELLED":
+		newStatus = db.BookingStatusCancelled
+		// Verify user is the requester
+		if booking.FromUserID != user.ObjectID() {
+			return nil, ErrOnlyRequesterCanCancel.WithErr(fmt.Errorf("user %s is not the requester", user.ID))
+		}
+		// Verify booking is in PENDING state
+		if booking.BookingStatus != db.BookingStatusPending {
+			return nil, ErrCanOnlyCancelPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
+		}
+	case "RETURNED":
+		newStatus = db.BookingStatusReturned
+		// Verify user is the tool owner
+		if booking.ToUserID != user.ObjectID() {
+			return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
+		}
+		// Verify booking is in ACCEPTED state
+		if booking.BookingStatus != db.BookingStatusAccepted {
+			return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking must be in ACCEPTED state to be returned"))
+		}
+	default:
+		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("invalid status: %s", statusUpdate.Status))
+	}
+
+	// Update the booking status
+	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, newStatus)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return nil, nil
+	// Get the updated booking to return
+	updatedBooking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	return convertBookingToResponse(updatedBooking), nil
 }
 
-// HandleGetPendingRatings handles GET /bookings/rates
+// HandleGetPendingRatings handles GET /bookings/ratings/pending
 func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -356,55 +379,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 	return response, nil
 }
 
-// HandleGetSubmittedRatings handles GET /bookings/rates/submitted
-// Deprecated: Use HandleGetUserRatings instead
-func (a *API) HandleGetSubmittedRatings(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get user from database
-	user, err := a.getUserByID(r.UserID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	ratings, err := a.database.BookingService.GetSubmittedRatings(r.Context.Request.Context(), user.ObjectID())
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if ratings == nil {
-		// do not return nil, return empty array instead
-		ratings = make([]*db.BookingRating, 0)
-	}
-	return ratings, nil
-}
-
-// HandleGetReceivedRatings handles GET /bookings/rates/received
-// Deprecated: Use HandleGetUserRatings instead
-func (a *API) HandleGetReceivedRatings(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get user from database
-	user, err := a.getUserByID(r.UserID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	ratings, err := a.database.BookingService.GetReceivedRatings(r.Context.Request.Context(), user.ObjectID())
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if ratings == nil {
-		// do not return nil, return empty array instead
-		ratings = make([]*db.BookingRating, 0)
-	}
-	return ratings, nil
-}
-
-// HandleGetUserRatings handles GET /users/{id}/rates
+// HandleGetUserRatings handles GET /users/{id}/ratings
 // Returns a unified list of all ratings (both submitted and received) for a user
 func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
@@ -431,7 +406,7 @@ func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
 	return unifiedRatings, nil
 }
 
-// HandleGetBookingRatings handles GET /bookings/{bookingId}/rate
+// HandleGetBookingRatings handles GET /bookings/{bookingId}/ratings
 func (a *API) HandleGetBookingRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -555,7 +530,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 	return convertBookingToResponse(&db.BookingWithRatings{Booking: *booking, Ratings: nil}), nil
 }
 
-// HandleRateBooking handles POST /bookings/{bookingId}/rate
+// HandleRateBooking handles POST /bookings/{bookingId}/ratings
 func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -608,7 +583,7 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	return nil, nil
 }
 
-// HandleCountPendingActions handles GET /bookings/pending
+// HandleCountPendingActions handles GET /profile/pendings
 func (a *API) HandleCountPendingActions(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))

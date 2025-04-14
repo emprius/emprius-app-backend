@@ -82,6 +82,9 @@ func (a *API) router() http.Handler {
 		// Users
 		log.Info().Msg("register route GET /profile")
 		r.Get("/profile", a.routerHandler(a.userProfileHandler))
+		// GET /profile/pendings
+		log.Info().Msg("register route GET /profile/pendings")
+		r.Get("/profile/pendings", a.routerHandler(a.HandleCountPendingActions))
 		log.Info().Msg("register route GET /refresh")
 		r.Get("/refresh", a.routerHandler(a.refreshHandler))
 		log.Info().Msg("register route POST /profile")
@@ -90,6 +93,9 @@ func (a *API) router() http.Handler {
 		r.Get("/users", a.routerHandler(a.usersHandler))
 		log.Info().Msg("register route GET /users/{id}")
 		r.Get("/users/{id}", a.routerHandler(a.getUserHandler))
+		// GET /users/{id}/ratings
+		log.Info().Msg("register route GET /users/{id}/ratings")
+		r.Get("/users/{id}/ratings", a.routerHandler(a.HandleGetUserRatings))
 
 		// Images
 		// POST /images
@@ -109,9 +115,9 @@ func (a *API) router() http.Handler {
 		// GET /tools/{id}
 		log.Info().Msg("register route GET /tools/{id}")
 		r.Get("/tools/{id}", a.routerHandler(a.toolHandler))
-		// GET /tools/{id}/rates
-		log.Info().Msg("register route GET /tools/{id}/rates")
-		r.Get("/tools/{id}/rates", a.routerHandler(a.HandleGetToolRatings))
+		// GET /tools/{id}/ratings
+		log.Info().Msg("register route GET /tools/{id}/ratings")
+		r.Get("/tools/{id}/ratings", a.routerHandler(a.HandleGetToolRatings))
 		// POST /tools
 		log.Info().Msg("register route POST /tools")
 		r.Post("/tools", a.routerHandler(a.addToolHandler))
@@ -126,53 +132,27 @@ func (a *API) router() http.Handler {
 		// POST /bookings
 		log.Info().Msg("register route POST /bookings")
 		r.Post("/bookings", a.routerHandler(a.HandleCreateBooking))
-		// GET /bookings/requests
-		log.Info().Msg("register route GET /bookings/requests")
-		r.Get("/bookings/requests", a.routerHandler(a.HandleGetBookingRequests))
-		// GET /bookings/petitions
-		log.Info().Msg("register route GET /bookings/petitions")
-		r.Get("/bookings/petitions", a.routerHandler(a.HandleGetBookingPetitions))
-		// GET /bookings/pendings
-		log.Info().Msg("register route GET /bookings/pendings")
-		r.Get("/bookings/pendings", a.routerHandler(a.HandleCountPendingActions))
+		// GET /bookings/requests/outgoing
+		log.Info().Msg("register route GET /bookings/requests/outgoing")
+		r.Get("/bookings/requests/outgoing", a.routerHandler(a.HandleGetOutgoingRequests))
+		// GET /bookings/requests/incoming
+		log.Info().Msg("register route GET /bookings/requests/incoming")
+		r.Get("/bookings/requests/incoming", a.routerHandler(a.HandleGetIncomingRequests))
+		// PUT /bookings/{bookingId} - Update booking status
+		log.Info().Msg("register route POST /bookings/{bookingId}")
+		r.Put("/bookings/{bookingId}", a.routerHandler(a.HandleUpdateBookingStatus))
 		// GET /bookings/{bookingId}
 		log.Info().Msg("register route GET /bookings/{bookingId}")
 		r.Get("/bookings/{bookingId}", a.routerHandler(a.HandleGetBooking))
-		// POST /bookings/{bookingId}/return
-		log.Info().Msg("register route POST /bookings/{bookingId}/return")
-		r.Post("/bookings/{bookingId}/return", a.routerHandler(a.HandleReturnBooking))
-		// GET /bookings/rates
-		log.Info().Msg("register route GET /bookings/rates")
-		r.Get("/bookings/rates", a.routerHandler(a.HandleGetPendingRatings))
-		// GET /bookings/rates/submitted (DEPRECATED)
-		log.Info().Msg("register route GET /bookings/rates/submitted (DEPRECATED)")
-		r.Get("/bookings/rates/submitted", a.routerHandler(a.HandleGetSubmittedRatings))
-		// GET /bookings/rates/received (DEPRECATED)
-		log.Info().Msg("register route GET /bookings/rates/received (DEPRECATED)")
-		r.Get("/bookings/rates/received", a.routerHandler(a.HandleGetReceivedRatings))
-		// GET /users/{id}/rates
-		log.Info().Msg("register route GET /users/{id}/rates")
-		r.Get("/users/{id}/rates", a.routerHandler(a.HandleGetUserRatings))
-		// POST /bookings/{bookingId}/rate
-		log.Info().Msg("register route POST /bookings/{bookingId}/rate")
-		r.Post("/bookings/{bookingId}/rate", a.routerHandler(a.HandleRateBooking))
-		// GET /bookings/{bookingId}/rate
-		log.Info().Msg("register route GET /bookings/{bookingId}/rate")
-		r.Get("/bookings/{bookingId}/rate", a.routerHandler(a.HandleGetBookingRatings))
-		// GET /bookings/user/{id}
-		log.Info().Msg("register route GET /bookings/user/{id}")
-		r.Get("/bookings/user/{id}", a.routerHandler(a.HandleGetUserBookings))
-
-		// New booking endpoints
-		// POST /bookings/petitions/{petitionId}/accept
-		log.Info().Msg("register route POST /bookings/petitions/{petitionId}/accept")
-		r.Post("/bookings/petitions/{petitionId}/accept", a.routerHandler(a.HandleAcceptPetition))
-		// POST /bookings/petitions/{petitionId}/deny
-		log.Info().Msg("register route POST /bookings/petitions/{petitionId}/deny")
-		r.Post("/bookings/petitions/{petitionId}/deny", a.routerHandler(a.HandleDenyPetition))
-		// POST /bookings/requests/{petitionId}/cancel
-		log.Info().Msg("register route POST /bookings/requests/{petitionId}/cancel")
-		r.Post("/bookings/requests/{petitionId}/cancel", a.routerHandler(a.HandleCancelRequest))
+		// GET /bookings/ratings/pending
+		log.Info().Msg("register route GET /bookings/ratings/pending")
+		r.Get("/bookings/ratings/pending", a.routerHandler(a.HandleGetPendingRatings))
+		// POST /bookings/{bookingId}/ratings
+		log.Info().Msg("register route POST /bookings/{bookingId}/ratings")
+		r.Post("/bookings/{bookingId}/ratings", a.routerHandler(a.HandleRateBooking))
+		// GET /bookings/{bookingId}/ratings
+		log.Info().Msg("register route GET /bookings/{bookingId}/ratings")
+		r.Get("/bookings/{bookingId}/ratings", a.routerHandler(a.HandleGetBookingRatings))
 	})
 
 	// Public routes

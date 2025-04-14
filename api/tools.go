@@ -536,7 +536,7 @@ func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 	return nil, nil
 }
 
-// HandleGetToolRatings handles GET /tools/{id}/rates
+// HandleGetToolRatings handles GET /tools/{id}/ratings
 func (a *API) HandleGetToolRatings(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))

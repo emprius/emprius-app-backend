@@ -65,11 +65,15 @@ func TestBookingOrder(t *testing.T) {
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Accept the second booking
-	_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID2, "accept")
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "ACCEPTED",
+		},
+		"bookings", bookingID2)
 	qt.Assert(t, code, qt.Equals, 200)
 
 	// Now get the requests and check the order - for owner's view
-	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests")
+	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
 	qt.Assert(t, code, qt.Equals, 200)
 
 	var bookingsResp struct {
@@ -102,7 +106,7 @@ func TestBookingOrder(t *testing.T) {
 	}
 
 	// Now check petitions (renter side) too
-	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "petitions")
+	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
 	qt.Assert(t, code, qt.Equals, 200)
 
 	var petitionsResp struct {
