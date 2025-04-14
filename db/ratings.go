@@ -316,6 +316,13 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 			BookingID: bookingID,
 		}
 
+		// Check if there are any ratings for this booking
+		bookingRatings, hasRatings := ratingsByBooking[bookingID]
+		if !hasRatings {
+			// Skip bookings with no ratings
+			continue
+		}
+
 		// Determine who is the owner and who is the requester
 		ownerID := booking.ToUserID
 		requesterID := booking.FromUserID
@@ -329,27 +336,25 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 		}
 
 		// Add ratings if they exist
-		if bookingRatings, ok := ratingsByBooking[bookingID]; ok {
-			for _, r := range bookingRatings {
-				if r.RaterID == ownerID && r.RateeID == requesterID {
-					// Owner rating the requester
-					ratedAt := r.CreatedAt.Unix()
-					comment := r.Comment
-					score := r.Score
-					unified.Owner.Rating = &score
-					unified.Owner.RatingComment = &comment
-					unified.Owner.RatedAt = &ratedAt
-					unified.Owner.Images = r.Images
-				} else if r.RaterID == requesterID && r.RateeID == ownerID {
-					// Requester rating the owner
-					ratedAt := r.CreatedAt.Unix()
-					comment := r.Comment
-					score := r.Score
-					unified.Requester.Rating = &score
-					unified.Requester.RatingComment = &comment
-					unified.Requester.RatedAt = &ratedAt
-					unified.Requester.Images = r.Images
-				}
+		for _, r := range bookingRatings {
+			if r.RaterID == ownerID && r.RateeID == requesterID {
+				// Owner rating the requester
+				ratedAt := r.CreatedAt.Unix()
+				comment := r.Comment
+				score := r.Score
+				unified.Owner.Rating = &score
+				unified.Owner.RatingComment = &comment
+				unified.Owner.RatedAt = &ratedAt
+				unified.Owner.Images = r.Images
+			} else if r.RaterID == requesterID && r.RateeID == ownerID {
+				// Requester rating the owner
+				ratedAt := r.CreatedAt.Unix()
+				comment := r.Comment
+				score := r.Score
+				unified.Requester.Rating = &score
+				unified.Requester.RatingComment = &comment
+				unified.Requester.RatedAt = &ratedAt
+				unified.Requester.Images = r.Images
 			}
 		}
 
@@ -472,10 +477,6 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 	// Sort bookings by createdAt in descending order (newest first)
 	var sortedBookings []*Booking
 	for _, booking := range bookingMap {
-		// Skip bookings that are in the pending ratings list for this user
-		if pendingBookingIDs[booking.ID] {
-			continue
-		}
 		sortedBookings = append(sortedBookings, booking)
 	}
 
@@ -487,6 +488,13 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 	// Process bookings in sorted order
 	for _, booking := range sortedBookings {
 		bookingID := booking.ID
+
+		// Check if there are any ratings for this booking
+		bookingRatings, hasRatings := ratingsByBooking[bookingID]
+		if !hasRatings {
+			// Skip bookings with no ratings
+			continue
+		}
 
 		unified := &UnifiedRating{
 			ID:        bookingID,
@@ -506,27 +514,25 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 		}
 
 		// Add ratings if they exist
-		if bookingRatings, ok := ratingsByBooking[bookingID]; ok {
-			for _, r := range bookingRatings {
-				if r.RaterID == ownerID && r.RateeID == requesterID {
-					// Owner rating the requester
-					ratedAt := r.CreatedAt.Unix()
-					comment := r.Comment
-					score := r.Score
-					unified.Owner.Rating = &score
-					unified.Owner.RatingComment = &comment
-					unified.Owner.RatedAt = &ratedAt
-					unified.Owner.Images = r.Images
-				} else if r.RaterID == requesterID && r.RateeID == ownerID {
-					// Requester rating the owner
-					ratedAt := r.CreatedAt.Unix()
-					comment := r.Comment
-					score := r.Score
-					unified.Requester.Rating = &score
-					unified.Requester.RatingComment = &comment
-					unified.Requester.RatedAt = &ratedAt
-					unified.Requester.Images = r.Images
-				}
+		for _, r := range bookingRatings {
+			if r.RaterID == ownerID && r.RateeID == requesterID {
+				// Owner rating the requester
+				ratedAt := r.CreatedAt.Unix()
+				comment := r.Comment
+				score := r.Score
+				unified.Owner.Rating = &score
+				unified.Owner.RatingComment = &comment
+				unified.Owner.RatedAt = &ratedAt
+				unified.Owner.Images = r.Images
+			} else if r.RaterID == requesterID && r.RateeID == ownerID {
+				// Requester rating the owner
+				ratedAt := r.CreatedAt.Unix()
+				comment := r.Comment
+				score := r.Score
+				unified.Requester.Rating = &score
+				unified.Requester.RatingComment = &comment
+				unified.Requester.RatedAt = &ratedAt
+				unified.Requester.Images = r.Images
 			}
 		}
 
