@@ -268,29 +268,14 @@ func TestBookings(t *testing.T) {
 			resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID, "ratings")
 			qt.Assert(t, code, qt.Equals, 200)
 			var bookingRatingsResp struct {
-				Data struct {
-					Ratings []*api.Rating `json:"ratings"`
-				} `json:"data"`
+				Data *db.UnifiedRating `json:"data"`
 			}
 			err = json.Unmarshal(resp, &bookingRatingsResp)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(bookingRatingsResp.Data.Ratings), qt.Equals, 2) // Should have 2 ratings (one from renter, one from owner)
-
-			// Verify ratings content
-			var hasRenterRating, hasOwnerRating bool
-			for _, rating := range bookingRatingsResp.Data.Ratings {
-				if rating.FromUserID == renterID {
-					hasRenterRating = true
-					qt.Assert(t, rating.Rating, qt.Equals, 5)
-					qt.Assert(t, rating.Comment, qt.Equals, "Great experience!")
-				} else {
-					hasOwnerRating = true
-					qt.Assert(t, rating.Rating, qt.Equals, 4)
-					qt.Assert(t, rating.Comment, qt.Equals, "Self rating test")
-				}
-			}
-			qt.Assert(t, hasRenterRating, qt.IsTrue)
-			qt.Assert(t, hasOwnerRating, qt.IsTrue)
+			qt.Assert(t, *bookingRatingsResp.Data.Owner.Rating, qt.Equals, 4)
+			qt.Assert(t, *bookingRatingsResp.Data.Owner.RatingComment, qt.Equals, "Self rating test")
+			qt.Assert(t, *bookingRatingsResp.Data.Requester.Rating, qt.Equals, 5)
+			qt.Assert(t, *bookingRatingsResp.Data.Requester.RatingComment, qt.Equals, "Great experience!")
 
 			// Try to get ratings for non-existent booking
 			_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "nonexistentid", "ratings")
@@ -301,6 +286,7 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 401)
 		})
 
+		// todo(kon): recreate this tests after rest api refactoring
 		// Test deny petition
 		//t.Run("Deny Petition", func(t *testing.T) {
 		//	// Create a new booking to deny

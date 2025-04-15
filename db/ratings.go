@@ -381,7 +381,18 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 }
 
 // GetRatingsByBookingID retrieves all ratings associated with a specific booking ID
-func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID primitive.ObjectID) ([]*BookingRating, error) {
+func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID primitive.ObjectID) (*UnifiedRating, error) {
+	// First get the booking to have access to the tool ID and user IDs
+	var booking *Booking
+	err := s.collection.FindOne(ctx, bson.M{"_id": bookingID}).Decode(&booking)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrBookingNotFound
+		}
+		return nil, err
+	}
+
+	// Get all ratings for this booking
 	filter := bson.M{
 		"bookingId": bookingID,
 	}
@@ -404,8 +415,28 @@ func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID pr
 		return nil, err
 	}
 
-	// Convert to BookingRating for API compatibility
-	return s.convertToBookingRatings(ratings), nil
+	// Create a basic UnifiedRating with booking information
+	unifiedRating := &UnifiedRating{
+		ID:        bookingID,
+		BookingID: bookingID,
+		ToolID:    booking.ToolID,
+		Owner: &RatingParty{
+			ID: booking.ToUserID,
+		},
+		Requester: &RatingParty{
+			ID: booking.FromUserID,
+		},
+	}
+
+	// If there are ratings, use the createUnifiedRatings helper to populate the rating details
+	if len(ratings) > 0 {
+		unifiedRatings := s.createUnifiedRatings([]*Booking{booking}, ratings)
+		if len(unifiedRatings) > 0 {
+			unifiedRating = unifiedRatings[0]
+		}
+	}
+
+	return unifiedRating, nil
 }
 
 // GetUnifiedRatings retrieves all ratings for a user (both submitted and received) and groups them by booking

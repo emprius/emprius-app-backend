@@ -427,33 +427,14 @@ func (a *API) HandleGetBookingRatings(r *Request) (interface{}, error) {
 		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
 	}
 
-	// Get ratings for the booking
-	ratings, err := a.database.BookingService.GetRatingsByBookingID(r.Context.Request.Context(), bookingID)
+	// Get unified rating for the booking
+	unifiedRating, err := a.database.BookingService.GetRatingsByBookingID(r.Context.Request.Context(), bookingID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// Convert DB ratings to API ratings
-	apiRatings := make([]*Rating, len(ratings))
-	for i, dbRating := range ratings {
-		apiRating := new(Rating)
-		apiRatings[i] = apiRating.FromDB(dbRating)
-	}
-
-	if len(apiRatings) == 0 {
-		// Return empty array instead of nil
-		return &struct {
-			Ratings []*Rating `json:"ratings"`
-		}{
-			Ratings: []*Rating{},
-		}, nil
-	}
-
-	return &struct {
-		Ratings []*Rating `json:"ratings"`
-	}{
-		Ratings: apiRatings,
-	}, nil
+	// Return the unified rating directly
+	return unifiedRating, nil
 }
 
 // RateRequest represents the request body for rating a booking
