@@ -43,6 +43,7 @@ type BookingRating struct {
 type UnifiedRating struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	BookingID primitive.ObjectID `bson:"bookingId" json:"bookingId"`
+	ToolID    string             `bson:"toolId" json:"toolId"`
 	Owner     *RatingParty       `bson:"owner,omitempty" json:"owner,omitempty"`
 	Requester *RatingParty       `bson:"requester,omitempty" json:"requester,omitempty"`
 }
@@ -314,6 +315,7 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 		unified := &UnifiedRating{
 			ID:        bookingID,
 			BookingID: bookingID,
+			ToolID:    booking.ToolID,
 		}
 
 		// Check if there are any ratings for this booking
@@ -499,6 +501,7 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 		unified := &UnifiedRating{
 			ID:        bookingID,
 			BookingID: bookingID,
+			ToolID:    booking.ToolID,
 		}
 
 		// Determine who is the owner and who is the requester
