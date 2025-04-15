@@ -13,8 +13,32 @@ import (
 )
 
 // convertBookingToResponse converts a db.Booking and an associated db.BookingRating
-// into a BookingResponse. If rating is nil, the booking is considered not yet rated.
-func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
+// into a BookingResponse. The IsRated field is set based on whether the authenticated user has rated the booking.
+func convertBookingToResponse(booking *db.BookingWithRatings, authenticatedUserID ...string) *BookingResponse {
+	isRated := false
+
+	// Check if the booking is rated by the authenticated user
+	if len(authenticatedUserID) > 0 && authenticatedUserID[0] != "" {
+		userID, err := primitive.ObjectIDFromHex(authenticatedUserID[0])
+		if err == nil {
+			// Determine the counterparty ID based on the user's role in the booking
+			var counterpartyID primitive.ObjectID
+			if booking.FromUserID == userID {
+				counterpartyID = booking.ToUserID
+			} else if booking.ToUserID == userID {
+				counterpartyID = booking.FromUserID
+			}
+
+			// Check if there's a rating from the authenticated user
+			for _, rating := range booking.Ratings {
+				if rating.FromUserID == userID && rating.ToUserID == counterpartyID {
+					isRated = true
+					break
+				}
+			}
+		}
+	}
+
 	return &BookingResponse{
 		ID:            booking.ID.Hex(),
 		ToolID:        booking.ToolID,
@@ -27,7 +51,7 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 		BookingStatus: string(booking.BookingStatus),
 		CreatedAt:     booking.CreatedAt.Unix(),
 		UpdatedAt:     booking.UpdatedAt.Unix(),
-		IsRated:       len(booking.Ratings) > 0,
+		IsRated:       isRated, // This field indicates if the booking is rated by the authenticated user
 	}
 }
 
@@ -50,7 +74,7 @@ func (a *API) HandleGetOutgoingRequests(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
+		response[i] = convertBookingToResponse(booking, r.UserID)
 	}
 
 	return response, nil
@@ -75,7 +99,7 @@ func (a *API) HandleGetIncomingRequests(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(booking)
+		response[i] = convertBookingToResponse(booking, r.UserID)
 	}
 
 	return response, nil
@@ -96,7 +120,7 @@ func (a *API) HandleGetBooking(r *Request) (interface{}, error) {
 		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
 	}
 
-	return convertBookingToResponse(booking), nil
+	return convertBookingToResponse(booking, r.UserID), nil
 }
 
 // HandleAcceptPetition handles POST /bookings/petitions/{petitionId}/accept
@@ -319,7 +343,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return convertBookingToResponse(updatedBooking), nil
+	return convertBookingToResponse(updatedBooking, r.UserID), nil
 }
 
 // HandleGetPendingRatings handles GET /bookings/ratings/pending
@@ -344,7 +368,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(&db.BookingWithRatings{Booking: *booking})
+		response[i] = convertBookingToResponse(&db.BookingWithRatings{Booking: *booking}, r.UserID)
 	}
 
 	return response, nil
@@ -479,7 +503,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return convertBookingToResponse(&db.BookingWithRatings{Booking: *booking, Ratings: nil}), nil
+	return convertBookingToResponse(&db.BookingWithRatings{Booking: *booking, Ratings: nil}, r.UserID), nil
 }
 
 // HandleRateBooking handles POST /bookings/{bookingId}/ratings
@@ -532,7 +556,13 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		}
 	}
 
-	return nil, nil
+	// Get the updated booking with the isRated flag set
+	updatedBooking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	return convertBookingToResponse(updatedBooking, r.UserID), nil
 }
 
 // HandleCountPendingActions handles GET /profile/pendings
