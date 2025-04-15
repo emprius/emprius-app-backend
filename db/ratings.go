@@ -234,59 +234,17 @@ func (s *BookingService) GetReceivedRatings(ctx context.Context, userID primitiv
 	return s.convertToBookingRatings(ratings), nil
 }
 
-// GetRatingsByToolID retrieves all ratings associated with a specific tool ID
-func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) ([]*UnifiedRating, error) {
-	// Get all bookings for this tool
-	filter := bson.M{"toolId": toolID}
-	cursor, err := s.collection.Find(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := cursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing cursor")
-		}
-	}()
-
-	var bookings []*Booking
-	if err = cursor.All(ctx, &bookings); err != nil {
-		return nil, err
-	}
-
+// createUnifiedRatings processes bookings and ratings to create unified rating objects
+func (s *BookingService) createUnifiedRatings(bookings []*Booking, ratings []*Rating) []*UnifiedRating {
 	// If no bookings found, return empty array
 	if len(bookings) == 0 {
-		return []*UnifiedRating{}, nil
+		return []*UnifiedRating{}
 	}
 
 	// Create a map of booking IDs for efficient lookup
 	bookingMap := make(map[primitive.ObjectID]*Booking)
-	var bookingIDs []primitive.ObjectID
 	for _, booking := range bookings {
 		bookingMap[booking.ID] = booking
-		bookingIDs = append(bookingIDs, booking.ID)
-	}
-
-	// Get all ratings for these bookings
-	ratingFilter := bson.M{
-		"bookingId": bson.M{"$in": bookingIDs},
-	}
-
-	// Use options to sort by createdAt in descending order (newest first)
-	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
-
-	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter, findOptions)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := ratingCursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing rating cursor")
-		}
-	}()
-
-	var ratings []*Rating
-	if err = ratingCursor.All(ctx, &ratings); err != nil {
-		return nil, err
 	}
 
 	// Group ratings by booking ID
@@ -312,17 +270,18 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 	// Process bookings in sorted order
 	for _, booking := range sortedBookings {
 		bookingID := booking.ID
-		unified := &UnifiedRating{
-			ID:        bookingID,
-			BookingID: bookingID,
-			ToolID:    booking.ToolID,
-		}
 
 		// Check if there are any ratings for this booking
 		bookingRatings, hasRatings := ratingsByBooking[bookingID]
 		if !hasRatings {
 			// Skip bookings with no ratings
 			continue
+		}
+
+		unified := &UnifiedRating{
+			ID:        bookingID,
+			BookingID: bookingID,
+			ToolID:    booking.ToolID,
 		}
 
 		// Determine who is the owner and who is the requester
@@ -363,7 +322,62 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 		unifiedRatings = append(unifiedRatings, unified)
 	}
 
-	return unifiedRatings, nil
+	return unifiedRatings
+}
+
+// GetRatingsByToolID retrieves all ratings associated with a specific tool ID
+func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) ([]*UnifiedRating, error) {
+	// Get all bookings for this tool
+	filter := bson.M{"toolId": toolID}
+	cursor, err := s.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var bookings []*Booking
+	if err = cursor.All(ctx, &bookings); err != nil {
+		return nil, err
+	}
+
+	// If no bookings found, return empty array
+	if len(bookings) == 0 {
+		return []*UnifiedRating{}, nil
+	}
+
+	// Get all ratings for these bookings
+	var bookingIDs []primitive.ObjectID
+	for _, booking := range bookings {
+		bookingIDs = append(bookingIDs, booking.ID)
+	}
+
+	ratingFilter := bson.M{
+		"bookingId": bson.M{"$in": bookingIDs},
+	}
+
+	// Use options to sort by createdAt in descending order (newest first)
+	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+
+	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter, findOptions)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := ratingCursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing rating cursor")
+		}
+	}()
+
+	var ratings []*Rating
+	if err = ratingCursor.All(ctx, &ratings); err != nil {
+		return nil, err
+	}
+
+	return s.createUnifiedRatings(bookings, ratings), nil
 }
 
 // GetRatingsByBookingID retrieves all ratings associated with a specific booking ID
@@ -436,15 +450,12 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 		return []*UnifiedRating{}, nil
 	}
 
-	// Create a map of booking IDs for efficient lookup
-	bookingMap := make(map[primitive.ObjectID]*Booking)
+	// Get all ratings for these bookings
 	var bookingIDs []primitive.ObjectID
 	for _, booking := range bookings {
-		bookingMap[booking.ID] = booking
 		bookingIDs = append(bookingIDs, booking.ID)
 	}
 
-	// Get all ratings for these bookings
 	ratingFilter := bson.M{
 		"bookingId": bson.M{"$in": bookingIDs},
 	}
@@ -467,82 +478,7 @@ func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive
 		return nil, err
 	}
 
-	// Group ratings by booking ID
-	ratingsByBooking := make(map[primitive.ObjectID][]*Rating)
-	for _, rating := range ratings {
-		ratingsByBooking[rating.BookingID] = append(ratingsByBooking[rating.BookingID], rating)
-	}
-
-	// Create unified ratings
-	var unifiedRatings []*UnifiedRating
-
-	// Sort bookings by createdAt in descending order (newest first)
-	var sortedBookings []*Booking
-	for _, booking := range bookingMap {
-		sortedBookings = append(sortedBookings, booking)
-	}
-
-	// Sort the bookings by createdAt in descending order
-	sort.Slice(sortedBookings, func(i, j int) bool {
-		return sortedBookings[i].CreatedAt.After(sortedBookings[j].CreatedAt)
-	})
-
-	// Process bookings in sorted order
-	for _, booking := range sortedBookings {
-		bookingID := booking.ID
-
-		// Check if there are any ratings for this booking
-		bookingRatings, hasRatings := ratingsByBooking[bookingID]
-		if !hasRatings {
-			// Skip bookings with no ratings
-			continue
-		}
-
-		unified := &UnifiedRating{
-			ID:        bookingID,
-			BookingID: bookingID,
-			ToolID:    booking.ToolID,
-		}
-
-		// Determine who is the owner and who is the requester
-		ownerID := booking.ToUserID
-		requesterID := booking.FromUserID
-
-		// Initialize owner and requester
-		unified.Owner = &RatingParty{
-			ID: ownerID,
-		}
-		unified.Requester = &RatingParty{
-			ID: requesterID,
-		}
-
-		// Add ratings if they exist
-		for _, r := range bookingRatings {
-			if r.RaterID == ownerID && r.RateeID == requesterID {
-				// Owner rating the requester
-				ratedAt := r.CreatedAt.Unix()
-				comment := r.Comment
-				score := r.Score
-				unified.Owner.Rating = &score
-				unified.Owner.RatingComment = &comment
-				unified.Owner.RatedAt = &ratedAt
-				unified.Owner.Images = r.Images
-			} else if r.RaterID == requesterID && r.RateeID == ownerID {
-				// Requester rating the owner
-				ratedAt := r.CreatedAt.Unix()
-				comment := r.Comment
-				score := r.Score
-				unified.Requester.Rating = &score
-				unified.Requester.RatingComment = &comment
-				unified.Requester.RatedAt = &ratedAt
-				unified.Requester.Images = r.Images
-			}
-		}
-
-		unifiedRatings = append(unifiedRatings, unified)
-	}
-
-	return unifiedRatings, nil
+	return s.createUnifiedRatings(bookings, ratings), nil
 }
 
 // RateBooking creates a new rating for a booking
