@@ -15,30 +15,6 @@ import (
 // convertBookingToResponse converts a db.Booking and an associated db.BookingRating
 // into a BookingResponse. If rating is nil, the booking is considered not yet rated.
 func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
-	var rVal *int
-	var rComment string
-	var rating *db.BookingRating
-
-	// Find the rating for the user, we only consider the rating that received FromUserID here.
-	// This is legacy code to be removed
-	if len(booking.Ratings) > 0 {
-		if booking.Ratings[0].ToUserID == booking.FromUserID {
-			rating = booking.Ratings[0]
-		} else if len(booking.Ratings) > 1 && booking.Ratings[1].ToUserID == booking.FromUserID {
-			rating = booking.Ratings[1]
-		}
-	}
-	if rating != nil {
-		rVal = &rating.Rating
-		rComment = rating.RatingComment
-	}
-
-	ratings := []*Rating{}
-	for _, r := range booking.Ratings {
-		apiRating := new(Rating)
-		ratings = append(ratings, apiRating.FromDB(r))
-	}
-
 	return &BookingResponse{
 		ID:            booking.ID.Hex(),
 		ToolID:        booking.ToolID,
@@ -51,12 +27,7 @@ func convertBookingToResponse(booking *db.BookingWithRatings) *BookingResponse {
 		BookingStatus: string(booking.BookingStatus),
 		CreatedAt:     booking.CreatedAt.Unix(),
 		UpdatedAt:     booking.UpdatedAt.Unix(),
-		Ratings:       ratings,
 		IsRated:       len(booking.Ratings) > 0,
-
-		// Legacy fields for backward compatibility
-		Rating:        rVal,
-		RatingComment: rComment,
 	}
 }
 

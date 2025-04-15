@@ -216,23 +216,20 @@ type CreateBookingRequest struct {
 
 // BookingResponse represents the API response for a booking
 type BookingResponse struct {
-	ID            string    `json:"id"`
-	ToolID        string    `json:"toolId"`
-	FromUserID    string    `json:"fromUserId"`
-	ToUserID      string    `json:"toUserId"`
-	StartDate     int64     `json:"startDate"`
-	EndDate       int64     `json:"endDate"`
-	Contact       string    `json:"contact"`
-	Comments      string    `json:"comments"`
-	BookingStatus string    `json:"bookingStatus"`
-	IsRated       bool      `json:"isRated"`
-	Ratings       []*Rating `json:"ratings"`
+	ID            string `json:"id"`
+	ToolID        string `json:"toolId"`
+	FromUserID    string `json:"fromUserId"`
+	ToUserID      string `json:"toUserId"`
+	StartDate     int64  `json:"startDate"`
+	EndDate       int64  `json:"endDate"`
+	Contact       string `json:"contact"`
+	Comments      string `json:"comments"`
+	BookingStatus string `json:"bookingStatus"`
+	IsRated       bool   `json:"isRated"`
 
 	// Legacy fields for backward compatibility
-	Rating        *int   `json:"rating,omitempty"`
-	RatingComment string `json:"ratingComment,omitempty"`
-	CreatedAt     int64  `json:"createdAt"`
-	UpdatedAt     int64  `json:"updatedAt"`
+	CreatedAt int64 `json:"createdAt"`
+	UpdatedAt int64 `json:"updatedAt"`
 }
 
 // BookingStatusUpdate represents a request to update a booking's status
