@@ -268,29 +268,14 @@ func TestBookings(t *testing.T) {
 			resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID, "ratings")
 			qt.Assert(t, code, qt.Equals, 200)
 			var bookingRatingsResp struct {
-				Data struct {
-					Ratings []*api.Rating `json:"ratings"`
-				} `json:"data"`
+				Data *db.UnifiedRating `json:"data"`
 			}
 			err = json.Unmarshal(resp, &bookingRatingsResp)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(bookingRatingsResp.Data.Ratings), qt.Equals, 2) // Should have 2 ratings (one from renter, one from owner)
-
-			// Verify ratings content
-			var hasRenterRating, hasOwnerRating bool
-			for _, rating := range bookingRatingsResp.Data.Ratings {
-				if rating.FromUserID == renterID {
-					hasRenterRating = true
-					qt.Assert(t, rating.Rating, qt.Equals, 5)
-					qt.Assert(t, rating.Comment, qt.Equals, "Great experience!")
-				} else {
-					hasOwnerRating = true
-					qt.Assert(t, rating.Rating, qt.Equals, 4)
-					qt.Assert(t, rating.Comment, qt.Equals, "Self rating test")
-				}
-			}
-			qt.Assert(t, hasRenterRating, qt.IsTrue)
-			qt.Assert(t, hasOwnerRating, qt.IsTrue)
+			qt.Assert(t, *bookingRatingsResp.Data.Owner.Rating, qt.Equals, 4)
+			qt.Assert(t, *bookingRatingsResp.Data.Owner.RatingComment, qt.Equals, "Self rating test")
+			qt.Assert(t, *bookingRatingsResp.Data.Requester.Rating, qt.Equals, 5)
+			qt.Assert(t, *bookingRatingsResp.Data.Requester.RatingComment, qt.Equals, "Great experience!")
 
 			// Try to get ratings for non-existent booking
 			_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "nonexistentid", "ratings")
@@ -301,6 +286,7 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 401)
 		})
 
+		// todo(kon): recreate this tests after rest api refactoring
 		// Test deny petition
 		//t.Run("Deny Petition", func(t *testing.T) {
 		//	// Create a new booking to deny
@@ -780,6 +766,164 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, testBookingRating.Requester.RatingComment, qt.Not(qt.IsNil))
 			qt.Assert(t, *testBookingRating.Requester.RatingComment, qt.Equals, "Good experience with the tool")
 		})
+	})
+
+	t.Run("IsRated Attribute", func(t *testing.T) {
+		// Create a new booking
+		resp, code := c.Request(http.MethodPost, renterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: time.Now().Add(250 * time.Hour).Unix(),
+				EndDate:   time.Now().Add(274 * time.Hour).Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking for isRated attribute",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Owner accepts the booking
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Mark booking as returned
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "RETURNED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Check isRated attribute before rating (should be false)
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, *bookingResp.Data.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false before rating"))
+
+		// Check isRated attribute in outgoing requests list (should be false)
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
+		qt.Assert(t, code, qt.Equals, 200)
+		var outgoingResp struct {
+			Data []api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &outgoingResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		var foundBooking bool
+		for _, booking := range outgoingResp.Data {
+			if booking.ID == bookingID {
+				foundBooking = true
+				qt.Assert(t, *booking.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false in outgoing requests before rating"))
+				break
+			}
+		}
+		qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in outgoing requests"))
+
+		// Renter submits a rating
+		_, code = c.Request(http.MethodPost, renterJWT,
+			api.RateRequest{
+				Rating:  4,
+				Comment: "Testing isRated attribute",
+			},
+			"bookings", bookingID, "ratings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Check isRated attribute after rating (should be true)
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, *bookingResp.Data.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true after rating"))
+
+		// Check isRated attribute in outgoing requests list (should be true)
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &outgoingResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundBooking = false
+		for _, booking := range outgoingResp.Data {
+			if booking.ID == bookingID {
+				foundBooking = true
+				qt.Assert(t, *booking.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true in outgoing requests after rating"))
+				break
+			}
+		}
+		qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in outgoing requests"))
+
+		// Check from owner's perspective (should be false since owner hasn't rated yet)
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, *bookingResp.Data.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false for owner who hasn't rated yet"))
+
+		// Check isRated attribute in incoming requests list (should be false for owner)
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
+		qt.Assert(t, code, qt.Equals, 200)
+		var incomingResp struct {
+			Data []api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &incomingResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundBooking = false
+		for _, booking := range incomingResp.Data {
+			if booking.ID == bookingID {
+				foundBooking = true
+				qt.Assert(t, *booking.IsRated, qt.Equals, false, qt.Commentf(
+					"IsRated should be false in incoming requests for owner who hasn't rated yet",
+				))
+				break
+			}
+		}
+		qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in incoming requests"))
+
+		// Owner submits a rating
+		_, code = c.Request(http.MethodPost, ownerJWT,
+			api.RateRequest{
+				Rating:  5,
+				Comment: "Testing isRated attribute as owner",
+			},
+			"bookings", bookingID, "ratings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Check isRated attribute for owner after rating (should be true)
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, *bookingResp.Data.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true for owner after rating"))
+
+		// Check isRated attribute in incoming requests list (should be true for owner)
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &incomingResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundBooking = false
+		for _, booking := range incomingResp.Data {
+			if booking.ID == bookingID {
+				foundBooking = true
+				qt.Assert(t, *booking.IsRated, qt.Equals, true, qt.Commentf(
+					"IsRated should be true in incoming requests for owner after rating",
+				))
+				break
+			}
+		}
+		qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in incoming requests"))
 	})
 
 	t.Run("Date Validation", func(t *testing.T) {

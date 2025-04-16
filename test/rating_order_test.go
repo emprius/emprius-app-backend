@@ -202,7 +202,7 @@ func TestRatingOrder(t *testing.T) {
 		qt.Assert(t, *ratesResp.Data[2].Requester.RatingComment, qt.Equals, "First rating")
 	})
 
-	// Test 3: GET /bookings/{bookingId}/rate - should return ratings ordered by newest first
+	// Test 3: GET /bookings/{bookingId}/rate - should return unified ratings
 	t.Run("Booking Ratings Order", func(t *testing.T) {
 		// For this test, we need to add owner ratings to the bookings
 		for i, bookingID := range bookingIDs {
@@ -221,23 +221,22 @@ func TestRatingOrder(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var ratingResp struct {
-			Data struct {
-				Ratings []*api.Rating `json:"ratings"`
-			} `json:"data"`
+			Data *db.UnifiedRating `json:"data"`
 		}
 		err := json.Unmarshal(resp, &ratingResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(ratingResp.Data.Ratings), qt.Equals, 2) // Owner and renter ratings
 
-		// Verify the newest rating is first
-		// Since we added the owner rating last, it should be first
-		ownerRating := ratingResp.Data.Ratings[0]
-		renterRating := ratingResp.Data.Ratings[1]
+		// Verify both owner and requester ratings exist
+		qt.Assert(t, ratingResp.Data.Owner != nil, qt.IsTrue)
+		qt.Assert(t, ratingResp.Data.Requester != nil, qt.IsTrue)
+		qt.Assert(t, ratingResp.Data.Owner.Rating != nil, qt.IsTrue)
+		qt.Assert(t, ratingResp.Data.Requester.Rating != nil, qt.IsTrue)
 
-		qt.Assert(t, ownerRating.Rating, qt.Equals, 3)
-		qt.Assert(t, ownerRating.Comment, qt.Equals, "Owner rating 3")
-		qt.Assert(t, renterRating.Rating, qt.Equals, 3)
-		qt.Assert(t, renterRating.Comment, qt.Equals, "Third rating")
+		// Verify the ratings are correct
+		qt.Assert(t, *ratingResp.Data.Owner.Rating, qt.Equals, 3)
+		qt.Assert(t, *ratingResp.Data.Owner.RatingComment, qt.Equals, "Owner rating 3")
+		qt.Assert(t, *ratingResp.Data.Requester.Rating, qt.Equals, 3)
+		qt.Assert(t, *ratingResp.Data.Requester.RatingComment, qt.Equals, "Third rating")
 	})
 
 	// Test 4: GET /bookings/rates - should return pending ratings ordered by newest first

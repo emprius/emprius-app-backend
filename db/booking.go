@@ -39,12 +39,6 @@ type Booking struct {
 	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
 }
 
-// BookingWithRatings is a composite type that embeds a Booking and its associated ratings.
-type BookingWithRatings struct {
-	Booking `bson:",inline"`
-	Ratings []*BookingRating `bson:"ratings" json:"ratings"`
-}
-
 // BookingService handles all booking related database operations
 type BookingService struct {
 	collection *mongo.Collection
@@ -148,7 +142,7 @@ func (s *BookingService) Create(
 }
 
 // Get retrieves a booking (by ID) along with its related ratings in one query.
-func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*BookingWithRatings, error) {
+func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booking, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{"_id": id}}},
 		{{Key: "$lookup", Value: bson.M{
@@ -168,7 +162,7 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 		}
 	}()
 
-	var results []BookingWithRatings
+	var results []Booking
 	if err = cursor.All(ctx, &results); err != nil {
 		return nil, err
 	}
@@ -183,7 +177,7 @@ func (s *BookingService) GetUserBookings(
 	ctx context.Context,
 	userID primitive.ObjectID,
 	page int,
-) ([]*BookingWithRatings, error) {
+) ([]*Booking, error) {
 	if page < 0 {
 		page = 0
 	}
@@ -217,12 +211,12 @@ func (s *BookingService) GetUserBookings(
 		}
 	}()
 
-	var results []BookingWithRatings
+	var results []Booking
 	if err = cursor.All(ctx, &results); err != nil {
 		return nil, err
 	}
-	// Convert slice to []*BookingWithRatings
-	bookings := make([]*BookingWithRatings, len(results))
+	// Convert slice to []*Booking
+	bookings := make([]*Booking, len(results))
 	for i := range results {
 		bookings[i] = &results[i]
 	}
@@ -232,7 +226,7 @@ func (s *BookingService) GetUserBookings(
 // GetUserRequests returns all bookings where the given user is the owner (toUserId)
 // along with their associated ratings.
 // Bookings are ordered with PENDING status first, then sorted by createdAt date (newest first).
-func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.ObjectID) ([]*BookingWithRatings, error) {
+func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{"toUserId": userID}}},
 		// Add a field to use for sorting (1 for PENDING status, 0 for others)
@@ -267,11 +261,11 @@ func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.O
 		}
 	}()
 
-	var results []BookingWithRatings
+	var results []Booking
 	if err = cursor.All(ctx, &results); err != nil {
 		return nil, err
 	}
-	bookings := make([]*BookingWithRatings, len(results))
+	bookings := make([]*Booking, len(results))
 	for i := range results {
 		bookings[i] = &results[i]
 	}
@@ -281,7 +275,7 @@ func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.O
 // GetUserPetitions returns all bookings where the given user is the requester (fromUserId)
 // along with their associated ratings.
 // Bookings are ordered with PENDING status first, then sorted by createdAt date (newest first).
-func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.ObjectID) ([]*BookingWithRatings, error) {
+func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{"fromUserId": userID}}},
 		// Add a field to use for sorting (1 for PENDING status, 0 for others)
@@ -316,11 +310,11 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 		}
 	}()
 
-	var results []BookingWithRatings
+	var results []Booking
 	if err = cursor.All(ctx, &results); err != nil {
 		return nil, err
 	}
-	bookings := make([]*BookingWithRatings, len(results))
+	bookings := make([]*Booking, len(results))
 	for i := range results {
 		bookings[i] = &results[i]
 	}
@@ -373,7 +367,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 				return fmt.Errorf("error finding user: %w", err)
 			}
 
-			tokenCost := s.calculateTokenCost(&booking.Booking, tool)
+			tokenCost := s.calculateTokenCost(booking, tool)
 			if fromUser.Tokens < tokenCost {
 				return fmt.Errorf("insufficient tokens: user has %d, needs %d", fromUser.Tokens, tokenCost)
 			}
@@ -391,7 +385,7 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		// If returning, add tokens to lending user
 		if status == BookingStatusReturned {
 			userService := s.database.Collection("users")
-			tokenCost := s.calculateTokenCost(&booking.Booking, tool)
+			tokenCost := s.calculateTokenCost(booking, tool)
 
 			_, err = userService.UpdateOne(ctx,
 				bson.M{"_id": booking.ToUserID},
