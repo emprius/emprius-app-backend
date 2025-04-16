@@ -286,139 +286,113 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 401)
 		})
 
-		// todo(kon): recreate this tests after rest api refactoring
 		// Test deny petition
-		//t.Run("Deny Petition", func(t *testing.T) {
-		//	// Create a new booking to deny
-		//	resp, code := c.Request(http.MethodPost, renterJWT,
-		//		api.CreateBookingRequest{
-		//			ToolID:    fmt.Sprint(toolID),
-		//			StartDate: time.Now().Add(72 * time.Hour).Unix(),
-		//			EndDate:   time.Now().Add(96 * time.Hour).Unix(),
-		//			Contact:   "test@example.com",
-		//			Comments:  "Test booking to deny",
-		//		},
-		//		"bookings",
-		//	)
-		//	qt.Assert(t, code, qt.Equals, 200)
-		//
-		//	var response struct {
-		//		Data api.BookingResponse `json:"data"`
-		//	}
-		//	err := json.Unmarshal(resp, &response)
-		//	qt.Assert(t, err, qt.IsNil)
-		//	denyBookingID := response.Data.ID
-		//
-		//	// Try to deny without auth
-		//	_, code = c.Request(http.MethodPost, "",
-		//		&api.BookingStatusUpdate{
-		//			Status: "REJECTED",
-		//		}, "bookings", denyBookingID)
-		//	qt.Assert(t, code, qt.Equals, 401)
-		//
-		//	// Try to deny as renter (should fail)
-		//	_, code = c.Request(http.MethodPost, renterJWT,
-		//		&api.BookingStatusUpdate{
-		//			Status: "REJECTED",
-		//		}, "bookings", denyBookingID)
-		//	qt.Assert(t, code, qt.Equals, 403)
-		//
-		//	// Deny as owner
-		//	_, code = c.Request(http.MethodPost, ownerJWT,
-		//		&api.BookingStatusUpdate{
-		//			Status: "REJECTED",
-		//		}, "bookings", denyBookingID)
-		//	qt.Assert(t, code, qt.Equals, 200)
-		//
-		//	// Verify booking status is REJECTED
-		//	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", denyBookingID)
-		//	qt.Assert(t, code, qt.Equals, 200)
-		//	var bookingResp struct {
-		//		Data api.BookingResponse `json:"data"`
-		//	}
-		//	err = json.Unmarshal(resp, &bookingResp)
-		//	qt.Assert(t, err, qt.IsNil)
-		//	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "REJECTED")
-		//})
+		t.Run("Deny Petition", func(t *testing.T) {
+			// Create a new booking to deny
+			resp, code := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(toolID),
+					StartDate: time.Now().Add(72 * time.Hour).Unix(),
+					EndDate:   time.Now().Add(96 * time.Hour).Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Test booking to deny",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp, &response)
+			qt.Assert(t, err, qt.IsNil)
+			denyBookingID := response.Data.ID
+
+			// Try to deny without auth
+			resp, code = c.Request(http.MethodPut, "",
+				&api.BookingStatusUpdate{
+					Status: "REJECTED",
+				}, "bookings", denyBookingID)
+			qt.Assert(t, code, qt.Equals, 401)
+
+			// Try to deny as renter (should fail)
+			_, code = c.Request(http.MethodPut, renterJWT,
+				&api.BookingStatusUpdate{
+					Status: "REJECTED",
+				}, "bookings", denyBookingID)
+			qt.Assert(t, code, qt.Equals, 403)
+
+			// Deny as owner
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "REJECTED",
+				}, "bookings", denyBookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Verify booking status is REJECTED
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", denyBookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+			var bookingResp struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "REJECTED")
+		})
 
 		// Test cancel request
-		//t.Run("Cancel Request", func(t *testing.T) {
-		//	// Create a new booking to cancel
-		//	resp, code := c.Request(http.MethodPost, renterJWT,
-		//		api.CreateBookingRequest{
-		//			ToolID:    fmt.Sprint(toolID),
-		//			StartDate: time.Now().Add(120 * time.Hour).Unix(),
-		//			EndDate:   time.Now().Add(144 * time.Hour).Unix(),
-		//			Contact:   "test@example.com",
-		//			Comments:  "Test booking to cancel",
-		//		},
-		//		"bookings",
-		//	)
-		//	qt.Assert(t, code, qt.Equals, 200)
-		//
-		//	var response struct {
-		//		Data api.BookingResponse `json:"data"`
-		//	}
-		//	err := json.Unmarshal(resp, &response)
-		//	qt.Assert(t, err, qt.IsNil)
-		//	cancelBookingID := response.Data.ID
-		//
-		//	// Try to cancel without auth
-		//	_, code = c.Request(http.MethodPost, "",
-		//		&api.BookingStatusUpdate{
-		//			Status: "CANCELLED",
-		//		}, "bookings", cancelBookingID)
-		//	qt.Assert(t, code, qt.Equals, 401)
-		//
-		//	// Try to cancel as owner (should fail)
-		//	_, code = c.Request(http.MethodPost, ownerJWT,
-		//		&api.BookingStatusUpdate{
-		//			Status: "CANCELLED",
-		//		}, "bookings", cancelBookingID)
-		//	qt.Assert(t, code, qt.Equals, 403)
-		//
-		//	// Cancel as renter
-		//	_, code = c.Request(http.MethodPost, renterJWT,
-		//		&api.BookingStatusUpdate{
-		//			Status: "CANCELLED",
-		//		}, "bookings", cancelBookingID)
-		//	qt.Assert(t, code, qt.Equals, 200)
-		//
-		//	// Verify booking status is CANCELLED
-		//	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", cancelBookingID)
-		//	qt.Assert(t, code, qt.Equals, 200)
-		//	var bookingResp struct {
-		//		Data api.BookingResponse `json:"data"`
-		//	}
-		//	err = json.Unmarshal(resp, &bookingResp)
-		//	qt.Assert(t, err, qt.IsNil)
-		//	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "CANCELLED")
-		//})
+		t.Run("Cancel Request", func(t *testing.T) {
+			// Create a new booking to cancel
+			resp, code := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(toolID),
+					StartDate: time.Now().Add(120 * time.Hour).Unix(),
+					EndDate:   time.Now().Add(144 * time.Hour).Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Test booking to cancel",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
 
-		// Test paginated user bookings
-		//t.Run("Get User Bookings", func(t *testing.T) {
-		//	// Get first page of bookings
-		//	resp, code := c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=0")
-		//	qt.Assert(t, code, qt.Equals, 200)
-		//	var pageResp struct {
-		//		Data []api.BookingResponse `json:"data"`
-		//	}
-		//	err := json.Unmarshal(resp, &pageResp)
-		//	qt.Assert(t, err, qt.IsNil)
-		//	qt.Assert(t, len(pageResp.Data), qt.Equals, 4) // Should show all bookings (accepted, pending, denied, and cancelled)
-		//
-		//	// Test invalid page number
-		//	_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", renterID, "?page=-1")
-		//	qt.Assert(t, code, qt.Equals, 400)
-		//
-		//	// Test with non-existent user ID
-		//	_, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "user", "invalid-id")
-		//	qt.Assert(t, code, qt.Equals, 400)
-		//
-		//	// Test without authentication
-		//	_, code = c.Request(http.MethodGet, "", nil, "bookings", "user", renterID)
-		//	qt.Assert(t, code, qt.Equals, 401)
-		//})
+			var response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp, &response)
+			qt.Assert(t, err, qt.IsNil)
+			cancelBookingID := response.Data.ID
+
+			// Try to cancel without auth
+			_, code = c.Request(http.MethodPut, "",
+				&api.BookingStatusUpdate{
+					Status: "CANCELLED",
+				}, "bookings", cancelBookingID)
+			qt.Assert(t, code, qt.Equals, 401)
+
+			// Try to cancel as owner (should fail)
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "CANCELLED",
+				}, "bookings", cancelBookingID)
+			qt.Assert(t, code, qt.Equals, 403)
+
+			// Cancel as renter
+			_, code = c.Request(http.MethodPut, renterJWT,
+				&api.BookingStatusUpdate{
+					Status: "CANCELLED",
+				}, "bookings", cancelBookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Verify booking status is CANCELLED
+			resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", cancelBookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+			var bookingResp struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "CANCELLED")
+		})
 
 		// Test count pending actions
 		t.Run("Count Pending Actions", func(t *testing.T) {

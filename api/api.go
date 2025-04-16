@@ -139,7 +139,7 @@ func (a *API) router() http.Handler {
 		log.Info().Msg("register route GET /bookings/requests/incoming")
 		r.Get("/bookings/requests/incoming", a.routerHandler(a.HandleGetIncomingRequests))
 		// PUT /bookings/{bookingId} - Update booking status
-		log.Info().Msg("register route POST /bookings/{bookingId}")
+		log.Info().Msg("register route PUT /bookings/{bookingId}")
 		r.Put("/bookings/{bookingId}", a.routerHandler(a.HandleUpdateBookingStatus))
 		// GET /bookings/{bookingId}
 		log.Info().Msg("register route GET /bookings/{bookingId}")
