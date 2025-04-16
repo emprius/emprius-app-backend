@@ -14,30 +14,31 @@ import (
 
 // convertBookingToResponse converts a db.Booking and an associated db.BookingRating
 // into a BookingResponse. The IsRated field is set based on whether the authenticated user has rated the booking.
-func convertBookingToResponse(booking *db.BookingWithRatings, authenticatedUserID ...string) *BookingResponse {
+func convertBookingToResponse(booking *db.Booking, authenticatedUserID ...string) *BookingResponse {
 	isRated := false
 
 	// Check if the booking is rated by the authenticated user
-	if len(authenticatedUserID) > 0 && authenticatedUserID[0] != "" {
-		userID, err := primitive.ObjectIDFromHex(authenticatedUserID[0])
-		if err == nil {
-			// Determine the counterparty ID based on the user's role in the booking
-			var counterpartyID primitive.ObjectID
-			if booking.FromUserID == userID {
-				counterpartyID = booking.ToUserID
-			} else if booking.ToUserID == userID {
-				counterpartyID = booking.FromUserID
-			}
+	//if len(authenticatedUserID) > 0 && authenticatedUserID[0] != "" {
+	//userID, err := primitive.ObjectIDFromHex(authenticatedUserID[0])
+	//if err == nil {
+	// Determine the counterparty ID based on the user's role in the booking
+	//var counterpartyID primitive.ObjectID
+	//if booking.FromUserID == userID {
+	//	counterpartyID = booking.ToUserID
+	//} else if booking.ToUserID == userID {
+	//	counterpartyID = booking.FromUserID
+	//}
 
-			// Check if there's a rating from the authenticated user
-			for _, rating := range booking.Ratings {
-				if rating.FromUserID == userID && rating.ToUserID == counterpartyID {
-					isRated = true
-					break
-				}
-			}
-		}
-	}
+	// Check if there's a rating from the authenticated user
+	//for _, rating := range booking.Ratings {
+	//	// Check if this rating was created by the authenticated user
+	//	if rating.FromUserID == userID && rating.ToUserID == counterpartyID {
+	//		isRated = true
+	//		break
+	//	}
+	//}
+	//}
+	//}
 
 	return &BookingResponse{
 		ID:            booking.ID.Hex(),
@@ -368,7 +369,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 
 	response := make([]*BookingResponse, len(bookings))
 	for i, booking := range bookings {
-		response[i] = convertBookingToResponse(&db.BookingWithRatings{Booking: *booking}, r.UserID)
+		response[i] = convertBookingToResponse(booking, r.UserID)
 	}
 
 	return response, nil
@@ -503,7 +504,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return convertBookingToResponse(&db.BookingWithRatings{Booking: *booking, Ratings: nil}, r.UserID), nil
+	return convertBookingToResponse(booking, r.UserID), nil
 }
 
 // HandleRateBooking handles POST /bookings/{bookingId}/ratings
