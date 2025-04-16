@@ -49,7 +49,7 @@ func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID 
 		BookingStatus: string(booking.BookingStatus),
 		CreatedAt:     booking.CreatedAt.Unix(),
 		UpdatedAt:     booking.UpdatedAt.Unix(),
-		IsRated:       isRated, // This field indicates if the booking is rated by the authenticated user
+		IsRated:       &isRated, // This field indicates if the booking is rated by the authenticated user
 	}
 }
 

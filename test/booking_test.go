@@ -808,7 +808,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, bookingResp.Data.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false before rating"))
+		qt.Assert(t, *bookingResp.Data.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false before rating"))
 
 		// Check isRated attribute in outgoing requests list (should be false)
 		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
@@ -823,7 +823,7 @@ func TestBookings(t *testing.T) {
 		for _, booking := range outgoingResp.Data {
 			if booking.ID == bookingID {
 				foundBooking = true
-				qt.Assert(t, booking.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false in outgoing requests before rating"))
+				qt.Assert(t, *booking.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false in outgoing requests before rating"))
 				break
 			}
 		}
@@ -844,7 +844,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, bookingResp.Data.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true after rating"))
+		qt.Assert(t, *bookingResp.Data.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true after rating"))
 
 		// Check isRated attribute in outgoing requests list (should be true)
 		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
@@ -856,7 +856,7 @@ func TestBookings(t *testing.T) {
 		for _, booking := range outgoingResp.Data {
 			if booking.ID == bookingID {
 				foundBooking = true
-				qt.Assert(t, booking.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true in outgoing requests after rating"))
+				qt.Assert(t, *booking.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true in outgoing requests after rating"))
 				break
 			}
 		}
@@ -867,7 +867,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, bookingResp.Data.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false for owner who hasn't rated yet"))
+		qt.Assert(t, *bookingResp.Data.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false for owner who hasn't rated yet"))
 
 		// Check isRated attribute in incoming requests list (should be false for owner)
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
@@ -882,7 +882,7 @@ func TestBookings(t *testing.T) {
 		for _, booking := range incomingResp.Data {
 			if booking.ID == bookingID {
 				foundBooking = true
-				qt.Assert(t, booking.IsRated, qt.Equals, false, qt.Commentf(
+				qt.Assert(t, *booking.IsRated, qt.Equals, false, qt.Commentf(
 					"IsRated should be false in incoming requests for owner who hasn't rated yet",
 				))
 				break
@@ -905,7 +905,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, bookingResp.Data.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true for owner after rating"))
+		qt.Assert(t, *bookingResp.Data.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true for owner after rating"))
 
 		// Check isRated attribute in incoming requests list (should be true for owner)
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
@@ -917,7 +917,7 @@ func TestBookings(t *testing.T) {
 		for _, booking := range incomingResp.Data {
 			if booking.ID == bookingID {
 				foundBooking = true
-				qt.Assert(t, booking.IsRated, qt.Equals, true, qt.Commentf(
+				qt.Assert(t, *booking.IsRated, qt.Equals, true, qt.Commentf(
 					"IsRated should be true in incoming requests for owner after rating",
 				))
 				break

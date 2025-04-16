@@ -225,7 +225,7 @@ type BookingResponse struct {
 	Contact       string `json:"contact"`
 	Comments      string `json:"comments"`
 	BookingStatus string `json:"bookingStatus"`
-	IsRated       bool   `json:"isRated"`
+	IsRated       *bool  `json:"isRated"`
 
 	// Legacy fields for backward compatibility
 	CreatedAt int64 `json:"createdAt"`
