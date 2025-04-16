@@ -216,42 +216,6 @@ components:
           type: string
           description: Additional comments about the booking
 
-    BookingRating:
-      type: object
-      properties:
-        id:
-          type: string
-          format: objectid
-          description: MongoDB ObjectID of the rating
-        bookingId:
-          type: string
-          format: objectid
-          description: MongoDB ObjectID of the rated booking
-        fromUserId:
-          type: string
-          format: objectid
-          description: MongoDB ObjectID of the user giving the rating
-        toUserId:
-          type: string
-          format: objectid
-          description: MongoDB ObjectID of the user receiving the rating
-        rating:
-          type: integer
-          minimum: 1
-          maximum: 5
-          description: Rating value between 1 and 5
-        comment:
-          type: string
-          description: Optional comment about the rating
-        images:
-          type: array
-          items:
-            type: string
-          description: Optional array of image hashes associated with the rating
-        ratedAt:
-          type: integer
-          format: int64
-          description: When the rating was submitted
 
     BookingResponse:
       type: object
@@ -291,12 +255,7 @@ components:
           description: Current status of the booking
         isRated:
           type: boolean
-          description: Whether this booking has been rated by any party
-        ratings:
-          type: array
-          items:
-            $ref: '#/components/schemas/BookingRating'
-          description: Array of ratings associated with this booking
+          description: Whether this booking has been rated by any party=
         # Legacy fields marked as deprecated
         rating:
           type: integer
@@ -316,15 +275,6 @@ components:
           type: string
           format: date-time
           description: When the booking was last updated
-
-    RatingResponse:
-      type: object
-      properties:
-        ratings:
-          type: array
-          items:
-            $ref: '#/components/schemas/BookingRating'
-          description: Array of ratings
 
     RateRequest:
       type: object
@@ -381,6 +331,11 @@ components:
           type: string
           format: objectid
           description: MongoDB ObjectID of the booking (same as id)
+
+        toolId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of related tool (same as id)
         owner:
           $ref: '#/components/schemas/RatingParty'
           description: Rating information for the tool owner
@@ -1107,7 +1062,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BookingRating'
+                $ref: '#/components/schemas/UnifiedRating'
         '400':
           description: Invalid request or rating value (must be between 1-5)
         '401':
@@ -1144,7 +1099,7 @@ paths:
                   ratings:
                     type: array
                     items:
-                      $ref: '#/components/schemas/BookingRating'
+                      $ref: '#/components/schemas/UnifiedRating'
                     description: Array of ratings associated with this booking
         '401':
           description: Unauthorized
