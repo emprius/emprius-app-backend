@@ -427,6 +427,13 @@ func (a *API) HandleGetBookingRatings(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
+	// Check if there are any actual ratings
+	if (unifiedRating.Owner == nil || unifiedRating.Owner.Rating == nil) &&
+		(unifiedRating.Requester == nil || unifiedRating.Requester.Rating == nil) {
+		// No ratings found, return 204 No Content
+		return nil, ErrNoContent.WithErr(fmt.Errorf("no ratings yet"))
+	}
+
 	// Return the unified rating directly
 	return unifiedRating, nil
 }

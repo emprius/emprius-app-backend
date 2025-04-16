@@ -96,8 +96,12 @@ var (
 	}
 )
 
-// Resource not found errors
+// Resource not found or empty errors
 var (
+	ErrNoContent = &HTTPError{
+		Code:    http.StatusNoContent,
+		Message: "no content",
+	}
 	ErrImageNotFound = &HTTPError{
 		Code:    http.StatusNotFound,
 		Message: "image not found",
