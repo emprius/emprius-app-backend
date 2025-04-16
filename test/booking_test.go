@@ -882,7 +882,9 @@ func TestBookings(t *testing.T) {
 		for _, booking := range incomingResp.Data {
 			if booking.ID == bookingID {
 				foundBooking = true
-				qt.Assert(t, booking.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false in incoming requests for owner who hasn't rated yet"))
+				qt.Assert(t, booking.IsRated, qt.Equals, false, qt.Commentf(
+					"IsRated should be false in incoming requests for owner who hasn't rated yet",
+				))
 				break
 			}
 		}
@@ -915,7 +917,9 @@ func TestBookings(t *testing.T) {
 		for _, booking := range incomingResp.Data {
 			if booking.ID == bookingID {
 				foundBooking = true
-				qt.Assert(t, booking.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true in incoming requests for owner after rating"))
+				qt.Assert(t, booking.IsRated, qt.Equals, true, qt.Commentf(
+					"IsRated should be true in incoming requests for owner after rating",
+				))
 				break
 			}
 		}
