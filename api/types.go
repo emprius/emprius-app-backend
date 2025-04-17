@@ -151,6 +151,7 @@ type Tool struct {
 	EstimatedValue   *uint64          `json:"estimatedValue"`
 	Height           uint32           `json:"height"`
 	Weight           uint32           `json:"weight"`
+	MaxDistance      uint32           `json:"maxDistance"`
 	ReservedDates    []db.DateRange   `json:"reservedDates"`
 }
 
@@ -175,6 +176,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.EstimatedValue = &dbt.EstimatedValue
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
+	t.MaxDistance = dbt.MaxDistance
 	t.ReservedDates = dbt.ReservedDates
 	return t
 }

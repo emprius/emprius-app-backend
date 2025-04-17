@@ -124,6 +124,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		EstimatedValue:   *t.EstimatedValue,
 		Height:           t.Height,
 		Weight:           t.Weight,
+		MaxDistance:      t.MaxDistance,
 		Images:           dbImages,
 		Location:         t.Location.ToDBLocation(),
 		TransportOptions: transportOptions,
@@ -217,6 +218,9 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 	if newTool.Weight != 0 {
 		tool.Weight = newTool.Weight
 	}
+	if newTool.MaxDistance != 0 {
+		tool.MaxDistance = newTool.MaxDistance
+	}
 	if newTool.Category != 0 {
 		categories := a.toolCategories()
 		validCategory := false
@@ -305,6 +309,7 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 		"estimatedValue":   tool.EstimatedValue,
 		"height":           tool.Height,
 		"weight":           tool.Weight,
+		"maxDistance":      tool.MaxDistance,
 		"images":           tool.Images,
 		"location":         tool.Location,
 		"transportOptions": tool.TransportOptions,

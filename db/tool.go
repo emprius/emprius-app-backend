@@ -71,6 +71,7 @@ type Tool struct {
 	EstimatedValue   uint64             `bson:"estimatedValue" json:"estimatedValue"`
 	Height           uint32             `bson:"height" json:"height"`
 	Weight           uint32             `bson:"weight" json:"weight"`
+	MaxDistance      uint32             `bson:"maxDistance" json:"maxDistance"`
 	ReservedDates    []DateRange        `bson:"reservedDates" json:"reservedDates"`
 }
 
