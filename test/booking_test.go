@@ -309,7 +309,7 @@ func TestBookings(t *testing.T) {
 			denyBookingID := response.Data.ID
 
 			// Try to deny without auth
-			resp, code = c.Request(http.MethodPut, "",
+			_, code = c.Request(http.MethodPut, "",
 				&api.BookingStatusUpdate{
 					Status: "REJECTED",
 				}, "bookings", denyBookingID)
