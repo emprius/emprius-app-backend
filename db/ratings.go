@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/emprius/emprius-app-backend/types"
+
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -23,20 +25,20 @@ type Rating struct {
 	RateeID   primitive.ObjectID `bson:"rateeId" json:"rateeId"`
 	Score     int                `bson:"score" json:"score"`
 	Comment   string             `bson:"comment,omitempty" json:"comment,omitempty"`
-	Images    []string           `bson:"images,omitempty" json:"images,omitempty"`
+	Images    []Image            `bson:"images,omitempty" json:"images,omitempty"`
 	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
 }
 
 // BookingRating represents the legacy rating model for API compatibility
 type BookingRating struct {
-	ID               primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
-	BookingID        primitive.ObjectID `bson:"bookingId" json:"bookingId"`
-	FromUserID       primitive.ObjectID `bson:"fromUserId" json:"fromUserId"`
-	ToUserID         primitive.ObjectID `bson:"toUserId" json:"toUserId"`
-	Rating           int                `bson:"rating" json:"rating"`
-	RatingComment    string             `bson:"ratingComment,omitempty" json:"ratingComment,omitempty"`
-	RatingHashImages []string           `bson:"ratingHashImages,omitempty" json:"ratingHashImages,omitempty"`
-	RatedAt          time.Time          `bson:"ratedAt" json:"ratedAt"`
+	ID            primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	BookingID     primitive.ObjectID `bson:"bookingId" json:"bookingId"`
+	FromUserID    primitive.ObjectID `bson:"fromUserId" json:"fromUserId"`
+	ToUserID      primitive.ObjectID `bson:"toUserId" json:"toUserId"`
+	Rating        int                `bson:"rating" json:"rating"`
+	RatingComment string             `bson:"ratingComment,omitempty" json:"ratingComment,omitempty"`
+	Images        []Image            `bson:"images,omitempty" json:"images,omitempty"`
+	RatedAt       time.Time          `bson:"ratedAt" json:"ratedAt"`
 }
 
 // UnifiedRating represents a unified view of ratings for a booking, grouping owner and requester ratings
@@ -54,7 +56,7 @@ type RatingParty struct {
 	Rating        *int               `bson:"rating,omitempty" json:"rating,omitempty"`
 	RatingComment *string            `bson:"ratingComment,omitempty" json:"ratingComment,omitempty"`
 	RatedAt       *int64             `bson:"ratedAt,omitempty" json:"ratedAt,omitempty"`
-	Images        []string           `bson:"images,omitempty" json:"images,omitempty"`
+	Images        []types.HexBytes   `bson:"images,omitempty" json:"images,omitempty"`
 }
 
 func newRatingCollection(db *mongo.Database) *mongo.Collection {
@@ -306,7 +308,9 @@ func (s *BookingService) createUnifiedRatings(bookings []*Booking, ratings []*Ra
 				unified.Owner.Rating = &score
 				unified.Owner.RatingComment = &comment
 				unified.Owner.RatedAt = &ratedAt
-				unified.Owner.Images = r.Images
+				for i := range r.Images {
+					unified.Owner.Images = append(unified.Owner.Images, r.Images[i].Hash)
+				}
 			} else if r.RaterID == requesterID && r.RateeID == ownerID {
 				// Requester rating the owner
 				ratedAt := r.CreatedAt.Unix()
@@ -315,7 +319,9 @@ func (s *BookingService) createUnifiedRatings(bookings []*Booking, ratings []*Ra
 				unified.Requester.Rating = &score
 				unified.Requester.RatingComment = &comment
 				unified.Requester.RatedAt = &ratedAt
-				unified.Requester.Images = r.Images
+				for i := range r.Images {
+					unified.Requester.Images = append(unified.Requester.Images, r.Images[i].Hash)
+				}
 			}
 		}
 
@@ -519,6 +525,7 @@ func (s *BookingService) RateBooking(
 	raterID primitive.ObjectID,
 	score int,
 	comment string,
+	images []Image,
 ) error {
 	// Get the booking
 	var booking Booking
@@ -546,6 +553,11 @@ func (s *BookingService) RateBooking(
 		rateeID = booking.ToUserID
 	} else {
 		rateeID = booking.FromUserID
+	}
+
+	// Handle nil images
+	if images == nil {
+		images = []Image{}
 	}
 
 	// Check that the user has not already submitted a rating for this booking
@@ -577,6 +589,7 @@ func (s *BookingService) RateBooking(
 		Score:     score,
 		Comment:   comment,
 		CreatedAt: now,
+		Images:    images,
 	}
 
 	_, err = s.ratingsCollection.InsertOne(ctx, newRating)
@@ -845,14 +858,14 @@ func (s *BookingService) convertToBookingRatings(ratings []*Rating) []*BookingRa
 	bookingRatings := make([]*BookingRating, len(ratings))
 	for i, r := range ratings {
 		bookingRatings[i] = &BookingRating{
-			ID:               r.ID,
-			BookingID:        r.BookingID,
-			FromUserID:       r.RaterID,
-			ToUserID:         r.RateeID,
-			Rating:           r.Score,
-			RatingComment:    r.Comment,
-			RatingHashImages: r.Images,
-			RatedAt:          r.CreatedAt,
+			ID:            r.ID,
+			BookingID:     r.BookingID,
+			FromUserID:    r.RaterID,
+			ToUserID:      r.RateeID,
+			Rating:        r.Score,
+			RatingComment: r.Comment,
+			Images:        r.Images,
+			RatedAt:       r.CreatedAt,
 		}
 	}
 	return bookingRatings

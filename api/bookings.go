@@ -7,10 +7,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"github.com/emprius/emprius-app-backend/types"
 
 	"github.com/emprius/emprius-app-backend/db"
+	"github.com/go-chi/chi/v5"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // convertBookingToResponse converts a db.Booking into a BookingResponse.
@@ -440,8 +441,9 @@ func (a *API) HandleGetBookingRatings(r *Request) (interface{}, error) {
 
 // RateRequest represents the request body for rating a booking
 type RateRequest struct {
-	Rating  int    `json:"rating"`
-	Comment string `json:"comment"`
+	Rating  int              `json:"rating"`
+	Comment string           `json:"comment"`
+	Images  []types.HexBytes `json:"images,omitempty"`
 }
 
 // HandleCreateBooking handles POST /bookings
@@ -558,6 +560,19 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	// Validate image hashes if provided
+	images, err := a.imageListFromSlice(rateReq.Images)
+	if err != nil {
+		return 0, err
+	}
+	dbImages := []db.Image{}
+	for _, i := range images {
+		dbImages = append(dbImages, db.Image{
+			Hash: i.Hash,
+			Name: i.Name,
+		})
+	}
+
 	// Rate the booking
 	err = a.database.BookingService.RateBooking(
 		r.Context.Request.Context(),
@@ -565,6 +580,7 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 		user.ObjectID(),
 		rateReq.Rating,
 		rateReq.Comment,
+		dbImages,
 	)
 	if err != nil {
 		switch {
