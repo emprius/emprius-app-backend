@@ -127,7 +127,7 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 			qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert booking"))
 
 			// Rate the booking from the renter.
-			err = bookingService.RateBooking(ctx, booking.ID, fromUser.ID, tc.rating, "Test comment")
+			err = bookingService.RateBooking(ctx, booking.ID, fromUser.ID, tc.rating, "Test comment", []Image{})
 			qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to rate booking"))
 
 			// Verify that the owner's overall rating has been updated correctly.
@@ -164,7 +164,7 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 		_, err = bookingService.collection.InsertOne(ctx, booking2)
 		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert booking2"))
 
-		err = bookingService.RateBooking(ctx, booking2.ID, fromUser.ID, 3, "Test comment")
+		err = bookingService.RateBooking(ctx, booking2.ID, fromUser.ID, 3, "Test comment", []Image{})
 		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to rate booking2"))
 
 		// Create another booking (booking1) and rate it with 5 stars.
@@ -184,7 +184,7 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 		_, err = bookingService.collection.InsertOne(ctx, booking1)
 		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert booking1"))
 
-		err = bookingService.RateBooking(ctx, booking1.ID, fromUser.ID, 5, "Test comment")
+		err = bookingService.RateBooking(ctx, booking1.ID, fromUser.ID, 5, "Test comment", []Image{})
 		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to rate booking1"))
 
 		// Expected overall rating is the average of 3 and 5 which is 4 stars → 80%.
@@ -257,7 +257,7 @@ func TestBookingService_GetPendingRatings(t *testing.T) {
 	assert.Len(t, toUserPending, 1, "Owner should see pending rating initially")
 
 	// Test 2: After renter rates, only owner should see pending rating
-	err = bookingService.RateBooking(ctx, booking.ID, fromUser.ID, 5, "Great tool!")
+	err = bookingService.RateBooking(ctx, booking.ID, fromUser.ID, 5, "Great tool!", []Image{})
 	assert.NoError(t, err)
 
 	fromUserPending, err = bookingService.GetPendingRatings(ctx, fromUser.ID)
@@ -269,7 +269,7 @@ func TestBookingService_GetPendingRatings(t *testing.T) {
 	assert.Len(t, toUserPending, 1, "Owner should still see pending rating")
 
 	// Test 3: After both rate, neither should see pending rating
-	err = bookingService.RateBooking(ctx, booking.ID, toUser.ID, 5, "Great renter!")
+	err = bookingService.RateBooking(ctx, booking.ID, toUser.ID, 5, "Great renter!", []Image{})
 	assert.NoError(t, err)
 
 	fromUserPending, err = bookingService.GetPendingRatings(ctx, fromUser.ID)

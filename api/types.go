@@ -241,15 +241,15 @@ type BookingStatusUpdate struct {
 
 // Rating represents a rating for a booking
 type Rating struct {
-	ID         string   `json:"id"`
-	BookingID  string   `json:"bookingId"`
-	ToolID     string   `json:"toolId"`
-	Rating     int      `json:"rating"`
-	Comment    string   `json:"comment"`
-	Images     []string `json:"images"`
-	FromUserID string   `json:"fromUserId"`
-	ToUserID   string   `json:"toUserId"`
-	RatedAt    int64    `json:"ratedAt"`
+	ID         string           `json:"id"`
+	BookingID  string           `json:"bookingId"`
+	ToolID     string           `json:"toolId"`
+	Rating     int              `json:"rating"`
+	Comment    string           `json:"comment"`
+	Images     []types.HexBytes `json:"images"`
+	FromUserID string           `json:"fromUserId"`
+	ToUserID   string           `json:"toUserId"`
+	RatedAt    int64            `json:"ratedAt"`
 }
 
 func (r *Rating) FromDB(b *db.BookingRating) *Rating {
@@ -260,7 +260,9 @@ func (r *Rating) FromDB(b *db.BookingRating) *Rating {
 	r.BookingID = b.BookingID.Hex()
 	r.Rating = b.Rating
 	r.Comment = b.RatingComment
-	r.Images = b.RatingHashImages
+	for i := range b.Images {
+		r.Images = append(r.Images, b.Images[i].Hash)
+	}
 	r.FromUserID = b.FromUserID.Hex()
 	r.ToUserID = b.ToUserID.Hex()
 	r.RatedAt = b.RatedAt.Unix()

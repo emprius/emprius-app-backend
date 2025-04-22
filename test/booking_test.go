@@ -1,8 +1,10 @@
 package test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/types"
 	"net/http"
 	"testing"
 	"time"
@@ -984,6 +986,118 @@ func TestBookings(t *testing.T) {
 		err = json.Unmarshal(data, &response)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, response.Data.ToolID, qt.Equals, fmt.Sprint(toolWithMaxDistanceID))
+	})
+
+	t.Run("Rating with Images", func(t *testing.T) {
+		// Create a new booking for testing ratings with images
+		resp, code := c.Request(http.MethodPost, renterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: time.Now().Add(300 * time.Hour).Unix(),
+				EndDate:   time.Now().Add(324 * time.Hour).Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking for rating with images",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Owner accepts the booking
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Mark booking as returned
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "RETURNED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Upload test images
+		// First test image
+		imageData1 := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+		decodedImage1, err := base64.StdEncoding.DecodeString(imageData1)
+		qt.Assert(t, err, qt.IsNil)
+		resp, code = c.Request(http.MethodPost, renterJWT, &db.Image{
+			Content: decodedImage1,
+			Name:    "test1.jpg",
+		}, "images")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var imageResp1 struct {
+			Data struct {
+				Hash string `json:"hash"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(resp, &imageResp1)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, imageResp1.Data.Hash, qt.Not(qt.Equals), "")
+
+		// Second test image
+		imageData2 := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+		decodedImage2, err := base64.StdEncoding.DecodeString(imageData2)
+		qt.Assert(t, err, qt.IsNil)
+		resp, code = c.Request(http.MethodPost, renterJWT, &db.Image{
+			Content: decodedImage2,
+			Name:    "test2.jpg",
+		}, "images")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var imageResp2 struct {
+			Data struct {
+				Hash string `json:"hash"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(resp, &imageResp2)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, imageResp2.Data.Hash, qt.Not(qt.Equals), "")
+
+		// Submit rating with images
+		_, code = c.Request(http.MethodPost, renterJWT,
+			api.RateRequest{
+				Rating:  5,
+				Comment: "Great experience with images!",
+				Images:  []types.HexBytes{types.HexStringToHexBytes(imageResp1.Data.Hash), types.HexStringToHexBytes(imageResp2.Data.Hash)},
+			},
+			"bookings", bookingID, "ratings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the rating and verify images are included
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID, "ratings")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var ratingResp struct {
+			Data *db.UnifiedRating `json:"data"`
+		}
+		err = json.Unmarshal(resp, &ratingResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, ratingResp.Data.Requester, qt.Not(qt.IsNil))
+		qt.Assert(t, ratingResp.Data.Requester.Images, qt.Not(qt.IsNil))
+		qt.Assert(t, len(ratingResp.Data.Requester.Images), qt.Equals, 2)
+		qt.Assert(t, ratingResp.Data.Requester.Images[0].String(), qt.Equals, imageResp1.Data.Hash)
+		qt.Assert(t, ratingResp.Data.Requester.Images[1].String(), qt.Equals, imageResp2.Data.Hash)
+
+		// Test invalid image hash
+		_, code = c.Request(http.MethodPost, ownerJWT,
+			api.RateRequest{
+				Rating:  4,
+				Comment: "Rating with invalid image hash",
+				Images:  []types.HexBytes{types.HexBytes("invalidhash123")},
+			},
+			"bookings", bookingID, "ratings",
+		)
+		qt.Assert(t, code, qt.Equals, 404) // Should fail with bad request
 	})
 
 	t.Run("Date Validation", func(t *testing.T) {
