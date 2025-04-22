@@ -4,16 +4,20 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/types"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/types"
 
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/test/utils"
 	qt "github.com/frankban/quicktest"
 )
+
+// TestImageBase64 is a small 1x1 pixel PNG image used for testing
+const testImageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
 
 func TestBookings(t *testing.T) {
 	c := utils.NewTestService(t)
@@ -1025,7 +1029,7 @@ func TestBookings(t *testing.T) {
 
 		// Upload test images
 		// First test image
-		imageData1 := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+		imageData1 := testImageBase64
 		decodedImage1, err := base64.StdEncoding.DecodeString(imageData1)
 		qt.Assert(t, err, qt.IsNil)
 		resp, code = c.Request(http.MethodPost, renterJWT, &db.Image{
@@ -1044,7 +1048,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, imageResp1.Data.Hash, qt.Not(qt.Equals), "")
 
 		// Second test image
-		imageData2 := "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+		imageData2 := testImageBase64
 		decodedImage2, err := base64.StdEncoding.DecodeString(imageData2)
 		qt.Assert(t, err, qt.IsNil)
 		resp, code = c.Request(http.MethodPost, renterJWT, &db.Image{

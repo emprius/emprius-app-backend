@@ -3,11 +3,12 @@ package db
 import (
 	"context"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/types"
 	"math"
 	"sort"
 	"strconv"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/types"
 
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
