@@ -47,7 +47,7 @@ func NewTestService(t *testing.T) *TestService {
 	mongoURI, err := container.Endpoint(ctx, "mongodb")
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
 
-	s, err := service.New(mongoURI, jwtSecret, RegisterToken, true)
+	s, err := service.New(mongoURI, jwtSecret, RegisterToken, 5, 30, true)
 	qt.Assert(t, err, qt.IsNil)
 	rand.NewSource(time.Now().UnixNano())
 	port := 20000 + rand.New(rand.NewSource(time.Now().UnixNano())).Intn(8192)

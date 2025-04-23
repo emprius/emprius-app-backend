@@ -13,15 +13,17 @@ import (
 
 // Service is the main service struct for the API backend.
 type Service struct {
-	Database      *db.Database
-	API           *api.API
-	jwtSecret     string
-	registerToken string
+	Database           *db.Database
+	API                *api.API
+	jwtSecret          string
+	registerToken      string
+	maxInviteCodes     int
+	inviteCodeCooldown int
 }
 
 // Start starts the API service.
 func (s *Service) Start(host string, port int) {
-	s.API = api.New(s.jwtSecret, s.registerToken, s.Database)
+	s.API = api.New(s.jwtSecret, s.registerToken, s.Database, s.maxInviteCodes, s.inviteCodeCooldown)
 	s.API.Start(host, port)
 	log.Info().Msgf("api service started at %s:%d", host, port)
 }
@@ -37,7 +39,7 @@ func (s *Service) Close() {
 // It also sets the global log level to InfoLevel or DebugLevel if debug is true.
 // The service must be started with Service.Start().
 // The database must be closed with Service.Close().
-func New(dbPath, jwtSecret, registerToken string, debug bool) (*Service, error) {
+func New(dbPath, jwtSecret, registerToken string, maxInviteCodes, inviteCodeCooldown int, debug bool) (*Service, error) {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout}).With().Caller().Logger()
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	if debug {
@@ -53,8 +55,10 @@ func New(dbPath, jwtSecret, registerToken string, debug bool) (*Service, error) 
 		return nil, fmt.Errorf("failed to create tables: %w", err)
 	}
 	return &Service{
-		Database:      database,
-		jwtSecret:     jwtSecret,
-		registerToken: registerToken,
+		Database:           database,
+		jwtSecret:          jwtSecret,
+		registerToken:      registerToken,
+		maxInviteCodes:     maxInviteCodes,
+		inviteCodeCooldown: inviteCodeCooldown,
 	}, nil
 }

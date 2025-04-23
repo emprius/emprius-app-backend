@@ -96,6 +96,32 @@ type User struct {
 	LastSeen    time.Time      `json:"lastSeen"`
 	Bio         string         `json:"bio"`
 	RatingCount int            `json:"ratingCount"`
+	InviteCodes []*InviteCode  `json:"inviteCodes,omitempty"`
+}
+
+// InviteCode represents an invitation code
+type InviteCode struct {
+	ID        string     `json:"id"`
+	Code      string     `json:"code"`
+	UsedByID  *string    `json:"usedById,omitempty"`
+	UsedOn    *time.Time `json:"usedOn,omitempty"`
+	CreatedOn time.Time  `json:"createdOn"`
+}
+
+// FromDBInviteCode converts a DB InviteCode to an API InviteCode
+func (i *InviteCode) FromDBInviteCode(dbic *db.InviteCode) *InviteCode {
+	i.ID = dbic.ID.Hex()
+	i.Code = dbic.Code
+	i.CreatedOn = dbic.CreatedOn
+
+	if dbic.UsedByID != nil {
+		usedByID := dbic.UsedByID.Hex()
+		i.UsedByID = &usedByID
+	}
+
+	i.UsedOn = dbic.UsedOn
+
+	return i
 }
 
 // FromDBUser converts a DB User to an API User

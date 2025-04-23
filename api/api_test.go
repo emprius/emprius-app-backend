@@ -84,7 +84,7 @@ func testAPI(t *testing.T) *API {
 	err = database.CreateTables()
 	qt.Assert(t, err, qt.IsNil)
 
-	return New("secret", "authtoken", database)
+	return New("secret", "authtoken", database, 5, 30)
 }
 
 func TestBookingDateConflicts(t *testing.T) {
