@@ -805,19 +805,31 @@ func TestBookings(t *testing.T) {
 			bookingID := bookingResp.Data.ID
 
 			// Owner accepts the booking
-			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", bookingID, "accept")
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", bookingID)
 			qt.Assert(t, code, qt.Equals, 200)
 
 			// Try to mark as picked without auth
-			_, code = c.Request(http.MethodPost, "", nil, "bookings", bookingID, "picked")
+			_, code = c.Request(http.MethodPut, "",
+				&api.BookingStatusUpdate{
+					Status: "PICKED",
+				}, "bookings", bookingID)
 			qt.Assert(t, code, qt.Equals, 401)
 
 			// Try to mark as picked by renter (should fail)
-			_, code = c.Request(http.MethodPost, renterJWT, nil, "bookings", bookingID, "picked")
+			_, code = c.Request(http.MethodPut, renterJWT,
+				&api.BookingStatusUpdate{
+					Status: "PICKED",
+				}, "bookings", bookingID)
 			qt.Assert(t, code, qt.Equals, 403)
 
 			// Mark as picked by owner
-			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", bookingID, "picked")
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "PICKED",
+				}, "bookings", bookingID)
 			qt.Assert(t, code, qt.Equals, 200)
 
 			// Get the booking to verify it's marked as PICKED
@@ -874,11 +886,17 @@ func TestBookings(t *testing.T) {
 			regularBookingID := bookingResp.Data.ID
 
 			// Owner accepts the booking
-			_, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", "petitions", regularBookingID, "accept")
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", regularBookingID)
 			qt.Assert(t, code, qt.Equals, 200)
 
 			// Try to mark regular tool as picked (should fail because it's not nomadic)
-			resp, code = c.Request(http.MethodPost, ownerJWT, nil, "bookings", regularBookingID, "picked")
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "PICKED",
+				}, "bookings", regularBookingID)
 			qt.Assert(t, code, qt.Equals, 422) // Unprocessable Entity - tool is not nomadic
 		})
 	})

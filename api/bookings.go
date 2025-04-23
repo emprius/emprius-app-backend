@@ -18,7 +18,6 @@ import (
 // The IsRated field is set based on whether the authenticated user has rated the booking.
 func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID ...string) *BookingResponse {
 	isRated := false
-	var nomadic bool
 
 	// Check if the booking is rated by the authenticated user
 	if len(authenticatedUserID) > 0 && authenticatedUserID[0] != "" &&
@@ -37,15 +36,6 @@ func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID 
 					isRated = ratings.Owner != nil && ratings.Owner.Rating != nil
 				}
 			}
-		}
-	}
-
-	// Tool lookup to get nomadic status
-	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
-	if err == nil {
-		tool, err := a.database.ToolService.GetToolByID(ctx, toolID)
-		if err == nil && tool != nil {
-			nomadic = tool.IsNomadic
 		}
 	}
 
@@ -293,6 +283,69 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if tool.IsNomadic {
 			return nil, ErrToolNomadic
 		}
+	case "PICKED":
+		newStatus = db.BookingStatusPicked
+
+		// Get the tool to check if it's nomadic and who is the actual user
+		toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
+		if err != nil {
+			return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID: %s", booking.ToolID))
+		}
+
+		tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
+		if err != nil {
+			return nil, ErrInternalServerError.WithErr(err)
+		}
+		if tool == nil {
+			return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
+		}
+
+		// Check if the tool is nomadic
+		if !tool.IsNomadic {
+			return nil, ErrToolNotNomadic
+		}
+
+		// Check if the user is authorized to mark the booking as picked
+		// For nomadic tools with an actual user set, the actual user should mark as picked
+		// For nomadic tools without an actual user, the owner should mark as picked
+		isAuthorized := false
+		if !tool.ActualUserID.IsZero() {
+			// For nomadic tools with an actual user, the actual user should mark as picked
+			isAuthorized = tool.ActualUserID == user.ObjectID()
+		} else {
+			// For nomadic tools without an actual user, the owner should mark as picked
+			isAuthorized = booking.ToUserID == user.ObjectID()
+		}
+
+		if !isAuthorized {
+			if !tool.ActualUserID.IsZero() {
+				return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the actual user of this nomadic tool", user.ID))
+			}
+			return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
+		}
+
+		// Verify booking is in ACCEPTED state
+		if booking.BookingStatus != db.BookingStatusAccepted {
+			return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking status is %s, must be ACCEPTED", booking.BookingStatus))
+		}
+
+		// Get the renter user to update the tool location
+		renter, err := a.getUserByID(booking.FromUserID.Hex())
+		if err != nil {
+			return nil, ErrUserNotFound.WithErr(err)
+		}
+
+		// Update the tool's location and actualUserId
+		updates := map[string]interface{}{
+			"location":     renter.Location.ToDBLocation(),
+			"actualUserId": booking.FromUserID,
+		}
+
+		err = a.database.ToolService.UpdateToolFields(r.Context.Request.Context(), toolID, updates)
+		if err != nil {
+			return nil, ErrInternalServerError.WithErr(err)
+		}
+
 	default:
 		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("invalid status: %s", statusUpdate.Status))
 	}
@@ -310,101 +363,6 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 	}
 
 	return a.convertBookingToResponse(updatedBooking, r.UserID), nil
-}
-
-
-// HandlePickedBooking handles POST /bookings/{bookingId}/picked
-func (a *API) HandlePickedBooking(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get user from database
-	user, err := a.getUserByID(r.UserID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	bookingID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "bookingId"))
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
-	}
-
-	booking, err := a.database.BookingService.Get(r.Context.Request.Context(), bookingID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if booking == nil {
-		return nil, ErrBookingNotFound.WithErr(fmt.Errorf("booking with id %s not found", bookingID.Hex()))
-	}
-
-	// Get the tool to check if it's nomadic and who is the actual user
-	toolID, err := strconv.ParseInt(booking.ToolID, 10, 64)
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid tool ID: %s", booking.ToolID))
-	}
-
-	tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), toolID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if tool == nil {
-		return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolID))
-	}
-
-	// Check if the tool is nomadic
-	if !tool.IsNomadic {
-		return nil, ErrToolNotNomadic
-	}
-
-	// Check if the user is authorized to mark the booking as picked
-	// For nomadic tools with an actual user set, the actual user should mark as picked
-	// For nomadic tools without an actual user, the owner should mark as picked
-	isAuthorized := false
-	if !tool.ActualUserID.IsZero() {
-		// For nomadic tools with an actual user, the actual user should mark as picked
-		isAuthorized = tool.ActualUserID == user.ObjectID()
-	} else {
-		// For nomadic tools without an actual user, the owner should mark as picked
-		isAuthorized = booking.ToUserID == user.ObjectID()
-	}
-
-	if !isAuthorized {
-		if !tool.ActualUserID.IsZero() {
-			return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the actual user of this nomadic tool", user.ID))
-		}
-		return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
-	}
-
-	// Verify booking is in ACCEPTED state
-	if booking.BookingStatus != db.BookingStatusAccepted {
-		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking status is %s, must be ACCEPTED", booking.BookingStatus))
-	}
-
-	// Get the renter user to update the tool location
-	renter, err := a.getUserByID(booking.FromUserID.Hex())
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	// Update the tool's location and actualUserId
-	updates := map[string]interface{}{
-		"location":     renter.Location.ToDBLocation(),
-		"actualUserId": booking.FromUserID,
-	}
-
-	err = a.database.ToolService.UpdateToolFields(r.Context.Request.Context(), toolID, updates)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-
-	// Update booking status to PICKED
-	err = a.database.BookingService.UpdateStatus(r.Context.Request.Context(), bookingID, db.BookingStatusPicked)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-
-	return nil, nil
 }
 
 // HandleGetPendingRatings handles GET /bookings/ratings/pending
