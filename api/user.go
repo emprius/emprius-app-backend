@@ -73,6 +73,14 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		}
 	}
 
+	// Generate initial invite codes for the new user
+	codeCount := a.maxInviteCodes
+	_, err = a.database.InviteCodeService.CreateInviteCodes(context.Background(), id, codeCount)
+	if err != nil {
+		log.Error().Err(err).Str("userId", id.Hex()).Msg("Failed to generate initial invite codes")
+		// Continue even if code generation fails
+	}
+
 	// Generate a new token with the user's ObjectID
 	token, err := a.makeToken(id.Hex())
 	if err != nil {
@@ -223,21 +231,24 @@ func (a *API) userProfileHandler(r *Request) (interface{}, error) {
 		return nil, err
 	}
 
-	// Get user's invite codes
+	// Get user's unused invite codes
 	objID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
 		return nil, ErrInvalidUserID.WithErr(err)
 	}
 
-	inviteCodes, err := a.database.InviteCodeService.GetAllInviteCodesByOwnerID(context.Background(), objID)
+	inviteCodes, err := a.database.InviteCodeService.GetUnusedInviteCodesByOwnerID(context.Background(), objID)
 	if err != nil {
 		log.Error().Err(err).Str("userId", r.UserID).Msg("Failed to get invite codes")
 		// Continue even if getting invite codes fails
 	} else {
-		// Convert DB invite codes to API invite codes
-		user.InviteCodes = make([]*InviteCode, len(inviteCodes))
+		// Convert DB invite codes to simplified API invite codes
+		user.InviteCodes = make([]*SimpleInviteCode, len(inviteCodes))
 		for i, dbInviteCode := range inviteCodes {
-			user.InviteCodes[i] = new(InviteCode).FromDBInviteCode(dbInviteCode)
+			user.InviteCodes[i] = &SimpleInviteCode{
+				Code:      dbInviteCode.Code,
+				CreatedOn: dbInviteCode.CreatedOn,
+			}
 		}
 	}
 
@@ -285,10 +296,13 @@ func (a *API) userInviteCodesHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// Convert DB invite codes to API invite codes
-	apiCodes := make([]*InviteCode, len(newCodes))
+	// Convert DB invite codes to simplified API invite codes
+	apiCodes := make([]*SimpleInviteCode, len(newCodes))
 	for i, dbCode := range newCodes {
-		apiCodes[i] = new(InviteCode).FromDBInviteCode(dbCode)
+		apiCodes[i] = &SimpleInviteCode{
+			Code:      dbCode.Code,
+			CreatedOn: dbCode.CreatedOn,
+		}
 	}
 
 	return apiCodes, nil

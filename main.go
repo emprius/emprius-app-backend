@@ -23,8 +23,8 @@ func main() {
 	flag.String("secret", "", "sets the secret for JWT")
 	flag.String("mongo", "mongodb://localhost:27017", "sets the mongo URI")
 	flag.String("registerAuthToken", "", "sets the registerAuthToken new users need to provide")
-	flag.Int("maxInviteCodes", 5, "maximum number of invite codes a user can have")
-	flag.Int("inviteCodeCooldown", 30, "cooldown period in days between invite code requests")
+	flag.Int("maxInviteCodes", 3, "maximum number of invite codes a user can have")
+	flag.Int("inviteCodeCooldown", 7, "cooldown period in days between invite code requests")
 	flag.Parse()
 
 	// Initialize Viper

@@ -82,21 +82,27 @@ type UserProfile struct {
 
 // User represents the user type
 type User struct {
-	ID          string         `json:"id"`
-	Email       string         `json:"email"`
-	Name        string         `json:"name"`
-	Community   string         `json:"community"`
-	Tokens      uint64         `json:"tokens"`
-	Active      bool           `json:"active"`
-	Rating      int            `json:"rating"`
-	AvatarHash  types.HexBytes `json:"avatarHash"`
-	Location    Location       `json:"location"`
-	Verified    bool           `json:"verified"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	LastSeen    time.Time      `json:"lastSeen"`
-	Bio         string         `json:"bio"`
-	RatingCount int            `json:"ratingCount"`
-	InviteCodes []*InviteCode  `json:"inviteCodes,omitempty"`
+	ID          string              `json:"id"`
+	Email       string              `json:"email"`
+	Name        string              `json:"name"`
+	Community   string              `json:"community"`
+	Tokens      uint64              `json:"tokens"`
+	Active      bool                `json:"active"`
+	Rating      int                 `json:"rating"`
+	AvatarHash  types.HexBytes      `json:"avatarHash"`
+	Location    Location            `json:"location"`
+	Verified    bool                `json:"verified"`
+	CreatedAt   time.Time           `json:"createdAt"`
+	LastSeen    time.Time           `json:"lastSeen"`
+	Bio         string              `json:"bio"`
+	RatingCount int                 `json:"ratingCount"`
+	InviteCodes []*SimpleInviteCode `json:"inviteCodes,omitempty"`
+}
+
+// SimpleInviteCode represents a simplified invitation code with only essential fields
+type SimpleInviteCode struct {
+	Code      string    `json:"code"`
+	CreatedOn time.Time `json:"createdOn"`
 }
 
 // InviteCode represents an invitation code

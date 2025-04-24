@@ -17,31 +17,20 @@ func TestInviteCodes(t *testing.T) {
 	userJWT, _ := c.RegisterAndLoginWithID("user@test.com", "user", "userpass")
 
 	t.Run("Request Invite Codes", func(t *testing.T) {
-		// Request invite codes
-		resp, code := c.Request(http.MethodPost, userJWT, nil, "profile", "invites")
-		qt.Assert(t, code, qt.Equals, 200)
-
-		var inviteResp struct {
-			Data []*api.InviteCode `json:"data"`
-		}
-		err := json.Unmarshal(resp, &inviteResp)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(inviteResp.Data) > 0, qt.IsTrue)
-
-		// Verify invite codes are returned in profile
-		resp, code = c.Request(http.MethodGet, userJWT, nil, "profile")
+		// Verify invite codes are already present in profile after registration
+		resp, code := c.Request(http.MethodGet, userJWT, nil, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var profileResp struct {
 			Data *api.User `json:"data"`
 		}
-		err = json.Unmarshal(resp, &profileResp)
+		err := json.Unmarshal(resp, &profileResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(profileResp.Data.InviteCodes) > 0, qt.IsTrue)
 
-		// Try to request more codes while still having unused ones
+		// Try to request codes while still having unused ones (should fail with 409 Conflict)
 		resp, code = c.Request(http.MethodPost, userJWT, nil, "profile", "invites")
-		qt.Assert(t, code, qt.Equals, 409) // Conflict
+		qt.Assert(t, code, qt.Equals, 409, qt.Commentf("Expected 409 Conflict when requesting codes while having unused ones"))
 
 		// Verify error message
 		var errorResp struct {
@@ -81,22 +70,21 @@ func TestInviteCodes(t *testing.T) {
 		)
 		qt.Assert(t, code, qt.Equals, 200)
 
-		// Verify the invite code is now marked as used
+		// Verify the invite code is no longer in the profile (since we only return unused codes)
 		resp, code = c.Request(http.MethodGet, userJWT, nil, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &profileResp)
 		qt.Assert(t, err, qt.IsNil)
 
+		// Check that the used invite code is no longer in the list
 		var foundUsedCode bool
 		for _, code := range profileResp.Data.InviteCodes {
 			if code.Code == inviteCode {
-				qt.Assert(t, code.UsedByID != nil, qt.IsTrue)
-				qt.Assert(t, code.UsedOn != nil, qt.IsTrue)
 				foundUsedCode = true
 				break
 			}
 		}
-		qt.Assert(t, foundUsedCode, qt.IsTrue)
+		qt.Assert(t, foundUsedCode, qt.Equals, false, qt.Commentf("Used invite code should not be returned in profile"))
 
 		// Try to register another user with the same invite code (should fail)
 		resp, code = c.Request(http.MethodPost, "",
