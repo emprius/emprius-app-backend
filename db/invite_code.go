@@ -83,7 +83,10 @@ func (s *InviteCodeService) GetInviteCodeByCode(ctx context.Context, code string
 }
 
 // GetUnusedInviteCodesByOwnerID retrieves all unused invite codes owned by a user.
-func (s *InviteCodeService) GetUnusedInviteCodesByOwnerID(ctx context.Context, ownerID primitive.ObjectID) ([]*InviteCode, error) {
+func (s *InviteCodeService) GetUnusedInviteCodesByOwnerID(
+	ctx context.Context,
+	ownerID primitive.ObjectID,
+) ([]*InviteCode, error) {
 	filter := bson.M{
 		"ownerId":  ownerID,
 		"usedById": nil,

@@ -68,7 +68,7 @@ func TestInviteCodes(t *testing.T) {
 		inviteCode := profileResp.Data.InviteCodes[0].Code
 
 		// Register a new user with the invite code
-		resp, code = c.Request(http.MethodPost, "",
+		_, code = c.Request(http.MethodPost, "",
 			&api.Register{
 				UserEmail:         "invited@test.com",
 				RegisterAuthToken: inviteCode,
