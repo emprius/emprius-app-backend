@@ -19,9 +19,27 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &userInfo); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
-	if userInfo.RegisterAuthToken != a.registerAuthToken {
-		return nil, ErrInvalidRegisterAuthToken
+
+	// Check if using master register token or invite code
+	var inviteCode *db.InviteCode
+	var err error
+
+	if userInfo.RegisterAuthToken == a.registerAuthToken {
+		// Using master register token, proceed without invite code
+		log.Debug().Msg("Registration using master token")
+	} else {
+		// Check if the token is a valid invite code
+		inviteCode, err = a.database.InviteCodeService.GetInviteCodeByCode(context.Background(), userInfo.RegisterAuthToken)
+		if err != nil {
+			return nil, ErrInvalidInviteCode.WithErr(err)
+		}
+
+		// Check if the invite code has already been used
+		if inviteCode.UsedByID != nil {
+			return nil, ErrInviteCodeAlreadyUsed
+		}
 	}
+
 	user := db.User{
 		Email:    userInfo.UserEmail,
 		Password: hashPassword(userInfo.Password),
@@ -45,6 +63,24 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
+
+	// If using an invite code, mark it as used
+	if inviteCode != nil {
+		err = a.database.InviteCodeService.MarkCodeAsUsed(context.Background(), inviteCode.Code, id)
+		if err != nil {
+			log.Error().Err(err).Str("code", inviteCode.Code).Str("userId", id.Hex()).Msg("Failed to mark invite code as used")
+			// Continue even if marking as used fails
+		}
+	}
+
+	// Generate initial invite codes for the new user
+	codeCount := a.maxInviteCodes
+	_, err = a.database.InviteCodeService.CreateInviteCodes(context.Background(), id, codeCount)
+	if err != nil {
+		log.Error().Err(err).Str("userId", id.Hex()).Msg("Failed to generate initial invite codes")
+		// Continue even if code generation fails
+	}
+
 	// Generate a new token with the user's ObjectID
 	token, err := a.makeToken(id.Hex())
 	if err != nil {
@@ -190,7 +226,86 @@ func (a *API) getDBUserByID(userID string) (*db.User, error) {
 }
 
 func (a *API) userProfileHandler(r *Request) (interface{}, error) {
-	return a.getUserByID(r.UserID)
+	user, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get user's unused invite codes
+	objID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	inviteCodes, err := a.database.InviteCodeService.GetUnusedInviteCodesByOwnerID(context.Background(), objID)
+	if err != nil {
+		log.Error().Err(err).Str("userId", r.UserID).Msg("Failed to get invite codes")
+		// Continue even if getting invite codes fails
+	} else {
+		// Convert DB invite codes to simplified API invite codes
+		user.InviteCodes = make([]*SimpleInviteCode, len(inviteCodes))
+		for i, dbInviteCode := range inviteCodes {
+			user.InviteCodes[i] = &SimpleInviteCode{
+				Code:      dbInviteCode.Code,
+				CreatedOn: dbInviteCode.CreatedOn,
+			}
+		}
+	}
+
+	return user, nil
+}
+
+// userInviteCodesHandler handles POST /profile/invites
+func (a *API) userInviteCodesHandler(r *Request) (interface{}, error) {
+	// Get user ID
+	objID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	// Check if user already has unused invite codes
+	unusedCodes, err := a.database.InviteCodeService.GetUnusedInviteCodesByOwnerID(context.Background(), objID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	if len(unusedCodes) > 0 {
+		return nil, ErrHasUnusedInviteCodes
+	}
+
+	// Check when the user last requested invite codes
+	lastRequestTime, err := a.database.InviteCodeService.GetLastCodeRequestTime(context.Background(), objID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// If the user has requested codes before, check if enough time has passed
+	if lastRequestTime != nil {
+		cooldownPeriod := time.Duration(a.inviteCodeCooldown) * 24 * time.Hour
+		if time.Since(*lastRequestTime) < cooldownPeriod {
+			return nil, ErrTooManyInviteCodeRequests
+		}
+	}
+
+	// Use the configured number of codes to generate
+	codeCount := a.maxInviteCodes
+
+	// Generate new invite codes
+	newCodes, err := a.database.InviteCodeService.CreateInviteCodes(context.Background(), objID, codeCount)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Convert DB invite codes to simplified API invite codes
+	apiCodes := make([]*SimpleInviteCode, len(newCodes))
+	for i, dbCode := range newCodes {
+		apiCodes[i] = &SimpleInviteCode{
+			Code:      dbCode.Code,
+			CreatedOn: dbCode.CreatedOn,
+		}
+	}
+
+	return apiCodes, nil
 }
 
 func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {

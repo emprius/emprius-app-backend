@@ -168,6 +168,31 @@ func createUniqueIndexes(db *Database, ctx context.Context) error {
 		return err
 	}
 
+	// Invite code collection indexes
+	inviteCodeColl := db.Database.Collection("invite_codes")
+	_, err = inviteCodeColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "code", Value: 1}},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "ownerId", Value: 1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "usedById", Value: 1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "createdOn", Value: 1}},
+			Options: options.Index(),
+		},
+	})
+	if err != nil {
+		log.Printf("Error creating invite code indexes: %v\n", err)
+		return err
+	}
+
 	log.Println("All indexes created successfully")
 	return nil
 }

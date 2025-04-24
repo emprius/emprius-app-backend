@@ -82,20 +82,52 @@ type UserProfile struct {
 
 // User represents the user type
 type User struct {
-	ID          string         `json:"id"`
-	Email       string         `json:"email"`
-	Name        string         `json:"name"`
-	Community   string         `json:"community"`
-	Tokens      uint64         `json:"tokens"`
-	Active      bool           `json:"active"`
-	Rating      int            `json:"rating"`
-	AvatarHash  types.HexBytes `json:"avatarHash"`
-	Location    Location       `json:"location"`
-	Verified    bool           `json:"verified"`
-	CreatedAt   time.Time      `json:"createdAt"`
-	LastSeen    time.Time      `json:"lastSeen"`
-	Bio         string         `json:"bio"`
-	RatingCount int            `json:"ratingCount"`
+	ID          string              `json:"id"`
+	Email       string              `json:"email"`
+	Name        string              `json:"name"`
+	Community   string              `json:"community"`
+	Tokens      uint64              `json:"tokens"`
+	Active      bool                `json:"active"`
+	Rating      int                 `json:"rating"`
+	AvatarHash  types.HexBytes      `json:"avatarHash"`
+	Location    Location            `json:"location"`
+	Verified    bool                `json:"verified"`
+	CreatedAt   time.Time           `json:"createdAt"`
+	LastSeen    time.Time           `json:"lastSeen"`
+	Bio         string              `json:"bio"`
+	RatingCount int                 `json:"ratingCount"`
+	InviteCodes []*SimpleInviteCode `json:"inviteCodes,omitempty"`
+}
+
+// SimpleInviteCode represents a simplified invitation code with only essential fields
+type SimpleInviteCode struct {
+	Code      string    `json:"code"`
+	CreatedOn time.Time `json:"createdOn"`
+}
+
+// InviteCode represents an invitation code
+type InviteCode struct {
+	ID        string     `json:"id"`
+	Code      string     `json:"code"`
+	UsedByID  *string    `json:"usedById,omitempty"`
+	UsedOn    *time.Time `json:"usedOn,omitempty"`
+	CreatedOn time.Time  `json:"createdOn"`
+}
+
+// FromDBInviteCode converts a DB InviteCode to an API InviteCode
+func (i *InviteCode) FromDBInviteCode(dbic *db.InviteCode) *InviteCode {
+	i.ID = dbic.ID.Hex()
+	i.Code = dbic.Code
+	i.CreatedOn = dbic.CreatedOn
+
+	if dbic.UsedByID != nil {
+		usedByID := dbic.UsedByID.Hex()
+		i.UsedByID = &usedByID
+	}
+
+	i.UsedOn = dbic.UsedOn
+
+	return i
 }
 
 // FromDBUser converts a DB User to an API User

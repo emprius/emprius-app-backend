@@ -186,6 +186,22 @@ var (
 		Code:    http.StatusBadRequest,
 		Message: "can only cancel pending requests",
 	}
+	ErrInvalidInviteCode = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invalid invite code",
+	}
+	ErrInviteCodeAlreadyUsed = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "invite code already used",
+	}
+	ErrHasUnusedInviteCodes = &HTTPError{
+		Code:    http.StatusConflict,
+		Message: "you still have unused invite codes",
+	}
+	ErrTooManyInviteCodeRequests = &HTTPError{
+		Code:    http.StatusConflict,
+		Message: "too many invite code requests, please try again later",
+	}
 )
 
 // Server errors

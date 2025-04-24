@@ -24,24 +24,28 @@ const (
 
 // API type represents the API HTTP server with JWT authentication capabilities.
 type API struct {
-	Router            *chi.Mux
-	auth              *jwtauth.JWTAuth
-	registerAuthToken string
-	database          *db.Database
-	webappdir         string
+	Router             *chi.Mux
+	auth               *jwtauth.JWTAuth
+	registerAuthToken  string
+	database           *db.Database
+	webappdir          string
+	maxInviteCodes     int
+	inviteCodeCooldown int
 }
 
 // New creates a new API HTTP server. It does not start the server. Use Start() for that.
-func New(secret, registerAuthToken string, database *db.Database) *API {
+func New(secret, registerAuthToken string, database *db.Database, maxInviteCodes, inviteCodeCooldown int) *API {
 	webappdir := os.Getenv("WEBAPPDIR")
 	if webappdir == "" {
 		log.Warn().Msg("WEBAPPDIR not set, static files will not be served")
 	}
 	return &API{
-		auth:              jwtauth.New("HS256", []byte(secret), nil),
-		database:          database,
-		registerAuthToken: registerAuthToken,
-		webappdir:         webappdir,
+		auth:               jwtauth.New("HS256", []byte(secret), nil),
+		database:           database,
+		registerAuthToken:  registerAuthToken,
+		webappdir:          webappdir,
+		maxInviteCodes:     maxInviteCodes,
+		inviteCodeCooldown: inviteCodeCooldown,
 	}
 }
 
@@ -82,6 +86,9 @@ func (a *API) router() http.Handler {
 		// Users
 		log.Info().Msg("register route GET /profile")
 		r.Get("/profile", a.routerHandler(a.userProfileHandler))
+		// POST /profile/invites
+		log.Info().Msg("register route POST /profile/invites")
+		r.Post("/profile/invites", a.routerHandler(a.userInviteCodesHandler))
 		// GET /profile/pendings
 		log.Info().Msg("register route GET /profile/pendings")
 		r.Get("/profile/pendings", a.routerHandler(a.HandleCountPendingActions))
