@@ -295,6 +295,15 @@ type BookingResponse struct {
 	UpdatedAt int64 `json:"updatedAt"`
 }
 
+// Booking status constants for API
+const (
+	BookingStatusAccepted  = "ACCEPTED"
+	BookingStatusRejected  = "REJECTED"
+	BookingStatusCancelled = "CANCELLED"
+	BookingStatusReturned  = "RETURNED"
+	BookingStatusPending   = "PENDING"
+)
+
 // BookingStatusUpdate represents a request to update a booking's status
 type BookingStatusUpdate struct {
 	Status string `json:"status"`

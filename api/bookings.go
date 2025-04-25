@@ -158,7 +158,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 	// Validate the requested status
 	var newStatus db.BookingStatus
 	switch statusUpdate.Status {
-	case "ACCEPTED":
+	case BookingStatusAccepted:
 		newStatus = db.BookingStatusAccepted
 		// Verify user is the tool owner
 		if booking.ToUserID != user.ObjectID() {
@@ -168,7 +168,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if booking.BookingStatus != db.BookingStatusPending {
 			return nil, ErrCanOnlyAcceptPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
 		}
-	case "REJECTED":
+	case BookingStatusRejected:
 		newStatus = db.BookingStatusRejected
 		// Verify user is the tool owner
 		if booking.ToUserID != user.ObjectID() {
@@ -178,7 +178,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if booking.BookingStatus != db.BookingStatusPending {
 			return nil, ErrCanOnlyDenyPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
 		}
-	case "CANCELLED":
+	case BookingStatusCancelled:
 		newStatus = db.BookingStatusCancelled
 		// Verify user is the requester
 		if booking.FromUserID != user.ObjectID() {
@@ -188,7 +188,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if booking.BookingStatus != db.BookingStatusPending {
 			return nil, ErrCanOnlyCancelPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
 		}
-	case "RETURNED":
+	case BookingStatusReturned:
 		newStatus = db.BookingStatusReturned
 		// Verify user is the tool owner
 		if booking.ToUserID != user.ObjectID() {
