@@ -122,6 +122,10 @@ var (
 		Code:    http.StatusNotFound,
 		Message: "user not found",
 	}
+	ErrCommunityNotFound = &HTTPError{
+		Code:    http.StatusNotFound,
+		Message: "community not found",
+	}
 	ErrInvalidUserID = &HTTPError{
 		Code:    http.StatusBadRequest,
 		Message: "invalid user id format",

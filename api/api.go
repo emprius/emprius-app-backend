@@ -94,8 +94,12 @@ func (a *API) router() http.Handler {
 		r.Get("/profile/pendings", a.routerHandler(a.HandleCountPendingActions))
 		log.Info().Msg("register route GET /refresh")
 		r.Get("/refresh", a.routerHandler(a.refreshHandler))
+		log.Info().Msg("register route GET /profile")
+		r.Get("/profile", a.routerHandler(a.userProfileHandler))
 		log.Info().Msg("register route POST /profile")
 		r.Post("/profile", a.routerHandler(a.userProfileUpdateHandler))
+		log.Info().Msg("register route GET /profile/pendings")
+		r.Get("/profile/pendings", a.routerHandler(a.HandleCountPendingActions))
 		log.Info().Msg("register route GET /users")
 		r.Get("/users", a.routerHandler(a.usersHandler))
 		log.Info().Msg("register route GET /users/{id}")
@@ -160,6 +164,39 @@ func (a *API) router() http.Handler {
 		// GET /bookings/{bookingId}/ratings
 		log.Info().Msg("register route GET /bookings/{bookingId}/ratings")
 		r.Get("/bookings/{bookingId}/ratings", a.routerHandler(a.HandleGetBookingRatings))
+
+		// Communities
+		// POST /communities
+		log.Info().Msg("register route POST /communities")
+		r.Post("/communities", a.routerHandler(a.createCommunityHandler))
+		// GET /communities/{communityId}
+		log.Info().Msg("register route GET /communities/{communityId}")
+		r.Get("/communities/{communityId}", a.routerHandler(a.getCommunityHandler))
+		// PUT /communities/{communityId}
+		log.Info().Msg("register route PUT /communities/{communityId}")
+		r.Put("/communities/{communityId}", a.routerHandler(a.updateCommunityHandler))
+		// DELETE /communities/{communityId}
+		log.Info().Msg("register route DELETE /communities/{communityId}")
+		r.Delete("/communities/{communityId}", a.routerHandler(a.deleteCommunityHandler))
+		// GET /communities/{communityId}/users
+		log.Info().Msg("register route GET /communities/{communityId}/users")
+		r.Get("/communities/{communityId}/users", a.routerHandler(a.getCommunityUsersHandler))
+
+		// POST /communities/{communityId}/invite/{userId}
+		log.Info().Msg("register route POST /communities/{communityId}/invite/{userId}")
+		r.Post("/communities/{communityId}/invite/{userId}", a.routerHandler(a.inviteUserToCommunityHandler))
+		// POST /communities/{communityId}/leave
+		log.Info().Msg("register route POST /communities/{communityId}/leave")
+		r.Post("/communities/{communityId}/leave", a.routerHandler(a.leaveCommunityHandler))
+		// GET /users/invites
+		log.Info().Msg("register route GET /users/invites")
+		r.Get("/users/invites", a.routerHandler(a.getUserPendingInvitesHandler))
+		// POST /users/invites/{inviteId}/accept
+		log.Info().Msg("register route POST /users/invites/{inviteId}/accept")
+		r.Post("/users/invites/{inviteId}/accept", a.routerHandler(a.acceptInviteHandler))
+		// POST /users/invites/{inviteId}/refuse
+		log.Info().Msg("register route POST /users/invites/{inviteId}/refuse")
+		r.Post("/users/invites/{inviteId}/refuse", a.routerHandler(a.rejectInviteHandler))
 	})
 
 	// Public routes

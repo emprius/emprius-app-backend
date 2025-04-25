@@ -383,6 +383,21 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Convert community ObjectIDs to strings
+	dbTool, err := a.toolFromDB(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use primitive package explicitly to ensure it's not removed by the formatter
+	communityIDs := make([]string, len(dbTool.Communities))
+	for i, communityID := range dbTool.Communities {
+		// This line uses primitive.ObjectID.Hex() method
+		communityIDs[i] = communityID.Hex()
+	}
+	tool.Communities = communityIDs
+
 	return tool, nil
 }
 
@@ -507,6 +522,15 @@ func (a *API) addToolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Handle communities if provided
+	if len(t.Communities) > 0 {
+		err = a.addToolToCommunity(r.Context.Request.Context(), id, t.Communities)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &ToolID{ID: id}, nil
 }
 
@@ -595,6 +619,15 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &t); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
+
+	// Handle communities if provided
+	if len(t.Communities) > 0 {
+		err = a.addToolToCommunity(r.Context.Request.Context(), id, t.Communities)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	newID, err := a.editTool(id, &t)
 	if err != nil {
 		return nil, err

@@ -80,6 +80,12 @@ type UserProfile struct {
 	Bio            string    `json:"bio,omitempty"`
 }
 
+// UserCommunityInfo represents a user's role in a community
+type UserCommunityInfo struct {
+	ID   string `json:"id"`
+	Role string `json:"role"`
+}
+
 // User represents the user type
 type User struct {
 	ID          string              `json:"id"`
@@ -97,6 +103,7 @@ type User struct {
 	Bio         string              `json:"bio"`
 	RatingCount int                 `json:"ratingCount"`
 	InviteCodes []*SimpleInviteCode `json:"inviteCodes,omitempty"`
+	Communities []UserCommunityInfo `json:"communities,omitempty"`
 }
 
 // SimpleInviteCode represents a simplified invitation code with only essential fields
@@ -149,6 +156,17 @@ func (u *User) FromDBUser(dbu *db.User) *User {
 	u.LastSeen = dbu.LastSeen
 	u.RatingCount = dbu.RatingCount
 
+	// Convert communities
+	if len(dbu.Communities) > 0 {
+		u.Communities = make([]UserCommunityInfo, len(dbu.Communities))
+		for i, comm := range dbu.Communities {
+			u.Communities[i] = UserCommunityInfo{
+				ID:   comm.ID.Hex(),
+				Role: string(comm.Role),
+			}
+		}
+	}
+
 	return u
 }
 
@@ -185,6 +203,7 @@ type Tool struct {
 	Weight           uint32           `json:"weight"`
 	MaxDistance      uint32           `json:"maxDistance"`
 	ReservedDates    []db.DateRange   `json:"reservedDates"`
+	Communities      []string         `json:"communities,omitempty"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
@@ -210,6 +229,15 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.Weight = dbt.Weight
 	t.MaxDistance = dbt.MaxDistance
 	t.ReservedDates = dbt.ReservedDates
+
+	// Convert communities
+	if len(dbt.Communities) > 0 {
+		t.Communities = make([]string, len(dbt.Communities))
+		for i, comm := range dbt.Communities {
+			t.Communities[i] = comm.Hex()
+		}
+	}
+
 	return t
 }
 
@@ -230,6 +258,7 @@ type ToolSearch struct {
 	MayBeFree        *bool   `json:"mayBeFree"`
 	AvailableFrom    int     `json:"availableFrom"`
 	TransportOptions []int   `json:"transportOptions"`
+	CommunityID      string  `json:"communityId,omitempty"`
 }
 
 type Info struct {
@@ -299,4 +328,11 @@ func (r *Rating) FromDB(b *db.BookingRating) *Rating {
 	r.ToUserID = b.ToUserID.Hex()
 	r.RatedAt = b.RatedAt.Unix()
 	return r
+}
+
+// PendingActionsResponse represents the response for pending actions
+type PendingActionsResponse struct {
+	PendingRatingsCount  int64 `json:"pendingRatingsCount"`
+	PendingRequestsCount int64 `json:"pendingRequestsCount"`
+	PendingInvitesCount  int64 `json:"pendingInvitesCount"`
 }

@@ -476,20 +476,3 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 
 	return a.convertBookingToResponse(updatedBooking, r.UserID), nil
 }
-
-// HandleCountPendingActions handles GET /profile/pendings
-func (a *API) HandleCountPendingActions(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-	uID, err := primitive.ObjectIDFromHex(r.UserID)
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
-	}
-
-	pending, err := a.database.BookingService.CountPendingActions(r.Context.Request.Context(), uID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	return pending, nil
-}

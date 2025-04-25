@@ -193,6 +193,76 @@ func createUniqueIndexes(db *Database, ctx context.Context) error {
 		return err
 	}
 
+	// Community collection indexes
+	communityColl := db.Database.Collection("communities")
+	_, err = communityColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "name", Value: 1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "createdAt", Value: 1}},
+			Options: options.Index(),
+		},
+	})
+	if err != nil {
+		log.Printf("Error creating community indexes: %v\n", err)
+		return err
+	}
+
+	// Community member collection indexes
+	communityMemberColl := db.Database.Collection("community_members")
+	_, err = communityMemberColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "communityId", Value: 1},
+				{Key: "userId", Value: 1},
+			},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "communityId", Value: 1}},
+			Options: options.Index(),
+		},
+	})
+	if err != nil {
+		log.Printf("Error creating community member indexes: %v\n", err)
+		return err
+	}
+
+	// Community invite collection indexes
+	communityInviteColl := db.Database.Collection("community_invites")
+	_, err = communityInviteColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "communityId", Value: 1},
+				{Key: "toUserId", Value: 1},
+				{Key: "status", Value: 1},
+			},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "toUserId", Value: 1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "fromUserId", Value: 1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "createdAt", Value: 1}},
+			Options: options.Index(),
+		},
+	})
+	if err != nil {
+		log.Printf("Error creating community invite indexes: %v\n", err)
+		return err
+	}
+
 	log.Println("All indexes created successfully")
 	return nil
 }

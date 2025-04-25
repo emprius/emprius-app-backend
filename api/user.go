@@ -383,3 +383,36 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	}
 	return newUser, nil
 }
+
+// HandleCountPendingActions handles GET /profile/pendings
+func (a *API) HandleCountPendingActions(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+	uID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	pending, err := a.database.BookingService.CountPendingActions(r.Context.Request.Context(), uID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Get pending community invites
+	pendingInvitesCount, err := a.database.CommunityService.CountUserPendingInvites(r.Context.Request.Context(), uID)
+	if err != nil {
+		log.Error().Err(err).Str("userId", r.UserID).Msg("Failed to count pending invites")
+		// Continue even if count fails, just set to 0
+		pendingInvitesCount = 0
+	}
+
+	// Create response with all pending counts
+	response := &PendingActionsResponse{
+		PendingRatingsCount:  pending.PendingRatingsCount,
+		PendingRequestsCount: pending.PendingRequestsCount,
+		PendingInvitesCount:  pendingInvitesCount,
+	}
+
+	return response, nil
+}
