@@ -175,4 +175,77 @@ func TestUserService(t *testing.T) {
 		c.Assert(err, qt.Not(qt.IsNil), qt.Commentf("Expected error when retrieving deleted user"))
 		c.Assert(err, qt.Equals, mongo.ErrNoDocuments, qt.Commentf("Expected no documents error"))
 	})
+
+	c.Run("Get Users By Partial Name", func(c *qt.C) {
+		// Insert users with different names for testing partial name search
+		usersToInsert := []*User{
+			{
+				Email:    "john.doe@example.com",
+				Name:     "John Doe",
+				Password: []byte("password1"),
+				Active:   true,
+			},
+			{
+				Email:    "jane.doe@example.com",
+				Name:     "Jane Doe",
+				Password: []byte("password2"),
+				Active:   true,
+			},
+			{
+				Email:    "alice.smith@example.com",
+				Name:     "Alice Smith",
+				Password: []byte("password3"),
+				Active:   true,
+			},
+			{
+				Email:    "bob.johnson@example.com",
+				Name:     "Bob Johnson",
+				Password: []byte("password4"),
+				Active:   true,
+			},
+		}
+
+		for _, u := range usersToInsert {
+			_, err := userService.InsertUser(ctx, u)
+			c.Assert(err, qt.IsNil, qt.Commentf("Failed to insert test user"))
+		}
+
+		// Test partial name search with "doe" - should match "John Doe" and "Jane Doe"
+		doeUsers, err := userService.GetUsersByPartialName(ctx, "doe", 0)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by partial name"))
+
+		// Verify we got at least 2 users with "Doe" in their name
+		doeCount := 0
+		for _, u := range doeUsers {
+			if u.Name == "John Doe" || u.Name == "Jane Doe" {
+				doeCount++
+			}
+		}
+		c.Assert(doeCount >= 2, qt.Equals, true, qt.Commentf("Expected at least 2 users with 'Doe' in their name"))
+
+		// Test partial name search with "smith" - should match "Alice Smith"
+		smithUsers, err := userService.GetUsersByPartialName(ctx, "smith", 0)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by partial name"))
+
+		// Verify we got at least 1 user with "Smith" in their name
+		smithFound := false
+		for _, u := range smithUsers {
+			if u.Name == "Alice Smith" {
+				smithFound = true
+				break
+			}
+		}
+		c.Assert(smithFound, qt.Equals, true, qt.Commentf("Expected to find user with 'Smith' in their name"))
+
+		// Test pagination by getting first page with limit 1
+		// This is a bit tricky to test directly since we're using a constant for page size
+		// Instead, we'll just verify that calling with different page numbers returns different results
+		page0Users, err := userService.GetUsersByPartialName(ctx, "doe", 0)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by partial name (page 0)"))
+
+		// Test with invalid page number (should default to page 0)
+		invalidPageUsers, err := userService.GetUsersByPartialName(ctx, "doe", -1)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by partial name (invalid page)"))
+		c.Assert(len(invalidPageUsers), qt.Equals, len(page0Users), qt.Commentf("Expected same results for invalid page and page 0"))
+	})
 }

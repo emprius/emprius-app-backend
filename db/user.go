@@ -152,7 +152,7 @@ func (s *UserService) GetUserByID(ctx context.Context, id primitive.ObjectID) (*
 	return &user, nil
 }
 
-// GetUsersByPartialName retrieves users whose names partially match the given string
+// GetUsersByPartialName retrieves users whose names partially match the given string using aggregation pipeline
 func (s *UserService) GetUsersByPartialName(ctx context.Context, partialName string, page int) ([]*User, error) {
 	if page < 0 {
 		page = 0
@@ -164,14 +164,20 @@ func (s *UserService) GetUsersByPartialName(ctx context.Context, partialName str
 	pattern := "(?i).*" + regexp.QuoteMeta(SanitizeString(partialName)) + ".*"
 	regex := primitive.Regex{Pattern: pattern, Options: "i"}
 
-	filter := bson.M{"name": regex}
+	// Create the aggregation pipeline
+	pipeline := mongo.Pipeline{
+		// Stage 1: Match users by name
+		bson.D{{Key: "$match", Value: bson.M{"name": regex}}},
+		// Stage 2: Sort by name
+		bson.D{{Key: "$sort", Value: bson.D{{Key: "name", Value: 1}}}},
+		// Stage 3: Skip for pagination
+		bson.D{{Key: "$skip", Value: int64(skip)}},
+		// Stage 4: Limit results
+		bson.D{{Key: "$limit", Value: int64(defaultPageSize)}},
+	}
 
-	opts := options.Find().
-		SetSort(bson.D{{Key: "name", Value: 1}}). // Sort by name
-		SetSkip(int64(skip)).
-		SetLimit(int64(defaultPageSize))
-
-	cursor, err := s.Collection.Find(ctx, filter, opts)
+	// Execute the aggregation pipeline
+	cursor, err := s.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
