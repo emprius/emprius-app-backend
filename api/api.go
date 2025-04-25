@@ -181,22 +181,18 @@ func (a *API) router() http.Handler {
 		// GET /communities/{communityId}/users
 		log.Info().Msg("register route GET /communities/{communityId}/users")
 		r.Get("/communities/{communityId}/users", a.routerHandler(a.getCommunityUsersHandler))
-
-		// POST /communities/{communityId}/invite/{userId}
-		log.Info().Msg("register route POST /communities/{communityId}/invite/{userId}")
-		r.Post("/communities/{communityId}/invite/{userId}", a.routerHandler(a.inviteUserToCommunityHandler))
-		// POST /communities/{communityId}/leave
-		log.Info().Msg("register route POST /communities/{communityId}/leave")
-		r.Post("/communities/{communityId}/leave", a.routerHandler(a.leaveCommunityHandler))
-		// GET /users/invites
-		log.Info().Msg("register route GET /users/invites")
-		r.Get("/users/invites", a.routerHandler(a.getUserPendingInvitesHandler))
-		// POST /users/invites/{inviteId}/accept
-		log.Info().Msg("register route POST /users/invites/{inviteId}/accept")
-		r.Post("/users/invites/{inviteId}/accept", a.routerHandler(a.acceptInviteHandler))
-		// POST /users/invites/{inviteId}/refuse
-		log.Info().Msg("register route POST /users/invites/{inviteId}/refuse")
-		r.Post("/users/invites/{inviteId}/refuse", a.routerHandler(a.rejectInviteHandler))
+		// POST /communities/{communityId}/members/{userId} - Invite user to community
+		log.Info().Msg("register route POST /communities/{communityId}/members/{userId}")
+		r.Post("/communities/{communityId}/members/{userId}", a.routerHandler(a.inviteUserToCommunityHandler))
+		// DELETE /communities/{communityId}/members/{userId} - Remove user from community (leave)
+		log.Info().Msg("register route DELETE /communities/{communityId}/members/{userId}")
+		r.Delete("/communities/{communityId}/members/{userId}", a.routerHandler(a.leaveCommunityHandler))
+		// GET /communities/invites - Get authenticated user's pending invites
+		log.Info().Msg("register route GET /communities/invites")
+		r.Get("/communities/invites", a.routerHandler(a.getUserPendingInvitesHandler))
+		// PUT /communities/invites/{inviteId} - Update invite status (accept/reject)
+		log.Info().Msg("register route PUT /communities/invites/{inviteId}")
+		r.Put("/communities/invites/{inviteId}", a.routerHandler(a.updateInviteStatusHandler))
 	})
 
 	// Public routes

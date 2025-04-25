@@ -99,7 +99,7 @@ func (a *API) getCommunityHandler(r *Request) (interface{}, error) {
 	// Get community
 	community, err := a.database.CommunityService.GetCommunity(r.Context.Request.Context(), communityID)
 	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
+		return nil, ErrCommunityNotFound.WithErr(err)
 	}
 
 	// Return response
@@ -133,7 +133,7 @@ func (a *API) updateCommunityHandler(r *Request) (interface{}, error) {
 	// Get community to check ownership
 	community, err := a.database.CommunityService.GetCommunity(r.Context.Request.Context(), communityID)
 	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
+		return nil, ErrCommunityNotFound.WithErr(err)
 	}
 
 	// Check if user is the owner
@@ -183,7 +183,7 @@ func (a *API) deleteCommunityHandler(r *Request) (interface{}, error) {
 	// Get community to check ownership
 	community, err := a.database.CommunityService.GetCommunity(r.Context.Request.Context(), communityID)
 	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
+		return nil, ErrCommunityNotFound.WithErr(err)
 	}
 
 	// Check if user is the owner
@@ -294,7 +294,7 @@ func (a *API) inviteUserToCommunityHandler(r *Request) (interface{}, error) {
 	}, nil
 }
 
-// leaveCommunityHandler handles POST /communities/{communityId}/leave
+// leaveCommunityHandler handles DELETE /communities/{communityId}/members/{userId}
 func (a *API) leaveCommunityHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
@@ -307,10 +307,40 @@ func (a *API) leaveCommunityHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get user ID
-	userID, err := primitive.ObjectIDFromHex(r.UserID)
-	if err != nil {
-		return nil, ErrInvalidUserID.WithErr(err)
+	// Get user ID from URL or use authenticated user's ID
+	userIDStr := chi.URLParam(r.Context.Request, "userId")
+	var userID primitive.ObjectID
+
+	if userIDStr != "" {
+		// If userId is provided in URL, use it (for admin operations)
+		userID, err = primitive.ObjectIDFromHex(userIDStr)
+		if err != nil {
+			return nil, ErrInvalidRequestBodyData.WithErr(err)
+		}
+
+		// Check if authenticated user is the community owner
+		authUserID, err := primitive.ObjectIDFromHex(r.UserID)
+		if err != nil {
+			return nil, ErrInvalidUserID.WithErr(err)
+		}
+
+		// Only allow removing other users if authenticated user is the owner
+		if userID != authUserID {
+			community, err := a.database.CommunityService.GetCommunity(r.Context.Request.Context(), communityID)
+			if err != nil {
+				return nil, ErrCommunityNotFound.WithErr(err)
+			}
+
+			if community.OwnerID != authUserID {
+				return nil, ErrUnauthorized.WithErr(fmt.Errorf("only the community owner can remove other users"))
+			}
+		}
+	} else {
+		// If no userId provided, use the authenticated user's ID
+		userID, err = primitive.ObjectIDFromHex(r.UserID)
+		if err != nil {
+			return nil, ErrInvalidUserID.WithErr(err)
+		}
 	}
 
 	// Leave community
@@ -355,36 +385,13 @@ func (a *API) getUserPendingInvitesHandler(r *Request) (interface{}, error) {
 	return response, nil
 }
 
-// acceptInviteHandler handles POST /users/invites/{inviteId}/accept
-func (a *API) acceptInviteHandler(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get invite ID from URL
-	inviteIDStr := chi.URLParam(r.Context.Request, "inviteId")
-	inviteID, err := primitive.ObjectIDFromHex(inviteIDStr)
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
-	}
-
-	// Get user ID
-	userID, err := primitive.ObjectIDFromHex(r.UserID)
-	if err != nil {
-		return nil, ErrInvalidUserID.WithErr(err)
-	}
-
-	// Accept invite
-	err = a.database.CommunityService.AcceptInvite(r.Context.Request.Context(), inviteID, userID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-
-	return nil, nil
+// InviteStatusUpdateRequest represents the request to update an invite status
+type InviteStatusUpdateRequest struct {
+	Status string `json:"status"` // "ACCEPTED" or "REJECTED"
 }
 
-// rejectInviteHandler handles POST /users/invites/{inviteId}/refuse
-func (a *API) rejectInviteHandler(r *Request) (interface{}, error) {
+// updateInviteStatusHandler handles PUT /invites/{inviteId}
+func (a *API) updateInviteStatusHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
@@ -402,13 +409,48 @@ func (a *API) rejectInviteHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidUserID.WithErr(err)
 	}
 
-	// Reject invite
-	err = a.database.CommunityService.RejectInvite(r.Context.Request.Context(), inviteID, userID)
+	// Parse request
+	var req InviteStatusUpdateRequest
+	if err := json.Unmarshal(r.Data, &req); err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Validate status
+	if req.Status != "ACCEPTED" && req.Status != "REJECTED" {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid status: must be 'ACCEPTED' or 'REJECTED'"))
+	}
+
+	// Update invite status
+	if req.Status == "ACCEPTED" {
+		err = a.database.CommunityService.AcceptInvite(r.Context.Request.Context(), inviteID, userID)
+	} else if req.Status == "REJECTED" {
+		err = a.database.CommunityService.RejectInvite(r.Context.Request.Context(), inviteID, userID)
+	}
+
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	return nil, nil
+	// Get updated invite
+	// Note: This is optional, but provides confirmation of the update
+	invites, err := a.database.CommunityService.GetUserPendingInvites(r.Context.Request.Context(), userID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Convert to response format
+	response := make([]CommunityInviteResponse, len(invites))
+	for i, invite := range invites {
+		response[i] = CommunityInviteResponse{
+			ID:          invite.ID.Hex(),
+			CommunityID: invite.CommunityID.Hex(),
+			UserID:      invite.UserID.Hex(),
+			InviterID:   invite.InviterID.Hex(),
+			Status:      string(invite.Status),
+		}
+	}
+
+	return response, nil
 }
 
 // addToolToCommunityHandler handles adding a tool to a community
@@ -481,7 +523,3 @@ func (a *API) addToolToCommunity(ctx context.Context, toolID int64, communityIDs
 
 	return nil
 }
-
-// These methods are now integrated into the original tool handlers in tools.go
-// The functionality for handling communities with tools is now part of the
-// original tool handlers, so these methods are no longer needed.

@@ -117,7 +117,7 @@ func TestCommunities(t *testing.T) {
 
 		// Verify the deletion
 		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityToDeleteID)
-		qt.Assert(t, code, qt.Equals, 500) // Internal server error when community not found
+		qt.Assert(t, code, qt.Equals, 404)
 	})
 
 	t.Run("Community Users", func(t *testing.T) {
@@ -159,11 +159,11 @@ func TestCommunities(t *testing.T) {
 
 		// Test pagination by creating a community with multiple users
 		// First invite and accept a user to the community
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "invite", memberID)
+		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", memberID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Get pending invites for the member
-		resp, code = c.Request(http.MethodGet, memberJWT, nil, "users", "invites")
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", "invites")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var invitesResp struct {
@@ -175,7 +175,11 @@ func TestCommunities(t *testing.T) {
 		inviteID := invitesResp.Data[0].ID
 
 		// Accept the invitation
-		_, code = c.Request(http.MethodPost, memberJWT, nil, "users", "invites", inviteID, "accept")
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the member is now in the community
@@ -215,11 +219,11 @@ func TestCommunities(t *testing.T) {
 		communityID := createResp.Data.ID
 
 		// Test inviting a user without auth
-		_, code = c.Request(http.MethodPost, "", nil, "communities", communityID, "invite", nonMemberID)
+		_, code = c.Request(http.MethodPost, "", nil, "communities", communityID, "members", nonMemberID)
 		qt.Assert(t, code, qt.Equals, 401)
 
 		// Test inviting a user with auth
-		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "invite", nonMemberID)
+		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", nonMemberID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var inviteResp struct {
@@ -233,11 +237,11 @@ func TestCommunities(t *testing.T) {
 		inviteID := inviteResp.Data.ID
 
 		// Test getting pending invites without auth
-		_, code = c.Request(http.MethodGet, "", nil, "users", "invites")
+		_, code = c.Request(http.MethodGet, "", nil, "communities", "invites")
 		qt.Assert(t, code, qt.Equals, 401)
 
 		// Test getting pending invites with auth
-		resp, code = c.Request(http.MethodGet, nonMemberJWT, nil, "users", "invites")
+		resp, code = c.Request(http.MethodGet, nonMemberJWT, nil, "communities", "invites")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var invitesResp struct {
@@ -249,15 +253,27 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, invitesResp.Data[0].ID, qt.Equals, inviteID)
 
 		// Test accepting an invite without auth
-		_, code = c.Request(http.MethodPost, "", nil, "users", "invites", inviteID, "accept")
+		_, code = c.Request(http.MethodPut, "",
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
 		qt.Assert(t, code, qt.Equals, 401)
 
 		// Test accepting an invite with wrong user
-		_, code = c.Request(http.MethodPost, memberJWT, nil, "users", "invites", inviteID, "accept")
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
 		qt.Assert(t, code, qt.Equals, 500) // Internal server error when invite not found for this user
 
 		// Test accepting an invite with correct user
-		_, code = c.Request(http.MethodPost, nonMemberJWT, nil, "users", "invites", inviteID, "accept")
+		_, code = c.Request(http.MethodPut, nonMemberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the user is now in the community
@@ -293,22 +309,34 @@ func TestCommunities(t *testing.T) {
 		rejectionCommunityID := createResp.Data.ID
 
 		// Invite the member to the new community
-		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", rejectionCommunityID, "invite", memberID)
+		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", rejectionCommunityID, "members", memberID)
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &inviteResp)
 		qt.Assert(t, err, qt.IsNil)
 		rejectInviteID := inviteResp.Data.ID
 
 		// Test rejecting an invite without auth
-		_, code = c.Request(http.MethodPost, "", nil, "users", "invites", rejectInviteID, "refuse")
+		_, code = c.Request(http.MethodPut, "",
+			map[string]interface{}{
+				"status": "REJECTED",
+			},
+			"communities", "invites", rejectInviteID)
 		qt.Assert(t, code, qt.Equals, 401)
 
 		// Test rejecting an invite with wrong user
-		_, code = c.Request(http.MethodPost, nonMemberJWT, nil, "users", "invites", rejectInviteID, "refuse")
+		_, code = c.Request(http.MethodPut, nonMemberJWT,
+			map[string]interface{}{
+				"status": "REJECTED",
+			},
+			"communities", "invites", rejectInviteID)
 		qt.Assert(t, code, qt.Equals, 500) // Internal server error when invite not found for this user
 
 		// Test rejecting an invite with correct user
-		_, code = c.Request(http.MethodPost, memberJWT, nil, "users", "invites", rejectInviteID, "refuse")
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "REJECTED",
+			},
+			"communities", "invites", rejectInviteID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the user is not in the community
@@ -341,7 +369,7 @@ func TestCommunities(t *testing.T) {
 		countCommunityID := createResp.Data.ID
 
 		// Invite the member to the new community
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", countCommunityID, "invite", memberID)
+		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", countCommunityID, "members", memberID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Get pending counts
@@ -353,6 +381,110 @@ func TestCommunities(t *testing.T) {
 		err = json.Unmarshal(resp, &pendingsResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, pendingsResp.Data.PendingInvitesCount, qt.Equals, int64(1))
+
+		// Test the new updateInviteStatus endpoint
+		// Create a new community for testing
+		resp, code = c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "Update Invite Status Test Community",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		updateInviteCommunityID := createResp.Data.ID
+
+		// Invite the member to the new community
+		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", updateInviteCommunityID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &inviteResp)
+		qt.Assert(t, err, qt.IsNil)
+		updateInviteID := inviteResp.Data.ID
+
+		// Test updating invite status without auth
+		_, code = c.Request(http.MethodPut, "",
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", updateInviteID)
+		qt.Assert(t, code, qt.Equals, 401)
+
+		// Test updating invite status with wrong user
+		_, code = c.Request(http.MethodPut, nonMemberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", updateInviteID)
+		qt.Assert(t, code, qt.Equals, 500) // Internal server error when invite not found for this user
+
+		// Test accepting invite with new endpoint
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", updateInviteID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify the member is now in the community
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", updateInviteCommunityID, "users")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find the member in the users list
+		found = false
+		for _, user := range usersResp.Data {
+			if user.ID == memberID {
+				found = true
+				qt.Assert(t, string(user.Role), qt.Equals, "user")
+				break
+			}
+		}
+		qt.Assert(t, found, qt.IsTrue)
+
+		// Create another community for testing invite rejection with new endpoint
+		resp, code = c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "New Rejection Test Community",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		newRejectionCommunityID := createResp.Data.ID
+
+		// Invite the member to the new community
+		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", newRejectionCommunityID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &inviteResp)
+		qt.Assert(t, err, qt.IsNil)
+		newRejectInviteID := inviteResp.Data.ID
+
+		// Test rejecting invite with new endpoint
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "REJECTED",
+			},
+			"communities", "invites", newRejectInviteID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify the member is not in the community
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", newRejectionCommunityID, "users")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Ensure the member is not in the community
+		found = false
+		for _, user := range usersResp.Data {
+			if user.ID == memberID {
+				found = true
+				break
+			}
+		}
+		qt.Assert(t, found, qt.IsFalse)
 	})
 
 	t.Run("Community Membership", func(t *testing.T) {
@@ -373,11 +505,11 @@ func TestCommunities(t *testing.T) {
 		communityID := createResp.Data.ID
 
 		// Invite and accept a user to the community
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "invite", memberID)
+		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", memberID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Get pending invites for the member
-		resp, code = c.Request(http.MethodGet, memberJWT, nil, "users", "invites")
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", "invites")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var invitesResp struct {
@@ -397,19 +529,23 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, inviteID, qt.Not(qt.Equals), "")
 
 		// Accept the invitation
-		_, code = c.Request(http.MethodPost, memberJWT, nil, "users", "invites", inviteID, "accept")
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Test leaving a community without auth
-		_, code = c.Request(http.MethodPost, "", nil, "communities", communityID, "leave")
+		_, code = c.Request(http.MethodDelete, "", nil, "communities", communityID, "members", memberID)
 		qt.Assert(t, code, qt.Equals, 401)
 
 		// Test owner trying to leave the community (should fail)
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "leave")
+		_, code = c.Request(http.MethodDelete, ownerJWT, nil, "communities", communityID, "members", ownerID)
 		qt.Assert(t, code, qt.Equals, 500) // Internal server error with message "community owner cannot leave the community"
 
 		// Test member leaving the community
-		_, code = c.Request(http.MethodPost, memberJWT, nil, "communities", communityID, "leave")
+		_, code = c.Request(http.MethodDelete, memberJWT, nil, "communities", communityID, "members", memberID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the member is no longer in the community
@@ -472,7 +608,7 @@ func TestCommunities(t *testing.T) {
 
 		// Test GET profile/pendings with pending invites count
 		// Invite the member to the community
-		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "invite", memberID)
+		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", memberID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Get pending counts for the member
