@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/types"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/go-chi/chi/v5"
@@ -12,22 +13,22 @@ import (
 
 // CreateCommunityRequest represents the request to create a new community
 type CreateCommunityRequest struct {
-	Name      string `json:"name"`
-	ImageHash []byte `json:"imageHash,omitempty"`
+	Name  string         `json:"name"`
+	Image types.HexBytes `json:"image,omitempty"`
 }
 
 // UpdateCommunityRequest represents the request to update a community
 type UpdateCommunityRequest struct {
-	Name      string `json:"name,omitempty"`
-	ImageHash []byte `json:"imageHash,omitempty"`
+	Name  string         `json:"name,omitempty"`
+	Image types.HexBytes `json:"image,omitempty"`
 }
 
 // CommunityResponse represents a community in API responses
 type CommunityResponse struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	ImageHash []byte `json:"imageHash,omitempty"`
-	OwnerID   string `json:"ownerId"`
+	ID      string         `json:"id"`
+	Name    string         `json:"name"`
+	Image   types.HexBytes `json:"image,omitempty"`
+	OwnerID string         `json:"ownerId"`
 }
 
 // CommunityUserResponse represents a user in a community
@@ -69,17 +70,17 @@ func (a *API) createCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	// Create community
-	community, err := a.database.CommunityService.CreateCommunity(r.Context.Request.Context(), req.Name, req.ImageHash, userID)
+	community, err := a.database.CommunityService.CreateCommunity(r.Context.Request.Context(), req.Name, req.Image, userID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	// Return response
 	return &CommunityResponse{
-		ID:        community.ID.Hex(),
-		Name:      community.Name,
-		ImageHash: community.ImageHash,
-		OwnerID:   community.OwnerID.Hex(),
+		ID:      community.ID.Hex(),
+		Name:    community.Name,
+		Image:   community.Image,
+		OwnerID: community.OwnerID.Hex(),
 	}, nil
 }
 
@@ -104,10 +105,10 @@ func (a *API) getCommunityHandler(r *Request) (interface{}, error) {
 
 	// Return response
 	return &CommunityResponse{
-		ID:        community.ID.Hex(),
-		Name:      community.Name,
-		ImageHash: community.ImageHash,
-		OwnerID:   community.OwnerID.Hex(),
+		ID:      community.ID.Hex(),
+		Name:    community.Name,
+		Image:   community.Image,
+		OwnerID: community.OwnerID.Hex(),
 	}, nil
 }
 
@@ -147,7 +148,7 @@ func (a *API) updateCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	// Update community
-	err = a.database.CommunityService.UpdateCommunity(r.Context.Request.Context(), communityID, req.Name, req.ImageHash)
+	err = a.database.CommunityService.UpdateCommunity(r.Context.Request.Context(), communityID, req.Name, req.Image)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -160,10 +161,10 @@ func (a *API) updateCommunityHandler(r *Request) (interface{}, error) {
 
 	// Return response
 	return &CommunityResponse{
-		ID:        updatedCommunity.ID.Hex(),
-		Name:      updatedCommunity.Name,
-		ImageHash: updatedCommunity.ImageHash,
-		OwnerID:   updatedCommunity.OwnerID.Hex(),
+		ID:      updatedCommunity.ID.Hex(),
+		Name:    updatedCommunity.Name,
+		Image:   updatedCommunity.Image,
+		OwnerID: updatedCommunity.OwnerID.Hex(),
 	}, nil
 }
 

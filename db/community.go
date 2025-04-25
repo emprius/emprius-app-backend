@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/types"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -24,7 +25,7 @@ const (
 type Community struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
 	Name      string             `bson:"name" json:"name"`
-	ImageHash []byte             `bson:"imageHash,omitempty" json:"imageHash,omitempty"`
+	Image     types.HexBytes     `json:"images"`
 	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt time.Time          `bson:"updatedAt" json:"updatedAt"`
 	OwnerID   primitive.ObjectID `bson:"ownerId" json:"ownerId"`
@@ -70,14 +71,14 @@ func NewCommunityService(db *Database) *CommunityService {
 // CreateCommunity creates a new community
 func (s *CommunityService) CreateCommunity(
 	ctx context.Context,
-	name string, imageHash []byte,
+	name string, image types.HexBytes,
 	ownerID primitive.ObjectID,
 ) (*Community, error) {
 	now := time.Now()
 	community := &Community{
 		ID:        primitive.NewObjectID(),
 		Name:      name,
-		ImageHash: imageHash,
+		Image:     image,
 		CreatedAt: now,
 		UpdatedAt: now,
 		OwnerID:   ownerID,
@@ -110,7 +111,7 @@ func (s *CommunityService) GetCommunity(ctx context.Context, id primitive.Object
 }
 
 // UpdateCommunity updates a community
-func (s *CommunityService) UpdateCommunity(ctx context.Context, id primitive.ObjectID, name string, imageHash []byte) error {
+func (s *CommunityService) UpdateCommunity(ctx context.Context, id primitive.ObjectID, name string, image types.HexBytes) error {
 	update := bson.M{
 		"$set": bson.M{
 			"updatedAt": time.Now(),
@@ -121,8 +122,8 @@ func (s *CommunityService) UpdateCommunity(ctx context.Context, id primitive.Obj
 		update["$set"].(bson.M)["name"] = name
 	}
 
-	if imageHash != nil {
-		update["$set"].(bson.M)["imageHash"] = imageHash
+	if image != nil {
+		update["$set"].(bson.M)["image"] = image
 	}
 
 	_, err := s.Collection.UpdateOne(ctx, bson.M{"_id": id}, update)
