@@ -17,6 +17,8 @@ tags:
     description: Tool management and search operations
   - name: Bookings
     description: Booking management and rating operations
+  - name: Communities
+    description: Community management and member operations
 
 servers:
   - url: http://localhost:8080
@@ -113,6 +115,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DateRange'
+        communities:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: List of communities ids where the user belongs to
 
     UserProfile:
       type: object
@@ -152,7 +160,12 @@ components:
         ratingCount:
           type: integer
           description: "Number of ratings received by the user"
-
+        communities:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: List of communities ids where the user belongs to
     LoginRequest:
       type: object
       required:
@@ -345,6 +358,100 @@ components:
         requester:
           $ref: '#/components/schemas/RatingParty'
           description: Rating information for the requester
+
+    Community:
+      type: object
+      properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the community
+        name:
+          type: string
+          description: Name of the community
+        description:
+          type: string
+          description: Description of the community
+        location:
+          $ref: '#/components/schemas/Location'
+          description: Geographic location of the community
+        createdBy:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the user who created the community
+        createdAt:
+          type: string
+          format: date-time
+          description: When the community was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the community was last updated
+        image:
+          type: string
+          description: Image hash representing the community
+
+    CommunityMember:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the user
+        communityId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the community
+        role:
+          type: string
+          enum: [ADMIN, MEMBER]
+          description: Role of the user in the community
+        joinedAt:
+          type: string
+          format: date-time
+          description: When the user joined the community
+
+    CommunityInvite:
+      type: object
+      properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the invite
+        communityId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the community
+        userId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the invited user
+        invitedBy:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the user who sent the invite
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REJECTED]
+          description: Status of the invite
+        createdAt:
+          type: string
+          format: date-time
+          description: When the invite was created
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the invite was last updated
+
+    InviteStatusUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [ACCEPTED, REJECTED]
+          description: New status for the invite
 
     BookingStatusUpdate:
       type: object
@@ -671,6 +778,10 @@ paths:
                         type: integer
                         format: int64
                         description: Number of pending booking requests
+                      pendingInvitesCount:
+                        type: integer
+                        format: int64
+                        description: Number of pending community invites
         '401':
           description: Unauthorized
         '500':
@@ -1111,3 +1222,294 @@ paths:
         '500':
           description: Internal server error
 
+  /communities:
+    post:
+      tags:
+        - Communities
+      summary: Create a new community
+      description: Create a new community with the authenticated user as admin
+      security:
+        - bearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Community'
+      responses:
+        '201':
+          description: Community created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Community'
+        '400':
+          description: Invalid request body
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /communities/{communityId}:
+    get:
+      tags:
+        - Communities
+      summary: Get community by ID
+      description: Get details of a specific community
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: communityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the community
+      responses:
+        '200':
+          description: Community details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Community'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Community not found
+        '500':
+          description: Internal server error
+    put:
+      tags:
+        - Communities
+      summary: Update community
+      description: Update a community's details (admin only)
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: communityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the community
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Community'
+      responses:
+        '200':
+          description: Community updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Community'
+        '400':
+          description: Invalid request body
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not an admin of this community
+        '404':
+          description: Community not found
+        '500':
+          description: Internal server error
+    delete:
+      tags:
+        - Communities
+      summary: Delete community
+      description: Delete a community (admin only)
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: communityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the community
+      responses:
+        '204':
+          description: Community deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not an admin of this community
+        '404':
+          description: Community not found
+        '500':
+          description: Internal server error
+
+  /communities/{communityId}/users:
+    get:
+      tags:
+        - Communities
+      summary: Get community members
+      description: Get all users who are members of a specific community
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: communityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the community
+      responses:
+        '200':
+          description: List of community members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserProfile'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Community not found
+        '500':
+          description: Internal server error
+
+  /communities/{communityId}/members/{userId}:
+    post:
+      tags:
+        - Communities
+      summary: Invite user to community
+      description: Send an invitation to a user to join a community (admin only)
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: communityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the community
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the user to invite
+      responses:
+        '201':
+          description: Invitation sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityInvite'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not an admin of this community
+        '404':
+          description: Community or user not found
+        '409':
+          description: User is already a member or has a pending invitation
+        '500':
+          description: Internal server error
+    delete:
+      tags:
+        - Communities
+      summary: Remove user from community
+      description: Remove a user from a community (admin can remove any user, members can remove themselves)
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: communityId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the community
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the user to remove
+      responses:
+        '204':
+          description: User removed successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not authorized to remove this member
+        '404':
+          description: Community or user not found
+        '500':
+          description: Internal server error
+
+  /communities/invites:
+    get:
+      tags:
+        - Communities
+      summary: Get pending community invites
+      description: Get all pending community invitations for the authenticated user
+      security:
+        - bearerAuth: [ ]
+      responses:
+        '200':
+          description: List of pending invitations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CommunityInvite'
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /communities/invites/{inviteId}:
+    put:
+      tags:
+        - Communities
+      summary: Update invite status
+      description: Accept or reject a community invitation
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: objectid
+            description: MongoDB ObjectID of the invitation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InviteStatusUpdate'
+      responses:
+        '200':
+          description: Invitation status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommunityInvite'
+        '400':
+          description: Invalid request body
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - User is not the invited user
+        '404':
+          description: Invitation not found
+        '500':
+          description: Internal server error
