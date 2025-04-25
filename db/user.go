@@ -244,7 +244,11 @@ func (s *UserService) RemoveUserFromCommunity(ctx context.Context, userID, commu
 }
 
 // UpdateUserCommunityRole updates a user's role in a community
-func (s *UserService) UpdateUserCommunityRole(ctx context.Context, userID, communityID primitive.ObjectID, role CommunityRole) error {
+func (s *UserService) UpdateUserCommunityRole(
+	ctx context.Context, userID,
+	communityID primitive.ObjectID,
+	role CommunityRole,
+) error {
 	_, err := s.Collection.UpdateOne(
 		ctx,
 		bson.M{

@@ -68,7 +68,11 @@ func NewCommunityService(db *Database) *CommunityService {
 }
 
 // CreateCommunity creates a new community
-func (s *CommunityService) CreateCommunity(ctx context.Context, name string, imageHash []byte, ownerID primitive.ObjectID) (*Community, error) {
+func (s *CommunityService) CreateCommunity(
+	ctx context.Context,
+	name string, imageHash []byte,
+	ownerID primitive.ObjectID,
+) (*Community, error) {
 	now := time.Now()
 	community := &Community{
 		ID:        primitive.NewObjectID(),
@@ -185,7 +189,12 @@ func (s *CommunityService) GetCommunityUsers(ctx context.Context, communityID pr
 }
 
 // InviteUserToCommunity creates an invitation for a user to join a community
-func (s *CommunityService) InviteUserToCommunity(ctx context.Context, communityID, userID, inviterID primitive.ObjectID) (*CommunityInvite, error) {
+func (s *CommunityService) InviteUserToCommunity(
+	ctx context.Context,
+	communityID,
+	userID,
+	inviterID primitive.ObjectID,
+) (*CommunityInvite, error) {
 	// Check if community exists
 	_, err := s.GetCommunity(ctx, communityID)
 	if err != nil {
@@ -297,7 +306,6 @@ func (s *CommunityService) AcceptInvite(ctx context.Context, inviteID, userID pr
 		"userId": userID,
 		"status": InviteStatusPending,
 	}).Decode(&invite)
-
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return fmt.Errorf("invite not found or not pending")
@@ -328,7 +336,6 @@ func (s *CommunityService) RejectInvite(ctx context.Context, inviteID, userID pr
 		"userId": userID,
 		"status": InviteStatusPending,
 	}).Decode(&invite)
-
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
 			return fmt.Errorf("invite not found or not pending")
