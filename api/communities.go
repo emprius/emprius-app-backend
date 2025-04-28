@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/emprius/emprius-app-backend/types"
+	"github.com/rs/zerolog/log"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/go-chi/chi/v5"
@@ -27,10 +28,11 @@ type UpdateCommunityRequest struct {
 
 // CommunityResponse represents a community in API responses
 type CommunityResponse struct {
-	ID      string         `json:"id"`
-	Name    string         `json:"name"`
-	Image   types.HexBytes `json:"image,omitempty"`
-	OwnerID string         `json:"ownerId"`
+	ID           string         `json:"id"`
+	Name         string         `json:"name"`
+	Image        types.HexBytes `json:"image,omitempty"`
+	OwnerID      string         `json:"ownerId"`
+	MembersCount int64          `json:"membersCount"`
 }
 
 // CommunityUserResponse represents a user in a community
@@ -77,12 +79,21 @@ func (a *API) createCommunityHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
+	// Get member count (should be 1 for a new community - just the owner)
+	membersCount, err := a.database.CommunityService.CountCommunityMembers(r.Context.Request.Context(), community.ID)
+	if err != nil {
+		// Log the error but don't fail the request
+		log.Error().Err(err).Str("communityId", community.ID.Hex()).Msg("Failed to count community members")
+		membersCount = 1 // Default to 1 (the owner) if count fails
+	}
+
 	// Return response
 	return &CommunityResponse{
-		ID:      community.ID.Hex(),
-		Name:    community.Name,
-		Image:   community.Image,
-		OwnerID: community.OwnerID.Hex(),
+		ID:           community.ID.Hex(),
+		Name:         community.Name,
+		Image:        community.Image,
+		OwnerID:      community.OwnerID.Hex(),
+		MembersCount: membersCount,
 	}, nil
 }
 
@@ -99,18 +110,19 @@ func (a *API) getCommunityHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get community
-	community, err := a.database.CommunityService.GetCommunity(r.Context.Request.Context(), communityID)
+	// Get community with member count
+	community, membersCount, err := a.database.CommunityService.GetCommunityWithMemberCount(r.Context.Request.Context(), communityID)
 	if err != nil {
 		return nil, ErrCommunityNotFound.WithErr(err)
 	}
 
 	// Return response
 	return &CommunityResponse{
-		ID:      community.ID.Hex(),
-		Name:    community.Name,
-		Image:   community.Image,
-		OwnerID: community.OwnerID.Hex(),
+		ID:           community.ID.Hex(),
+		Name:         community.Name,
+		Image:        community.Image,
+		OwnerID:      community.OwnerID.Hex(),
+		MembersCount: membersCount,
 	}, nil
 }
 
@@ -155,18 +167,19 @@ func (a *API) updateCommunityHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// Get updated community
-	updatedCommunity, err := a.database.CommunityService.GetCommunity(r.Context.Request.Context(), communityID)
+	// Get updated community with member count
+	updatedCommunity, membersCount, err := a.database.CommunityService.GetCommunityWithMemberCount(r.Context.Request.Context(), communityID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	// Return response
 	return &CommunityResponse{
-		ID:      updatedCommunity.ID.Hex(),
-		Name:    updatedCommunity.Name,
-		Image:   updatedCommunity.Image,
-		OwnerID: updatedCommunity.OwnerID.Hex(),
+		ID:           updatedCommunity.ID.Hex(),
+		Name:         updatedCommunity.Name,
+		Image:        updatedCommunity.Image,
+		OwnerID:      updatedCommunity.OwnerID.Hex(),
+		MembersCount: membersCount,
 	}, nil
 }
 
@@ -484,8 +497,8 @@ func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get communities for the user
-	communities, err := a.database.CommunityService.GetUserCommunities(r.Context.Request.Context(), userID, page)
+	// Get communities for the user with member counts
+	communities, memberCounts, err := a.database.CommunityService.GetUserCommunitiesWithMemberCount(r.Context.Request.Context(), userID, page)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -494,10 +507,11 @@ func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
 	response := make([]CommunityResponse, len(communities))
 	for i, community := range communities {
 		response[i] = CommunityResponse{
-			ID:      community.ID.Hex(),
-			Name:    community.Name,
-			Image:   community.Image,
-			OwnerID: community.OwnerID.Hex(),
+			ID:           community.ID.Hex(),
+			Name:         community.Name,
+			Image:        community.Image,
+			OwnerID:      community.OwnerID.Hex(),
+			MembersCount: memberCounts[community.ID],
 		}
 	}
 

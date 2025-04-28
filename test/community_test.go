@@ -56,6 +56,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, getResp.Data.Name, qt.Equals, "Test Community")
 		qt.Assert(t, getResp.Data.OwnerID, qt.Equals, ownerID)
+		qt.Assert(t, getResp.Data.MembersCount, qt.Equals, int64(1)) // Only the owner should be in the community initially
 
 		// Test updating community without auth
 		_, code = c.Request(http.MethodPut, "",
@@ -731,9 +732,13 @@ func TestCommunities(t *testing.T) {
 		for _, community := range communitiesResp.Data {
 			if community.ID == community1ID {
 				foundCommunity1 = true
+				// Verify the member count is at least 2 (owner and member)
+				qt.Assert(t, community.MembersCount >= 2, qt.IsTrue)
 			}
 			if community.ID == community2ID {
 				foundCommunity2 = true
+				// Verify the member count is at least 1 (just the owner)
+				qt.Assert(t, community.MembersCount >= 1, qt.IsTrue)
 			}
 		}
 		qt.Assert(t, foundCommunity1, qt.IsTrue)

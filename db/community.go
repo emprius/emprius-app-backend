@@ -527,3 +527,55 @@ func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primit
 
 	return communities, nil
 }
+
+// GetCommunityWithMemberCount retrieves a community by ID with member count
+func (s *CommunityService) GetCommunityWithMemberCount(ctx context.Context, id primitive.ObjectID) (*Community, int64, error) {
+	// Get the community
+	community, err := s.GetCommunity(ctx, id)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Count the members
+	count, err := s.CountCommunityMembers(ctx, id)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return community, count, nil
+}
+
+// GetUserCommunitiesWithMemberCount retrieves all communities for a specific user with member counts
+func (s *CommunityService) GetUserCommunitiesWithMemberCount(ctx context.Context, userID primitive.ObjectID, page int) ([]*Community, map[primitive.ObjectID]int64, error) {
+	// Get the communities
+	communities, err := s.GetUserCommunities(ctx, userID, page)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Count members for each community
+	memberCounts := make(map[primitive.ObjectID]int64, len(communities))
+	for _, community := range communities {
+		count, err := s.CountCommunityMembers(ctx, community.ID)
+		if err != nil {
+			log.Error().Err(err).Str("communityId", community.ID.Hex()).Msg("Failed to count community members")
+			// Continue with count 0 if there's an error
+			memberCounts[community.ID] = 0
+		} else {
+			memberCounts[community.ID] = count
+		}
+	}
+
+	return communities, memberCounts, nil
+}
+
+// CountCommunityMembers counts the number of users in a community
+func (s *CommunityService) CountCommunityMembers(ctx context.Context, communityID primitive.ObjectID) (int64, error) {
+	// Find users with this community in their communities array
+	filter := bson.M{"communities.id": communityID}
+	count, err := s.UserService.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
