@@ -138,11 +138,11 @@ func TestCommunities(t *testing.T) {
 		communityID := createResp.Data.ID
 
 		// Test getting community users without auth
-		_, code = c.Request(http.MethodGet, "", nil, "communities", communityID, "users")
+		_, code = c.Request(http.MethodGet, "", nil, "communities", communityID, "members")
 		qt.Assert(t, code, qt.Equals, 401)
 
 		// Test getting community users with auth
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "users")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var usersResp struct {
@@ -183,21 +183,21 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the member is now in the community
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "users")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(usersResp.Data), qt.Equals, 2) // Owner and member
 
 		// Test pagination with page parameter
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "users?page=0")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members?page=0")
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(usersResp.Data), qt.Equals, 2) // Should return all users since we have less than page size
 
 		// Test invalid page number
-		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "users?page=-1")
+		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members?page=-1")
 		qt.Assert(t, code, qt.Equals, 400)
 	})
 
@@ -277,7 +277,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the user is now in the community
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "users")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		var usersResp struct {
 			Data []api.CommunityUserResponse `json:"data"`
@@ -340,7 +340,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the user is not in the community
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", rejectionCommunityID, "users")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", rejectionCommunityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
@@ -427,7 +427,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the member is now in the community
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", updateInviteCommunityID, "users")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", updateInviteCommunityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
@@ -471,7 +471,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the member is not in the community
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", newRejectionCommunityID, "users")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", newRejectionCommunityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
@@ -549,7 +549,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the member is no longer in the community
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "users")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		var usersResp struct {
 			Data []api.CommunityUserResponse `json:"data"`

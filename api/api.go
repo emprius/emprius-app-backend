@@ -178,9 +178,9 @@ func (a *API) router() http.Handler {
 		// DELETE /communities/{communityId}
 		log.Info().Msg("register route DELETE /communities/{communityId}")
 		r.Delete("/communities/{communityId}", a.routerHandler(a.deleteCommunityHandler))
-		// GET /communities/{communityId}/users
-		log.Info().Msg("register route GET /communities/{communityId}/users")
-		r.Get("/communities/{communityId}/users", a.routerHandler(a.getCommunityUsersHandler))
+		// GET /communities/{communityId}/members
+		log.Info().Msg("register route GET /communities/{communityId}/members")
+		r.Get("/communities/{communityId}/members", a.routerHandler(a.getCommunityUsersHandler))
 		// POST /communities/{communityId}/members/{userId} - Invite user to community
 		log.Info().Msg("register route POST /communities/{communityId}/members/{userId}")
 		r.Post("/communities/{communityId}/members/{userId}", a.routerHandler(a.inviteUserToCommunityHandler))
