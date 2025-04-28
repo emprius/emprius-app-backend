@@ -33,8 +33,7 @@ type CommunityResponse struct {
 
 // CommunityUserResponse represents a user in a community
 type CommunityUserResponse struct {
-	ID   string           `json:"id"`
-	Name string           `json:"name"`
+	UserPreview
 	Role db.CommunityRole `json:"role"`
 }
 
@@ -244,9 +243,8 @@ func (a *API) getCommunityUsersHandler(r *Request) (interface{}, error) {
 		}
 
 		response[i] = CommunityUserResponse{
-			ID:   user.ID.Hex(),
-			Name: user.Name,
-			Role: role,
+			UserPreview: *new(UserPreview).FromDBUserPreview(user),
+			Role:        role,
 		}
 	}
 

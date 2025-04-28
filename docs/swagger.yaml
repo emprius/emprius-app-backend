@@ -122,6 +122,87 @@ components:
           nullable: true
           description: List of communities ids where the user belongs to
 
+    UserPreview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the user
+        name:
+          type: string
+          description: User's display name
+        avatarHash:
+          type: string
+          format: byte
+          description: Hash of the user's avatar image
+        ratingCount:
+          type: integer
+          description: Number of ratings received by the user
+        rating:
+          type: integer
+          description: Average rating of the user
+        active:
+          type: boolean
+          description: Whether the user is currently active
+
+    User:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/UserPreview'
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+        community:
+          type: string
+          description: User's community name
+        tokens:
+          type: integer
+          format: uint64
+          description: User's token balance
+        location:
+          $ref: '#/components/schemas/Location'
+          description: User's geographical location
+        verified:
+          type: boolean
+          description: Whether the user's email is verified
+        createdAt:
+          type: string
+          format: date-time
+          description: When the user account was created
+        lastSeen:
+          type: string
+          format: date-time
+          description: When the user was last active
+        bio:
+          type: string
+          description: User's biography or description
+        inviteCodes:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+              createdOn:
+                type: string
+                format: date-time
+          description: List of invitation codes owned by the user
+        communities:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: objectid
+              role:
+                type: string
+                enum: [ADMIN, MEMBER]
+          description: List of communities the user belongs to with their roles
+
     UserProfile:
       type: object
       properties:
@@ -358,6 +439,16 @@ components:
         requester:
           $ref: '#/components/schemas/RatingParty'
           description: Rating information for the requester
+
+    CommunityUserResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/UserPreview'
+      properties:
+        role:
+          type: string
+          enum: [ADMIN, MEMBER]
+          description: Role of the user in the community
 
     Community:
       type: object
@@ -1368,7 +1459,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/UserProfile'
+                  $ref: '#/components/schemas/CommunityUserResponse'
         '401':
           description: Unauthorized
         '404':

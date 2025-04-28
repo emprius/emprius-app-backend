@@ -86,22 +86,27 @@ type UserCommunityInfo struct {
 	Role string `json:"role"`
 }
 
+// User preview for list calls (does not send full information)
+type UserPreview struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	AvatarHash  types.HexBytes `json:"avatarHash"`
+	RatingCount int            `json:"ratingCount"`
+	Rating      int            `json:"rating"`
+	Active      bool           `json:"active"`
+}
+
 // User represents the user type
 type User struct {
-	ID          string              `json:"id"`
+	UserPreview
 	Email       string              `json:"email"`
-	Name        string              `json:"name"`
 	Community   string              `json:"community"`
 	Tokens      uint64              `json:"tokens"`
-	Active      bool                `json:"active"`
-	Rating      int                 `json:"rating"`
-	AvatarHash  types.HexBytes      `json:"avatarHash"`
 	Location    Location            `json:"location"`
 	Verified    bool                `json:"verified"`
 	CreatedAt   time.Time           `json:"createdAt"`
 	LastSeen    time.Time           `json:"lastSeen"`
 	Bio         string              `json:"bio"`
-	RatingCount int                 `json:"ratingCount"`
 	InviteCodes []*SimpleInviteCode `json:"inviteCodes,omitempty"`
 	Communities []UserCommunityInfo `json:"communities,omitempty"`
 }
@@ -137,24 +142,31 @@ func (i *InviteCode) FromDBInviteCode(dbic *db.InviteCode) *InviteCode {
 	return i
 }
 
-// FromDBUser converts a DB User to an API User
+// FromDBUserPreview converts a DB User to an API UserPreview
+func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
+	up.ID = dbu.ID.Hex()
+	up.Name = dbu.Name
+	up.AvatarHash = dbu.AvatarHash
+	up.Rating = int(dbu.Rating)
+	up.RatingCount = dbu.RatingCount
+	up.Active = dbu.Active
+	return up
+}
+
+// FromDBUser converts a DB User to an API User (full version)
 func (u *User) FromDBUser(dbu *db.User) *User {
-	u.ID = dbu.ID.Hex()
+	// First fill UserPreview fields
+	u.UserPreview.FromDBUserPreview(dbu)
+
+	// Then fill additional User fields
 	u.Email = dbu.Email
-	u.Name = dbu.Name
 	u.Community = dbu.Community
 	u.Tokens = dbu.Tokens
-	u.Active = dbu.Active
-	u.Rating = int(dbu.Rating)
-	u.AvatarHash = dbu.AvatarHash
 	u.Location.FromDBLocation(dbu.Location)
 	u.Verified = dbu.Verified
-
-	// Set new fields from DB user or defaults if not present
 	u.Bio = dbu.Bio
 	u.CreatedAt = dbu.CreatedAt
 	u.LastSeen = dbu.LastSeen
-	u.RatingCount = dbu.RatingCount
 
 	// Convert communities
 	if len(dbu.Communities) > 0 {
