@@ -45,9 +45,9 @@ type CommunityInvite struct {
 type InviteStatus string
 
 const (
-	InviteStatusPending  InviteStatus = "pending"
-	InviteStatusAccepted InviteStatus = "accepted"
-	InviteStatusRejected InviteStatus = "rejected"
+	InviteStatusPending  InviteStatus = "PENDING"
+	InviteStatusAccepted InviteStatus = "ACCEPTED"
+	InviteStatusRejected InviteStatus = "REJECTED"
 )
 
 // CommunityService provides methods to interact with communities

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/emprius/emprius-app-backend/types"
+	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/go-chi/chi/v5"
@@ -39,11 +40,12 @@ type CommunityUserResponse struct {
 
 // CommunityInviteResponse represents a community invitation
 type CommunityInviteResponse struct {
-	ID          string `json:"id"`
-	CommunityID string `json:"communityId"`
-	UserID      string `json:"userId"`
-	InviterID   string `json:"inviterId"`
-	Status      string `json:"status"`
+	ID          string    `json:"id"`
+	CommunityID string    `json:"communityId"`
+	UserID      string    `json:"userId"`
+	InviterID   string    `json:"inviterId"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 // createCommunityHandler handles POST /communities
@@ -378,6 +380,7 @@ func (a *API) getUserPendingInvitesHandler(r *Request) (interface{}, error) {
 			UserID:      invite.UserID.Hex(),
 			InviterID:   invite.InviterID.Hex(),
 			Status:      string(invite.Status),
+			CreatedAt:   invite.CreatedAt,
 		}
 	}
 
