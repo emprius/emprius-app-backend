@@ -107,6 +107,9 @@ func (a *API) router() http.Handler {
 		// GET /users/{id}/ratings
 		log.Info().Msg("register route GET /users/{id}/ratings")
 		r.Get("/users/{id}/ratings", a.routerHandler(a.HandleGetUserRatings))
+		// GET /users/{userId}/communities - Get communities for a specific user
+		log.Info().Msg("register route GET /users/{userId}/communities")
+		r.Get("/users/{userId}/communities", a.routerHandler(a.getUserCommunitiesHandler))
 
 		// Images
 		// POST /images

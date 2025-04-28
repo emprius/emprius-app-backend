@@ -459,6 +459,51 @@ func (a *API) updateInviteStatusHandler(r *Request) (interface{}, error) {
 	return response, nil
 }
 
+// getUserCommunitiesHandler handles GET /users/{userId}/communities
+func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get user ID from URL
+	userIDStr := chi.URLParam(r.Context.Request, "userId")
+	userID, err := primitive.ObjectIDFromHex(userIDStr)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Check if user exists
+	_, err = a.database.UserService.GetUserByID(r.Context.Request.Context(), userID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	// Get page from query parameters
+	page, err := r.Context.GetPage()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get communities for the user
+	communities, err := a.database.CommunityService.GetUserCommunities(r.Context.Request.Context(), userID, page)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Convert to response format
+	response := make([]CommunityResponse, len(communities))
+	for i, community := range communities {
+		response[i] = CommunityResponse{
+			ID:      community.ID.Hex(),
+			Name:    community.Name,
+			Image:   community.Image,
+			OwnerID: community.OwnerID.Hex(),
+		}
+	}
+
+	return response, nil
+}
+
 // addToolToCommunityHandler handles adding a tool to a community
 // This is part of the tool update process in editToolHandler
 func (a *API) addToolToCommunity(ctx context.Context, toolID int64, communityIDs []string) error {

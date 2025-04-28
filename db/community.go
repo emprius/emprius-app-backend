@@ -469,3 +469,61 @@ func (s *CommunityService) CommunityExists(ctx context.Context, communityID prim
 	}
 	return count > 0, nil
 }
+
+// GetUserCommunities retrieves all communities for a specific user
+func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primitive.ObjectID, page int) ([]*Community, error) {
+	if page < 0 {
+		page = 0
+	}
+
+	skip := page * defaultPageSize
+
+	// Use aggregation pipeline to get communities for the user
+	pipeline := []bson.M{
+		{
+			"$lookup": bson.M{
+				"from":         "users",
+				"localField":   "_id",
+				"foreignField": "communities.id",
+				"as":           "members",
+			},
+		},
+		{
+			"$match": bson.M{
+				"members": bson.M{
+					"$elemMatch": bson.M{
+						"_id": userID,
+					},
+				},
+			},
+		},
+		{
+			"$sort": bson.M{
+				"name": 1, // Sort by name ascending
+			},
+		},
+		{
+			"$skip": int64(skip),
+		},
+		{
+			"$limit": int64(defaultPageSize),
+		},
+	}
+
+	cursor, err := s.Collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var communities []*Community
+	if err := cursor.All(ctx, &communities); err != nil {
+		return nil, err
+	}
+
+	return communities, nil
+}

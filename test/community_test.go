@@ -648,6 +648,139 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, found, qt.IsTrue)
 	})
 
+	t.Run("User Communities", func(t *testing.T) {
+		// Create communities for testing
+		resp, code := c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "User Communities Test 1",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var createResp struct {
+			Data api.CommunityResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		community1ID := createResp.Data.ID
+
+		// Create a second community
+		resp, code = c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "User Communities Test 2",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		community2ID := createResp.Data.ID
+
+		// Invite member to first community
+		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", community1ID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get pending invites for the member
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", "invites")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var invitesResp struct {
+			Data []api.CommunityInviteResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &invitesResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(invitesResp.Data) > 0, qt.IsTrue)
+
+		// Find the invite for the first community
+		var inviteID string
+		for _, invite := range invitesResp.Data {
+			if invite.CommunityID == community1ID {
+				inviteID = invite.ID
+				break
+			}
+		}
+		qt.Assert(t, inviteID, qt.Not(qt.Equals), "")
+
+		// Accept the invitation
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Test getting user communities without auth
+		_, code = c.Request(http.MethodGet, "", nil, "users", ownerID, "communities")
+		qt.Assert(t, code, qt.Equals, 401)
+
+		// Test getting owner's communities
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "users", ownerID, "communities")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var communitiesResp struct {
+			Data []api.CommunityResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &communitiesResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(communitiesResp.Data) >= 2, qt.IsTrue) // Owner should be in at least the two test communities
+
+		// Verify the communities include the test communities
+		foundCommunity1 := false
+		foundCommunity2 := false
+		for _, community := range communitiesResp.Data {
+			if community.ID == community1ID {
+				foundCommunity1 = true
+			}
+			if community.ID == community2ID {
+				foundCommunity2 = true
+			}
+		}
+		qt.Assert(t, foundCommunity1, qt.IsTrue)
+		qt.Assert(t, foundCommunity2, qt.IsTrue)
+
+		// Test getting member's communities
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "users", memberID, "communities")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &communitiesResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(communitiesResp.Data) >= 1, qt.IsTrue) // Member should be in at least the first test community
+
+		// Verify the member is in the first community but not the second
+		foundCommunity1 = false
+		foundCommunity2 = false
+		for _, community := range communitiesResp.Data {
+			if community.ID == community1ID {
+				foundCommunity1 = true
+			}
+			if community.ID == community2ID {
+				foundCommunity2 = true
+			}
+		}
+		qt.Assert(t, foundCommunity1, qt.IsTrue)
+		qt.Assert(t, foundCommunity2, qt.IsFalse)
+
+		// Test pagination
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "users", ownerID, "communities?page=0")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &communitiesResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(communitiesResp.Data) > 0, qt.IsTrue)
+
+		// Test invalid page number
+		_, code = c.Request(http.MethodGet, ownerJWT, nil, "users", ownerID, "communities?page=-1")
+		qt.Assert(t, code, qt.Equals, 400)
+
+		// Test non-existent user
+		_, code = c.Request(http.MethodGet, ownerJWT, nil, "users", "507f1f77bcf86cd799439011", "communities")
+		qt.Assert(t, code, qt.Equals, 404)
+
+		// Test invalid user ID
+		_, code = c.Request(http.MethodGet, ownerJWT, nil, "users", "invalid-id", "communities")
+		qt.Assert(t, code, qt.Equals, 400)
+	})
+
 	t.Run("Modified Endpoints", func(t *testing.T) {
 		// Create a community for testing
 		resp, code := c.Request(http.MethodPost, ownerJWT,
