@@ -523,7 +523,7 @@ components:
           description: MongoDB ObjectID of the user who sent the invite
         status:
           type: string
-          enum: [PENDING, ACCEPTED, REJECTED]
+          enum: [PENDING, ACCEPTED, REJECTED, CANCELED]
           description: Status of the invite
         createdAt:
           type: string
@@ -541,7 +541,7 @@ components:
       properties:
         status:
           type: string
-          enum: [ACCEPTED, REJECTED]
+          enum: [ACCEPTED, REJECTED, CANCELED]
           description: New status for the invite
 
     BookingStatusUpdate:
@@ -1570,7 +1570,7 @@ paths:
       tags:
         - Communities
       summary: Update invite status
-      description: Accept or reject a community invitation
+      description: Accept, reject, or cancel a community invitation. Only the invited user can accept or reject, and only the inviter can cancel.
       security:
         - bearerAuth: [ ]
       parameters:

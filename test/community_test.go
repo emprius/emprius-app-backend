@@ -233,7 +233,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, inviteResp.Data.CommunityID, qt.Equals, communityID)
 		qt.Assert(t, inviteResp.Data.UserID, qt.Equals, nonMemberID)
-		qt.Assert(t, inviteResp.Data.Status, qt.Equals, "pending")
+		qt.Assert(t, inviteResp.Data.Status, qt.Equals, "PENDING")
 		inviteID := inviteResp.Data.ID
 
 		// Test getting pending invites without auth
@@ -341,6 +341,65 @@ func TestCommunities(t *testing.T) {
 
 		// Verify the user is not in the community
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", rejectionCommunityID, "members")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Ensure the member is not in the community
+		found = false
+		for _, user := range usersResp.Data {
+			if user.ID == memberID {
+				found = true
+				break
+			}
+		}
+		qt.Assert(t, found, qt.IsFalse)
+
+		// Create another community for testing invite cancellation
+		resp, code = c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "Cancellation Test Community",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		cancelCommunityID := createResp.Data.ID
+
+		// Invite the member to the new community
+		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", cancelCommunityID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &inviteResp)
+		qt.Assert(t, err, qt.IsNil)
+		cancelInviteID := inviteResp.Data.ID
+
+		// Test canceling an invite without auth
+		_, code = c.Request(http.MethodPut, "",
+			map[string]interface{}{
+				"status": "CANCELED",
+			},
+			"communities", "invites", cancelInviteID)
+		qt.Assert(t, code, qt.Equals, 401)
+
+		// Test canceling an invite with wrong user (non-inviter)
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "CANCELED",
+			},
+			"communities", "invites", cancelInviteID)
+		qt.Assert(t, code, qt.Equals, 500) // Internal server error when invite not found for this user as inviter
+
+		// Test canceling an invite with correct user (inviter)
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"status": "CANCELED",
+			},
+			"communities", "invites", cancelInviteID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify the invite is canceled by checking the member is not in the community
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", cancelCommunityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)

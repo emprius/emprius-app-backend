@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/types"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/types"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/go-chi/chi/v5"
@@ -389,7 +390,7 @@ func (a *API) getUserPendingInvitesHandler(r *Request) (interface{}, error) {
 
 // InviteStatusUpdateRequest represents the request to update an invite status
 type InviteStatusUpdateRequest struct {
-	Status string `json:"status"` // "ACCEPTED" or "REJECTED"
+	Status string `json:"status"` // "ACCEPTED", "REJECTED", or "CANCELED"
 }
 
 // updateInviteStatusHandler handles PUT /invites/{inviteId}
@@ -418,8 +419,8 @@ func (a *API) updateInviteStatusHandler(r *Request) (interface{}, error) {
 	}
 
 	// Validate status
-	if req.Status != "ACCEPTED" && req.Status != "REJECTED" {
-		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid status: must be 'ACCEPTED' or 'REJECTED'"))
+	if req.Status != "ACCEPTED" && req.Status != "REJECTED" && req.Status != "CANCELED" {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid status: must be 'ACCEPTED', 'REJECTED', or 'CANCELED'"))
 	}
 
 	// Update invite status
@@ -427,6 +428,9 @@ func (a *API) updateInviteStatusHandler(r *Request) (interface{}, error) {
 		err = a.database.CommunityService.AcceptInvite(r.Context.Request.Context(), inviteID, userID)
 	} else if req.Status == "REJECTED" {
 		err = a.database.CommunityService.RejectInvite(r.Context.Request.Context(), inviteID, userID)
+	} else if req.Status == "CANCELED" {
+		// Only the inviter can cancel an invite
+		err = a.database.CommunityService.CancelInvite(r.Context.Request.Context(), inviteID, userID)
 	}
 
 	if err != nil {

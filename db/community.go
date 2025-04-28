@@ -3,8 +3,9 @@ package db
 import (
 	"context"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/types"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/types"
 
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
@@ -48,6 +49,7 @@ const (
 	InviteStatusPending  InviteStatus = "PENDING"
 	InviteStatusAccepted InviteStatus = "ACCEPTED"
 	InviteStatusRejected InviteStatus = "REJECTED"
+	InviteStatusCanceled InviteStatus = "CANCELED"
 )
 
 // CommunityService provides methods to interact with communities
@@ -349,6 +351,31 @@ func (s *CommunityService) RejectInvite(ctx context.Context, inviteID, userID pr
 		ctx,
 		bson.M{"_id": inviteID},
 		bson.M{"$set": bson.M{"status": InviteStatusRejected}},
+	)
+	return err
+}
+
+// CancelInvite cancels a community invitation (only the inviter can cancel)
+func (s *CommunityService) CancelInvite(ctx context.Context, inviteID, inviterID primitive.ObjectID) error {
+	// Get the invite
+	var invite CommunityInvite
+	err := s.InviteCollection.FindOne(ctx, bson.M{
+		"_id":       inviteID,
+		"inviterId": inviterID,
+		"status":    InviteStatusPending,
+	}).Decode(&invite)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return fmt.Errorf("invite not found, not pending, or user is not the inviter")
+		}
+		return err
+	}
+
+	// Update invite status
+	_, err = s.InviteCollection.UpdateOne(
+		ctx,
+		bson.M{"_id": inviteID},
+		bson.M{"$set": bson.M{"status": InviteStatusCanceled}},
 	)
 	return err
 }
