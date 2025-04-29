@@ -235,6 +235,8 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, inviteResp.Data.CommunityID, qt.Equals, communityID)
 		qt.Assert(t, inviteResp.Data.UserID, qt.Equals, nonMemberID)
 		qt.Assert(t, inviteResp.Data.Status, qt.Equals, "PENDING")
+		// Verify community information is included
+		qt.Assert(t, inviteResp.Data.Community.Name, qt.Not(qt.Equals), "")
 		inviteID := inviteResp.Data.ID
 
 		// Test getting pending invites without auth
@@ -252,6 +254,8 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(invitesResp.Data), qt.Equals, 1)
 		qt.Assert(t, invitesResp.Data[0].ID, qt.Equals, inviteID)
+		// Verify community information is included in the invite response
+		qt.Assert(t, invitesResp.Data[0].Community.Name, qt.Not(qt.Equals), "")
 
 		// Test accepting an invite without auth
 		_, code = c.Request(http.MethodPut, "",

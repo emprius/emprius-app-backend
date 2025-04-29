@@ -42,6 +42,20 @@ type CommunityInvite struct {
 	Status      InviteStatus       `bson:"status" json:"status"`
 }
 
+// CommunityInviteWithDetails represents a community invitation with community details
+type CommunityInviteWithDetails struct {
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id,omitempty"`
+	CommunityID primitive.ObjectID `bson:"communityId" json:"communityId"`
+	UserID      primitive.ObjectID `bson:"userId" json:"userId"`
+	InviterID   primitive.ObjectID `bson:"inviterId" json:"inviterId"`
+	CreatedAt   time.Time          `bson:"createdAt" json:"createdAt"`
+	Status      InviteStatus       `bson:"status" json:"status"`
+	Community   struct {
+		Name  string         `bson:"name" json:"name"`
+		Image types.HexBytes `bson:"image" json:"image"`
+	} `bson:"community" json:"community"`
+}
+
 // InviteStatus represents the status of a community invitation
 type InviteStatus string
 
@@ -284,6 +298,114 @@ func (s *CommunityService) GetUserPendingInvites(ctx context.Context, userID pri
 		return nil, err
 	}
 	return invites, nil
+}
+
+// GetUserPendingInvitesWithDetails retrieves all pending invites for a user with community details
+func (s *CommunityService) GetUserPendingInvitesWithDetails(ctx context.Context, userID primitive.ObjectID) ([]*CommunityInviteWithDetails, error) {
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"userId": userID,
+				"status": InviteStatusPending,
+			},
+		},
+		{
+			"$lookup": bson.M{
+				"from":         "communities",
+				"localField":   "communityId",
+				"foreignField": "_id",
+				"as":           "communityDetails",
+			},
+		},
+		{
+			"$unwind": "$communityDetails",
+		},
+		{
+			"$addFields": bson.M{
+				"community": bson.M{
+					"name":  "$communityDetails.name",
+					"image": "$communityDetails.image",
+				},
+			},
+		},
+		{
+			"$project": bson.M{
+				"communityDetails": 0,
+			},
+		},
+	}
+
+	cursor, err := s.InviteCollection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var invites []*CommunityInviteWithDetails
+	if err := cursor.All(ctx, &invites); err != nil {
+		return nil, err
+	}
+	return invites, nil
+}
+
+// GetInviteWithDetails retrieves a single invite with community details
+func (s *CommunityService) GetInviteWithDetails(ctx context.Context, inviteID primitive.ObjectID) (*CommunityInviteWithDetails, error) {
+	pipeline := []bson.M{
+		{
+			"$match": bson.M{
+				"_id": inviteID,
+			},
+		},
+		{
+			"$lookup": bson.M{
+				"from":         "communities",
+				"localField":   "communityId",
+				"foreignField": "_id",
+				"as":           "communityDetails",
+			},
+		},
+		{
+			"$unwind": "$communityDetails",
+		},
+		{
+			"$addFields": bson.M{
+				"community": bson.M{
+					"name":  "$communityDetails.name",
+					"image": "$communityDetails.image",
+				},
+			},
+		},
+		{
+			"$project": bson.M{
+				"communityDetails": 0,
+			},
+		},
+	}
+
+	cursor, err := s.InviteCollection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var invites []*CommunityInviteWithDetails
+	if err := cursor.All(ctx, &invites); err != nil {
+		return nil, err
+	}
+
+	if len(invites) == 0 {
+		return nil, mongo.ErrNoDocuments
+	}
+
+	return invites[0], nil
 }
 
 // CountUserPendingInvites counts the number of pending invites for a user

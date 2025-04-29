@@ -49,6 +49,10 @@ type CommunityInviteResponse struct {
 	InviterID   string    `json:"inviterId"`
 	Status      string    `json:"status"`
 	CreatedAt   time.Time `json:"createdAt"`
+	Community   struct {
+		Name  string         `json:"name"`
+		Image types.HexBytes `json:"image"`
+	} `json:"community"`
 }
 
 // createCommunityHandler handles POST /communities
@@ -299,6 +303,12 @@ func (a *API) inviteUserToCommunityHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
+	// Get community details
+	community, err := a.database.CommunityService.GetCommunity(r.Context.Request.Context(), communityID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
 	// Return response
 	return &CommunityInviteResponse{
 		ID:          invite.ID.Hex(),
@@ -306,6 +316,14 @@ func (a *API) inviteUserToCommunityHandler(r *Request) (interface{}, error) {
 		UserID:      invite.UserID.Hex(),
 		InviterID:   invite.InviterID.Hex(),
 		Status:      string(invite.Status),
+		CreatedAt:   invite.CreatedAt,
+		Community: struct {
+			Name  string         `json:"name"`
+			Image types.HexBytes `json:"image"`
+		}{
+			Name:  community.Name,
+			Image: community.Image,
+		},
 	}, nil
 }
 
@@ -379,8 +397,8 @@ func (a *API) getUserPendingInvitesHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidUserID.WithErr(err)
 	}
 
-	// Get pending invites
-	invites, err := a.database.CommunityService.GetUserPendingInvites(r.Context.Request.Context(), userID)
+	// Get pending invites with community details
+	invites, err := a.database.CommunityService.GetUserPendingInvitesWithDetails(r.Context.Request.Context(), userID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -395,6 +413,13 @@ func (a *API) getUserPendingInvitesHandler(r *Request) (interface{}, error) {
 			InviterID:   invite.InviterID.Hex(),
 			Status:      string(invite.Status),
 			CreatedAt:   invite.CreatedAt,
+			Community: struct {
+				Name  string         `json:"name"`
+				Image types.HexBytes `json:"image"`
+			}{
+				Name:  invite.Community.Name,
+				Image: invite.Community.Image,
+			},
 		}
 	}
 
@@ -450,9 +475,8 @@ func (a *API) updateInviteStatusHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// Get updated invite
-	// Note: This is optional, but provides confirmation of the update
-	invites, err := a.database.CommunityService.GetUserPendingInvites(r.Context.Request.Context(), userID)
+	// Get updated invites with community details
+	invites, err := a.database.CommunityService.GetUserPendingInvitesWithDetails(r.Context.Request.Context(), userID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -466,6 +490,14 @@ func (a *API) updateInviteStatusHandler(r *Request) (interface{}, error) {
 			UserID:      invite.UserID.Hex(),
 			InviterID:   invite.InviterID.Hex(),
 			Status:      string(invite.Status),
+			CreatedAt:   invite.CreatedAt,
+			Community: struct {
+				Name  string         `json:"name"`
+				Image types.HexBytes `json:"image"`
+			}{
+				Name:  invite.Community.Name,
+				Image: invite.Community.Image,
+			},
 		}
 	}
 
