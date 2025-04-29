@@ -187,7 +187,10 @@ func (a *API) router() http.Handler {
 		// POST /communities/{communityId}/members/{userId} - Invite user to community
 		log.Info().Msg("register route POST /communities/{communityId}/members/{userId}")
 		r.Post("/communities/{communityId}/members/{userId}", a.routerHandler(a.inviteUserToCommunityHandler))
-		// DELETE /communities/{communityId}/members/{userId} - Remove user from community (leave)
+		// DELETE /communities/{communityId}/members} - Remove leave community
+		log.Info().Msg("register route DELETE /communities/{communityId}/members")
+		r.Delete("/communities/{communityId}/members", a.routerHandler(a.leaveCommunityHandler))
+		// DELETE /communities/{communityId}/members/{userId} - Remove user from community
 		log.Info().Msg("register route DELETE /communities/{communityId}/members/{userId}")
 		r.Delete("/communities/{communityId}/members/{userId}", a.routerHandler(a.leaveCommunityHandler))
 		// GET /communities/invites - Get authenticated user's pending invites
