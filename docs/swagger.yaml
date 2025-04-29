@@ -662,6 +662,11 @@ paths:
             minimum: 0
             default: 0
             description: Page number for pagination (0-based, 16 items per page)
+        - name: username
+          in: query
+          schema:
+            type: string
+          description: Optional parameter to search users by partial name match
       responses:
         '200':
           description: List of users

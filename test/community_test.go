@@ -827,7 +827,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, pendingsResp.Data.PendingInvitesCount > 0, qt.IsTrue)
 
 		// Test GET users/ with username search filter
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "users?username=member")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "users?username=kkk")
 		qt.Assert(t, code, qt.Equals, 200)
 		var usersResp struct {
 			Data struct {
