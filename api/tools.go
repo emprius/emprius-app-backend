@@ -620,12 +620,9 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Handle communities if provided
-	if len(t.Communities) > 0 {
-		err = a.addToolToCommunity(r.Context.Request.Context(), id, t.Communities)
-		if err != nil {
-			return nil, err
-		}
+	err = a.addToolToCommunity(r.Context.Request.Context(), id, t.Communities)
+	if err != nil {
+		return nil, err
 	}
 
 	newID, err := a.editTool(id, &t)
