@@ -223,6 +223,10 @@ func TestCommunities(t *testing.T) {
 		_, code = c.Request(http.MethodPost, "", nil, "communities", communityID, "members", nonMemberID)
 		qt.Assert(t, code, qt.Equals, 401)
 
+		// Test user trying to invite themselves (should fail)
+		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", ownerID)
+		qt.Assert(t, code, qt.Equals, 400) // Bad request - users cannot invite themselves
+
 		// Test inviting a user with auth
 		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", nonMemberID)
 		qt.Assert(t, code, qt.Equals, 200)

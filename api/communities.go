@@ -297,6 +297,11 @@ func (a *API) inviteUserToCommunityHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidUserID.WithErr(err)
 	}
 
+	// Check that user is not inviting themselves
+	if userID == inviterID {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("users cannot invite themselves to a community"))
+	}
+
 	// Create invitation
 	invite, err := a.database.CommunityService.InviteUserToCommunity(r.Context.Request.Context(), communityID, userID, inviterID)
 	if err != nil {
