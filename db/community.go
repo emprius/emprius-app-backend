@@ -650,45 +650,62 @@ func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primit
 	return communities, nil
 }
 
-// GetCommunityWithMemberCount retrieves a community by ID with member count
-func (s *CommunityService) GetCommunityWithMemberCount(ctx context.Context, id primitive.ObjectID) (*Community, int64, error) {
+// GetCommunityWithMemberCount retrieves a community by ID with member count and tool count
+func (s *CommunityService) GetCommunityWithMemberCount(ctx context.Context, id primitive.ObjectID) (*Community, int64, int64, error) {
 	// Get the community
 	community, err := s.GetCommunity(ctx, id)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
 	// Count the members
-	count, err := s.CountCommunityMembers(ctx, id)
+	membersCount, err := s.CountCommunityMembers(ctx, id)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 
-	return community, count, nil
+	// Count the tools
+	toolsCount, err := s.CountCommunityTools(ctx, id)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	return community, membersCount, toolsCount, nil
 }
 
-// GetUserCommunitiesWithMemberCount retrieves all communities for a specific user with member counts
-func (s *CommunityService) GetUserCommunitiesWithMemberCount(ctx context.Context, userID primitive.ObjectID, page int) ([]*Community, map[primitive.ObjectID]int64, error) {
+// GetUserCommunitiesWithMemberCount retrieves all communities for a specific user with member counts and tool counts
+func (s *CommunityService) GetUserCommunitiesWithMemberCount(ctx context.Context, userID primitive.ObjectID, page int) ([]*Community, map[primitive.ObjectID]int64, map[primitive.ObjectID]int64, error) {
 	// Get the communities
 	communities, err := s.GetUserCommunities(ctx, userID, page)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	// Count members for each community
+	// Count members and tools for each community
 	memberCounts := make(map[primitive.ObjectID]int64, len(communities))
+	toolCounts := make(map[primitive.ObjectID]int64, len(communities))
+
 	for _, community := range communities {
-		count, err := s.CountCommunityMembers(ctx, community.ID)
+		// Count members
+		memberCount, err := s.CountCommunityMembers(ctx, community.ID)
 		if err != nil {
 			log.Error().Err(err).Str("communityId", community.ID.Hex()).Msg("Failed to count community members")
-			// Continue with count 0 if there's an error
 			memberCounts[community.ID] = 0
 		} else {
-			memberCounts[community.ID] = count
+			memberCounts[community.ID] = memberCount
+		}
+
+		// Count tools
+		toolCount, err := s.CountCommunityTools(ctx, community.ID)
+		if err != nil {
+			log.Error().Err(err).Str("communityId", community.ID.Hex()).Msg("Failed to count community tools")
+			toolCounts[community.ID] = 0
+		} else {
+			toolCounts[community.ID] = toolCount
 		}
 	}
 
-	return communities, memberCounts, nil
+	return communities, memberCounts, toolCounts, nil
 }
 
 // CountCommunityMembers counts the number of users in a community
@@ -696,6 +713,17 @@ func (s *CommunityService) CountCommunityMembers(ctx context.Context, communityI
 	// Find users with this community in their communities array
 	filter := bson.M{"communities.id": communityID}
 	count, err := s.UserService.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// CountCommunityTools counts the number of tools in a community
+func (s *CommunityService) CountCommunityTools(ctx context.Context, communityID primitive.ObjectID) (int64, error) {
+	// Find tools with this community in their communities array
+	filter := bson.M{"communities": communityID}
+	count, err := s.ToolService.Collection.CountDocuments(ctx, filter)
 	if err != nil {
 		return 0, err
 	}

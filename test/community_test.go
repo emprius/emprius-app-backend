@@ -219,6 +219,9 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		communityID := createResp.Data.ID
 
+		// Verify the initial tool count is 0
+		qt.Assert(t, createResp.Data.ToolsCount, qt.Equals, int64(0))
+
 		// Create a tool
 		toolID := c.CreateTool(ownerJWT, "Community Tool")
 
@@ -256,6 +259,16 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 1) // One tool in the community now
 		qt.Assert(t, toolsResp.Data.Tools[0].ID, qt.Equals, toolID)
 
+		// Verify the tool count is updated in the community response
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+		var communityResp struct {
+			Data api.CommunityResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &communityResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, communityResp.Data.ToolsCount, qt.Equals, int64(1)) // Tool count should be 1
+
 		// Create a second tool
 		tool2ID := c.CreateTool(ownerJWT, "Another Community Tool")
 
@@ -274,6 +287,13 @@ func TestCommunities(t *testing.T) {
 		err = json.Unmarshal(resp, &toolsResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 2) // Two tools in the community now
+
+		// Verify the tool count is updated to 2 in the community response
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &communityResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, communityResp.Data.ToolsCount, qt.Equals, int64(2)) // Tool count should be 2
 
 		// Test with non-existent community ID
 		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", "507f1f77bcf86cd799439011", "tools")
