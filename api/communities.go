@@ -625,3 +625,40 @@ func (a *API) addToolToCommunity(ctx context.Context, toolID int64, communityIDs
 
 	return nil
 }
+
+// getCommunityToolsHandler handles GET /communities/{communityId}/tools
+func (a *API) getCommunityToolsHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get community ID from URL
+	communityIDStr := chi.URLParam(r.Context.Request, "communityId")
+	communityID, err := primitive.ObjectIDFromHex(communityIDStr)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Check if community exists
+	exists, err := a.database.CommunityService.CommunityExists(r.Context.Request.Context(), communityID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	if !exists {
+		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community with id %s not found", communityIDStr))
+	}
+
+	// Get tools for the community
+	dbTools, err := a.database.CommunityService.GetCommunityTools(r.Context.Request.Context(), communityID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Convert to API response format
+	tools := make([]*Tool, len(dbTools))
+	for i, dbTool := range dbTools {
+		tools[i] = new(Tool).FromDBTool(dbTool)
+	}
+
+	return &ToolsWrapper{Tools: tools}, nil
+}

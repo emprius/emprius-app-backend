@@ -184,6 +184,9 @@ func (a *API) router() http.Handler {
 		// GET /communities/{communityId}/members
 		log.Info().Msg("register route GET /communities/{communityId}/members")
 		r.Get("/communities/{communityId}/members", a.routerHandler(a.getCommunityUsersHandler))
+		// GET /communities/{communityId}/tools
+		log.Info().Msg("register route GET /communities/{communityId}/tools")
+		r.Get("/communities/{communityId}/tools", a.routerHandler(a.getCommunityToolsHandler))
 		// POST /communities/{communityId}/members/{userId} - Invite user to community
 		log.Info().Msg("register route POST /communities/{communityId}/members/{userId}")
 		r.Post("/communities/{communityId}/members/{userId}", a.routerHandler(a.inviteUserToCommunityHandler))

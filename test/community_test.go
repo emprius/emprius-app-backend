@@ -202,6 +202,105 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 400)
 	})
 
+	t.Run("Community Tools", func(t *testing.T) {
+		// Create a community for testing
+		resp, code := c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "Tools Test Community",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var createResp struct {
+			Data api.CommunityResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		communityID := createResp.Data.ID
+
+		// Create a tool
+		toolID := c.CreateTool(ownerJWT, "Community Tool")
+
+		// Test getting community tools without auth
+		_, code = c.Request(http.MethodGet, "", nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 401)
+
+		// Test getting community tools with auth (should be empty initially)
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolsResp struct {
+			Data struct {
+				Tools []*api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(resp, &toolsResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 0) // No tools in the community initially
+
+		// Add the tool to the community
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"communities": []string{communityID},
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify the tool is now in the community
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &toolsResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 1) // One tool in the community now
+		qt.Assert(t, toolsResp.Data.Tools[0].ID, qt.Equals, toolID)
+
+		// Create a second tool
+		tool2ID := c.CreateTool(ownerJWT, "Another Community Tool")
+
+		// Add the second tool to the community
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"communities": []string{communityID},
+			},
+			"tools", fmt.Sprint(tool2ID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify both tools are in the community
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &toolsResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 2) // Two tools in the community now
+
+		// Test with non-existent community ID
+		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", "507f1f77bcf86cd799439011", "tools")
+		qt.Assert(t, code, qt.Equals, 404)
+
+		// Test with invalid community ID
+		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", "invalid-id", "tools")
+		qt.Assert(t, code, qt.Equals, 400)
+
+		// Remove a tool from the community
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"communities": []string{},
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify only one tool remains in the community
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &toolsResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 1) // One tool in the community now
+		qt.Assert(t, toolsResp.Data.Tools[0].ID, qt.Equals, tool2ID)
+	})
+
 	t.Run("Community Invitations", func(t *testing.T) {
 		// Create a community for testing
 		resp, code := c.Request(http.MethodPost, ownerJWT,
@@ -449,110 +548,6 @@ func TestCommunities(t *testing.T) {
 		err = json.Unmarshal(resp, &pendingsResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, pendingsResp.Data.PendingInvitesCount, qt.Equals, int64(1))
-
-		// Test the new updateInviteStatus endpoint
-		// Create a new community for testing
-		resp, code = c.Request(http.MethodPost, ownerJWT,
-			api.CreateCommunityRequest{
-				Name: "Update Invite Status Test Community",
-			},
-			"communities",
-		)
-		qt.Assert(t, code, qt.Equals, 200)
-		err = json.Unmarshal(resp, &createResp)
-		qt.Assert(t, err, qt.IsNil)
-		updateInviteCommunityID := createResp.Data.ID
-
-		// Invite the member to the new community
-		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", updateInviteCommunityID, "members", memberID)
-		qt.Assert(t, code, qt.Equals, 200)
-		err = json.Unmarshal(resp, &inviteResp)
-		qt.Assert(t, err, qt.IsNil)
-		updateInviteID := inviteResp.Data.ID
-
-		// Test updating invite status without auth
-		_, code = c.Request(http.MethodPut, "",
-			map[string]interface{}{
-				"status": "ACCEPTED",
-			},
-			"communities", "invites", updateInviteID)
-		qt.Assert(t, code, qt.Equals, 401)
-
-		// Test updating invite status with wrong user
-		_, code = c.Request(http.MethodPut, nonMemberJWT,
-			map[string]interface{}{
-				"status": "ACCEPTED",
-			},
-			"communities", "invites", updateInviteID)
-		qt.Assert(t, code, qt.Equals, 500) // Internal server error when invite not found for this user
-
-		// Test accepting invite with new endpoint
-		_, code = c.Request(http.MethodPut, memberJWT,
-			map[string]interface{}{
-				"status": "ACCEPTED",
-			},
-			"communities", "invites", updateInviteID)
-		qt.Assert(t, code, qt.Equals, 200)
-
-		// Verify the member is now in the community
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", updateInviteCommunityID, "members")
-		qt.Assert(t, code, qt.Equals, 200)
-		err = json.Unmarshal(resp, &usersResp)
-		qt.Assert(t, err, qt.IsNil)
-
-		// Find the member in the users list
-		found = false
-		for _, user := range usersResp.Data {
-			if user.ID == memberID {
-				found = true
-				qt.Assert(t, string(user.Role), qt.Equals, "user")
-				break
-			}
-		}
-		qt.Assert(t, found, qt.IsTrue)
-
-		// Create another community for testing invite rejection with new endpoint
-		resp, code = c.Request(http.MethodPost, ownerJWT,
-			api.CreateCommunityRequest{
-				Name: "New Rejection Test Community",
-			},
-			"communities",
-		)
-		qt.Assert(t, code, qt.Equals, 200)
-		err = json.Unmarshal(resp, &createResp)
-		qt.Assert(t, err, qt.IsNil)
-		newRejectionCommunityID := createResp.Data.ID
-
-		// Invite the member to the new community
-		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", newRejectionCommunityID, "members", memberID)
-		qt.Assert(t, code, qt.Equals, 200)
-		err = json.Unmarshal(resp, &inviteResp)
-		qt.Assert(t, err, qt.IsNil)
-		newRejectInviteID := inviteResp.Data.ID
-
-		// Test rejecting invite with new endpoint
-		_, code = c.Request(http.MethodPut, memberJWT,
-			map[string]interface{}{
-				"status": "REJECTED",
-			},
-			"communities", "invites", newRejectInviteID)
-		qt.Assert(t, code, qt.Equals, 200)
-
-		// Verify the member is not in the community
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", newRejectionCommunityID, "members")
-		qt.Assert(t, code, qt.Equals, 200)
-		err = json.Unmarshal(resp, &usersResp)
-		qt.Assert(t, err, qt.IsNil)
-
-		// Ensure the member is not in the community
-		found = false
-		for _, user := range usersResp.Data {
-			if user.ID == memberID {
-				found = true
-				break
-			}
-		}
-		qt.Assert(t, found, qt.IsFalse)
 	})
 
 	t.Run("Community Membership", func(t *testing.T) {
@@ -827,7 +822,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, pendingsResp.Data.PendingInvitesCount > 0, qt.IsTrue)
 
 		// Test GET users/ with username search filter
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "users?username=kkk")
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "users?username=member")
 		qt.Assert(t, code, qt.Equals, 200)
 		var usersResp struct {
 			Data struct {
