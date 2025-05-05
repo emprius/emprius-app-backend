@@ -301,7 +301,10 @@ func (s *CommunityService) GetUserPendingInvites(ctx context.Context, userID pri
 }
 
 // GetUserPendingInvitesWithDetails retrieves all pending invites for a user with community details
-func (s *CommunityService) GetUserPendingInvitesWithDetails(ctx context.Context, userID primitive.ObjectID) ([]*CommunityInviteWithDetails, error) {
+func (s *CommunityService) GetUserPendingInvitesWithDetails(
+	ctx context.Context,
+	userID primitive.ObjectID,
+) ([]*CommunityInviteWithDetails, error) {
 	pipeline := []bson.M{
 		{
 			"$match": bson.M{
@@ -353,7 +356,10 @@ func (s *CommunityService) GetUserPendingInvitesWithDetails(ctx context.Context,
 }
 
 // GetInviteWithDetails retrieves a single invite with community details
-func (s *CommunityService) GetInviteWithDetails(ctx context.Context, inviteID primitive.ObjectID) (*CommunityInviteWithDetails, error) {
+func (s *CommunityService) GetInviteWithDetails(
+	ctx context.Context,
+	inviteID primitive.ObjectID,
+) (*CommunityInviteWithDetails, error) {
 	pipeline := []bson.M{
 		{
 			"$match": bson.M{
@@ -651,7 +657,10 @@ func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primit
 }
 
 // GetCommunityWithMemberCount retrieves a community by ID with member count and tool count
-func (s *CommunityService) GetCommunityWithMemberCount(ctx context.Context, id primitive.ObjectID) (*Community, int64, int64, error) {
+func (s *CommunityService) GetCommunityWithMemberCount(
+	ctx context.Context,
+	id primitive.ObjectID,
+) (*Community, int64, int64, error) {
 	// Get the community
 	community, err := s.GetCommunity(ctx, id)
 	if err != nil {
@@ -674,7 +683,11 @@ func (s *CommunityService) GetCommunityWithMemberCount(ctx context.Context, id p
 }
 
 // GetUserCommunitiesWithMemberCount retrieves all communities for a specific user with member counts and tool counts
-func (s *CommunityService) GetUserCommunitiesWithMemberCount(ctx context.Context, userID primitive.ObjectID, page int) ([]*Community, map[primitive.ObjectID]int64, map[primitive.ObjectID]int64, error) {
+func (s *CommunityService) GetUserCommunitiesWithMemberCount(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	page int,
+) ([]*Community, map[primitive.ObjectID]int64, map[primitive.ObjectID]int64, error) {
 	// Get the communities
 	communities, err := s.GetUserCommunities(ctx, userID, page)
 	if err != nil {

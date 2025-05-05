@@ -155,7 +155,7 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 	usernameParam := r.Context.URLParam("username")
 
 	var users []*db.User
-	if usernameParam != nil && len(usernameParam) > 0 {
+	if len(usernameParam) > 0 {
 		// Search by partial name
 		users, err = a.database.UserService.GetUsersByPartialName(r.Context.Request.Context(), usernameParam[0], page)
 	} else {

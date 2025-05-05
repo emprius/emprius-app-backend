@@ -11,6 +11,13 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+const (
+	testOwnerName  = "test-owner"
+	testOwnerEmail = "test-owner@example.com"
+	testToolTitle  = "Test Tool"
+	testToolDesc   = "A tool for testing"
+)
+
 func TestCountCommunityTools(t *testing.T) {
 	ctx := context.Background()
 
@@ -44,8 +51,8 @@ func TestCountCommunityTools(t *testing.T) {
 	// Create a test user (owner)
 	var owner1 User
 	owner1.ID = primitive.NewObjectID()
-	owner1.Name = "test-owner"
-	owner1.Email = "test-owner@example.com"
+	owner1.Name = testOwnerName
+	owner1.Email = testOwnerEmail
 	_, err = db.UserService.Collection.InsertOne(ctx, &owner1)
 	if err != nil {
 		t.Fatalf("Failed to create test user: %v", err)
@@ -69,8 +76,8 @@ func TestCountCommunityTools(t *testing.T) {
 	// Create a test tool
 	var tool Tool
 	tool.ID = 1
-	tool.Title = "Test Tool"
-	tool.Description = "A tool for testing"
+	tool.Title = testToolTitle
+	tool.Description = testToolDesc
 	tool.UserID = owner1.ID
 	tool.Communities = []primitive.ObjectID{}
 	_, err = db.ToolService.Collection.InsertOne(ctx, &tool)
@@ -169,8 +176,8 @@ func TestGetCommunityWithMemberCount(t *testing.T) {
 	// Create a test user (owner)
 	var owner2 User
 	owner2.ID = primitive.NewObjectID()
-	owner2.Name = "test-owner"
-	owner2.Email = "test-owner@example.com"
+	owner2.Name = testOwnerName
+	owner2.Email = testOwnerEmail
 	_, err = db.UserService.Collection.InsertOne(ctx, &owner2)
 	if err != nil {
 		t.Fatalf("Failed to create test user: %v", err)
@@ -209,8 +216,8 @@ func TestGetCommunityWithMemberCount(t *testing.T) {
 	// Create a test tool
 	var tool Tool
 	tool.ID = 1
-	tool.Title = "Test Tool"
-	tool.Description = "A tool for testing"
+	tool.Title = testToolTitle
+	tool.Description = testToolDesc
 	tool.UserID = owner2.ID
 	tool.Communities = []primitive.ObjectID{}
 	_, err = db.ToolService.Collection.InsertOne(ctx, &tool)
@@ -225,7 +232,7 @@ func TestGetCommunityWithMemberCount(t *testing.T) {
 	}
 
 	// Get community with member count and tool count again
-	comm, membersCount, toolsCount, err = db.CommunityService.GetCommunityWithMemberCount(ctx, community.ID)
+	_, _, toolsCount, err = db.CommunityService.GetCommunityWithMemberCount(ctx, community.ID)
 	if err != nil {
 		t.Fatalf("Failed to get community with member count: %v", err)
 	}
@@ -269,8 +276,8 @@ func TestGetUserCommunitiesWithMemberCount(t *testing.T) {
 	// Create a test user (owner)
 	var owner3 User
 	owner3.ID = primitive.NewObjectID()
-	owner3.Name = "test-owner"
-	owner3.Email = "test-owner@example.com"
+	owner3.Name = testOwnerName
+	owner3.Email = testOwnerEmail
 	_, err = db.UserService.Collection.InsertOne(ctx, &owner3)
 	if err != nil {
 		t.Fatalf("Failed to create test user: %v", err)
@@ -312,8 +319,8 @@ func TestGetUserCommunitiesWithMemberCount(t *testing.T) {
 	// Create a test tool
 	var tool Tool
 	tool.ID = 1
-	tool.Title = "Test Tool"
-	tool.Description = "A tool for testing"
+	tool.Title = testToolTitle
+	tool.Description = testToolDesc
 	tool.UserID = owner3.ID
 	tool.Communities = []primitive.ObjectID{}
 	_, err = db.ToolService.Collection.InsertOne(ctx, &tool)
@@ -328,7 +335,7 @@ func TestGetUserCommunitiesWithMemberCount(t *testing.T) {
 	}
 
 	// Get user communities with member count and tool count again
-	communities, memberCounts, toolCounts, err = db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0)
+	_, _, toolCounts, err = db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0)
 	if err != nil {
 		t.Fatalf("Failed to get user communities with member count: %v", err)
 	}

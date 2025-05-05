@@ -125,7 +125,8 @@ func (a *API) getCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	// Get community with member count and tool count
-	community, membersCount, toolsCount, err := a.database.CommunityService.GetCommunityWithMemberCount(r.Context.Request.Context(), communityID)
+	ctx := r.Context.Request.Context()
+	community, membersCount, toolsCount, err := a.database.CommunityService.GetCommunityWithMemberCount(ctx, communityID)
 	if err != nil {
 		return nil, ErrCommunityNotFound.WithErr(err)
 	}
@@ -183,7 +184,8 @@ func (a *API) updateCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	// Get updated community with member count and tool count
-	updatedCommunity, membersCount, toolsCount, err := a.database.CommunityService.GetCommunityWithMemberCount(r.Context.Request.Context(), communityID)
+	ctx := r.Context.Request.Context()
+	updatedCommunity, membersCount, toolsCount, err := a.database.CommunityService.GetCommunityWithMemberCount(ctx, communityID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -547,7 +549,8 @@ func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
 	}
 
 	// Get communities for the user with member counts and tool counts
-	communities, memberCounts, toolCounts, err := a.database.CommunityService.GetUserCommunitiesWithMemberCount(r.Context.Request.Context(), userID, page)
+	ctx := r.Context.Request.Context()
+	communities, memberCounts, toolCounts, err := a.database.CommunityService.GetUserCommunitiesWithMemberCount(ctx, userID, page)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}

@@ -352,7 +352,10 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 // It returns only tools that either:
 // 1. Don't belong to any community, or
 // 2. Belong to at least one community where the user is a member
-func (s *ToolService) filterToolsByCommunityMembership(ctx context.Context, tools []*Tool, userID primitive.ObjectID) ([]*Tool, error) {
+func (s *ToolService) filterToolsByCommunityMembership(
+	ctx context.Context, tools []*Tool,
+	userID primitive.ObjectID,
+) ([]*Tool, error) {
 	// Get the user to check their communities
 	userService := NewUserService(&Database{Database: s.Collection.Database()})
 	userCommunities, err := userService.GetUserCommunities(ctx, userID)
