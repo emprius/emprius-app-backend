@@ -242,6 +242,7 @@ type SearchToolsOptions struct {
 	Location         *DBLocation
 	TransportOptions []int
 	CommunityID      *primitive.ObjectID
+	UserID           *primitive.ObjectID // User ID for community membership filtering
 }
 
 // SearchTools finds tools by title, description, categories, cost, distance, etc.
@@ -315,6 +316,12 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 			return nil, err
 		}
 		log.Debug().Int("total_tools", len(tools)).Msg("Search completed with geoNear")
+
+		// Filter tools by community membership if user ID is provided
+		if opts.UserID != nil {
+			return s.filterToolsByCommunityMembership(ctx, tools, *opts.UserID)
+		}
+
 		return tools, nil
 	}
 
@@ -332,7 +339,58 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 		return nil, err
 	}
 	log.Debug().Int("total_tools", len(tools)).Msg("Search completed")
+
+	// Filter tools by community membership if user ID is provided
+	if opts.UserID != nil {
+		return s.filterToolsByCommunityMembership(ctx, tools, *opts.UserID)
+	}
+
 	return tools, nil
+}
+
+// filterToolsByCommunityMembership filters tools based on user's community membership.
+// It returns only tools that either:
+// 1. Don't belong to any community, or
+// 2. Belong to at least one community where the user is a member
+func (s *ToolService) filterToolsByCommunityMembership(ctx context.Context, tools []*Tool, userID primitive.ObjectID) ([]*Tool, error) {
+	// Get the user to check their communities
+	userService := NewUserService(&Database{Database: s.Collection.Database()})
+	userCommunities, err := userService.GetUserCommunities(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map of community IDs the user is a member of for quick lookup
+	userCommunityMap := make(map[string]bool)
+	for _, community := range userCommunities {
+		userCommunityMap[community.ID.Hex()] = true
+	}
+
+	// Filter the tools
+	var filteredTools []*Tool
+	for _, tool := range tools {
+		// If the tool has no communities, include it
+		if len(tool.Communities) == 0 {
+			filteredTools = append(filteredTools, tool)
+			continue
+		}
+
+		// Check if the user is a member of at least one of the tool's communities
+		userIsMember := false
+		for _, communityID := range tool.Communities {
+			if userCommunityMap[communityID.Hex()] {
+				userIsMember = true
+				break
+			}
+		}
+
+		// Include the tool only if the user is a member of at least one of its communities
+		if userIsMember {
+			filteredTools = append(filteredTools, tool)
+		}
+	}
+
+	return filteredTools, nil
 }
 
 // CountTools returns the total number of tool documents.
