@@ -134,6 +134,10 @@ var (
 
 // Permission errors
 var (
+	ErrUserNotCommunityMember = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "user is not a member of the community this tool belongs to",
+	}
 	ErrToolNotOwnedByUser = &HTTPError{
 		Code:    http.StatusForbidden,
 		Message: "tool not owned by user",

@@ -353,6 +353,30 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(fmt.Errorf("tool owner not found: %w", err))
 	}
 
+	// Check if the tool belongs to any communities
+	if len(tool.Communities) > 0 {
+		// Check if the user is a member of any of the tool's communities
+		userIsMember := false
+		for _, toolCommunityID := range tool.Communities {
+			toolCommunityIDStr := toolCommunityID.Hex()
+			for _, userCommunity := range fromUser.Communities {
+				if toolCommunityIDStr == userCommunity.ID {
+					userIsMember = true
+					break
+				}
+			}
+			if userIsMember {
+				break
+			}
+		}
+
+		if !userIsMember {
+			return nil, ErrUserNotCommunityMember.WithErr(
+				fmt.Errorf("user is not a member of any community this tool belongs to"),
+			)
+		}
+	}
+
 	// Validate dates
 	startDate := time.Unix(req.StartDate, 0)
 	endDate := time.Unix(req.EndDate, 0)
