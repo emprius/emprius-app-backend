@@ -532,4 +532,124 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, *rating.Requester.Rating, qt.Equals, 5)
 		qt.Assert(t, *rating.Requester.RatingComment, qt.Equals, "Great tool!")
 	})
+
+	t.Run("Community Membership Check", func(t *testing.T) {
+		// Create users for testing
+		ownerJWT, _ := c.RegisterAndLoginWithID("community-owner@test.com", "community-owner", "ownerpass")
+		memberJWT, memberID := c.RegisterAndLoginWithID("community-member@test.com", "community-member", "memberpass")
+		nonMemberJWT, _ := c.RegisterAndLoginWithID("community-nonmember@test.com", "community-nonmember", "nonmemberpass")
+
+		// Create a community
+		resp, code := c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "Tool Search Test Community",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var createResp struct {
+			Data api.CommunityResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		communityID := createResp.Data.ID
+
+		// Invite and accept the member to the community
+		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var inviteResp struct {
+			Data api.CommunityInviteResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &inviteResp)
+		qt.Assert(t, err, qt.IsNil)
+		inviteID := inviteResp.Data.ID
+
+		// Accept the invitation
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Create a tool and add it to the community
+		toolID := c.CreateTool(ownerJWT, "Community Tool")
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"communities": []string{communityID},
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Create a tool without community
+		nonCommunityToolID := c.CreateTool(ownerJWT, "Non-Community Tool")
+
+		// Test case 1: Non-member searching for tools
+		// Should only see the non-community tool
+		resp, code = c.Request(http.MethodGet, nonMemberJWT, nil, "tools/search")
+		qt.Assert(t, code, qt.Equals, 200)
+		var searchResp struct {
+			Data struct {
+				Tools []api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(resp, &searchResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify only the non-community tool is visible
+		foundCommunityTool := false
+		foundNonCommunityTool := false
+		for _, tool := range searchResp.Data.Tools {
+			if tool.ID == toolID {
+				foundCommunityTool = true
+			} else if tool.ID == nonCommunityToolID {
+				foundNonCommunityTool = true
+			}
+		}
+		qt.Assert(t, foundCommunityTool, qt.Equals, false, qt.Commentf("Non-member should not see community tool"))
+		qt.Assert(t, foundNonCommunityTool, qt.Equals, true, qt.Commentf("Non-member should see non-community tool"))
+
+		// Test case 2: Member searching for tools
+		// Should see both tools
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "tools/search")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &searchResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify both tools are visible
+		foundCommunityTool = false
+		foundNonCommunityTool = false
+		for _, tool := range searchResp.Data.Tools {
+			if tool.ID == toolID {
+				foundCommunityTool = true
+			} else if tool.ID == nonCommunityToolID {
+				foundNonCommunityTool = true
+			}
+		}
+		qt.Assert(t, foundCommunityTool, qt.Equals, true, qt.Commentf("Member should see community tool"))
+		qt.Assert(t, foundNonCommunityTool, qt.Equals, true, qt.Commentf("Member should see non-community tool"))
+
+		// Test case 3: Owner searching for tools
+		// Should see both tools
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools/search")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &searchResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify both tools are visible
+		foundCommunityTool = false
+		foundNonCommunityTool = false
+		for _, tool := range searchResp.Data.Tools {
+			if tool.ID == toolID {
+				foundCommunityTool = true
+			} else if tool.ID == nonCommunityToolID {
+				foundNonCommunityTool = true
+			}
+		}
+		qt.Assert(t, foundCommunityTool, qt.Equals, true, qt.Commentf("Owner should see community tool"))
+		qt.Assert(t, foundNonCommunityTool, qt.Equals, true, qt.Commentf("Owner should see non-community tool"))
+	})
 }

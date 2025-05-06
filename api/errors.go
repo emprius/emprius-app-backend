@@ -122,6 +122,10 @@ var (
 		Code:    http.StatusNotFound,
 		Message: "user not found",
 	}
+	ErrCommunityNotFound = &HTTPError{
+		Code:    http.StatusNotFound,
+		Message: "community not found",
+	}
 	ErrInvalidUserID = &HTTPError{
 		Code:    http.StatusBadRequest,
 		Message: "invalid user id format",
@@ -130,6 +134,10 @@ var (
 
 // Permission errors
 var (
+	ErrUserNotCommunityMember = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "user is not a member of the community this tool belongs to",
+	}
 	ErrToolNotOwnedByUser = &HTTPError{
 		Code:    http.StatusForbidden,
 		Message: "tool not owned by user",

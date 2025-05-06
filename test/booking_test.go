@@ -1155,4 +1155,121 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, response.Data.ToolID, qt.Equals, fmt.Sprint(toolID))
 	})
+
+	t.Run("Community Membership Check", func(t *testing.T) {
+		// Create users for testing
+		ownerJWT, _ := c.RegisterAndLoginWithID("community-owner@test.com", "community-owner", "ownerpass")
+		memberJWT, memberID := c.RegisterAndLoginWithID("community-member@test.com", "community-member", "memberpass")
+		nonMemberJWT, _ := c.RegisterAndLoginWithID("community-nonmember@test.com", "community-nonmember", "nonmemberpass")
+
+		// Create a community
+		resp, code := c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "Booking Test Community",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var createResp struct {
+			Data api.CommunityResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		communityID := createResp.Data.ID
+
+		// Invite and accept the member to the community
+		resp, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var inviteResp struct {
+			Data api.CommunityInviteResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &inviteResp)
+		qt.Assert(t, err, qt.IsNil)
+		inviteID := inviteResp.Data.ID
+
+		// Accept the invitation
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Create a tool and add it to the community
+		toolID := c.CreateTool(ownerJWT, "Community Tool")
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"communities": []string{communityID},
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Create a tool without community
+		nonCommunityToolID := c.CreateTool(ownerJWT, "Non-Community Tool")
+
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+		// Test case 1: Non-member trying to book a community tool (should fail)
+		data, code := c.Request(http.MethodPost, nonMemberJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking from non-member",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 403) // Forbidden
+
+		// Verify error message
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err = json.Unmarshal(data, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "user is not a member of the community this tool belongs to")
+
+		// Test case 2: Member booking a community tool (should succeed)
+		data, code = c.Request(http.MethodPost, memberJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking from member",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(data, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, bookingResp.Data.ToolID, qt.Equals, fmt.Sprint(toolID))
+
+		// Test case 3: Non-member booking a non-community tool (should succeed)
+		data, code = c.Request(http.MethodPost, nonMemberJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nonCommunityToolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking for non-community tool",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(data, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, bookingResp.Data.ToolID, qt.Equals, fmt.Sprint(nonCommunityToolID))
+	})
 }

@@ -94,8 +94,12 @@ func (a *API) router() http.Handler {
 		r.Get("/profile/pendings", a.routerHandler(a.HandleCountPendingActions))
 		log.Info().Msg("register route GET /refresh")
 		r.Get("/refresh", a.routerHandler(a.refreshHandler))
+		log.Info().Msg("register route GET /profile")
+		r.Get("/profile", a.routerHandler(a.userProfileHandler))
 		log.Info().Msg("register route POST /profile")
 		r.Post("/profile", a.routerHandler(a.userProfileUpdateHandler))
+		log.Info().Msg("register route GET /profile/pendings")
+		r.Get("/profile/pendings", a.routerHandler(a.HandleCountPendingActions))
 		log.Info().Msg("register route GET /users")
 		r.Get("/users", a.routerHandler(a.usersHandler))
 		log.Info().Msg("register route GET /users/{id}")
@@ -103,6 +107,9 @@ func (a *API) router() http.Handler {
 		// GET /users/{id}/ratings
 		log.Info().Msg("register route GET /users/{id}/ratings")
 		r.Get("/users/{id}/ratings", a.routerHandler(a.HandleGetUserRatings))
+		// GET /users/{userId}/communities - Get communities for a specific user
+		log.Info().Msg("register route GET /users/{userId}/communities")
+		r.Get("/users/{userId}/communities", a.routerHandler(a.getUserCommunitiesHandler))
 
 		// Images
 		// POST /images
@@ -160,6 +167,41 @@ func (a *API) router() http.Handler {
 		// GET /bookings/{bookingId}/ratings
 		log.Info().Msg("register route GET /bookings/{bookingId}/ratings")
 		r.Get("/bookings/{bookingId}/ratings", a.routerHandler(a.HandleGetBookingRatings))
+
+		// Communities
+		// POST /communities
+		log.Info().Msg("register route POST /communities")
+		r.Post("/communities", a.routerHandler(a.createCommunityHandler))
+		// GET /communities/{communityId}
+		log.Info().Msg("register route GET /communities/{communityId}")
+		r.Get("/communities/{communityId}", a.routerHandler(a.getCommunityHandler))
+		// PUT /communities/{communityId}
+		log.Info().Msg("register route PUT /communities/{communityId}")
+		r.Put("/communities/{communityId}", a.routerHandler(a.updateCommunityHandler))
+		// DELETE /communities/{communityId}
+		log.Info().Msg("register route DELETE /communities/{communityId}")
+		r.Delete("/communities/{communityId}", a.routerHandler(a.deleteCommunityHandler))
+		// GET /communities/{communityId}/members
+		log.Info().Msg("register route GET /communities/{communityId}/members")
+		r.Get("/communities/{communityId}/members", a.routerHandler(a.getCommunityUsersHandler))
+		// GET /communities/{communityId}/tools
+		log.Info().Msg("register route GET /communities/{communityId}/tools")
+		r.Get("/communities/{communityId}/tools", a.routerHandler(a.getCommunityToolsHandler))
+		// POST /communities/{communityId}/members/{userId} - Invite user to community
+		log.Info().Msg("register route POST /communities/{communityId}/members/{userId}")
+		r.Post("/communities/{communityId}/members/{userId}", a.routerHandler(a.inviteUserToCommunityHandler))
+		// DELETE /communities/{communityId}/members} - Remove leave community
+		log.Info().Msg("register route DELETE /communities/{communityId}/members")
+		r.Delete("/communities/{communityId}/members", a.routerHandler(a.leaveCommunityHandler))
+		// DELETE /communities/{communityId}/members/{userId} - Remove user from community
+		log.Info().Msg("register route DELETE /communities/{communityId}/members/{userId}")
+		r.Delete("/communities/{communityId}/members/{userId}", a.routerHandler(a.leaveCommunityHandler))
+		// GET /communities/invites - Get authenticated user's pending invites
+		log.Info().Msg("register route GET /communities/invites")
+		r.Get("/communities/invites", a.routerHandler(a.getUserPendingInvitesHandler))
+		// PUT /communities/invites/{inviteId} - Update invite status (accept/reject)
+		log.Info().Msg("register route PUT /communities/invites/{inviteId}")
+		r.Put("/communities/invites/{inviteId}", a.routerHandler(a.updateInviteStatusHandler))
 	})
 
 	// Public routes

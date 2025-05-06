@@ -144,15 +144,29 @@ func (a *API) refreshHandler(r *Request) (interface{}, error) {
 }
 
 // usersHandler list the existing users with pagination.
+// If username query parameter is provided, it will search for users with partial name match.
 func (a *API) usersHandler(r *Request) (interface{}, error) {
 	page, err := r.Context.GetPage()
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
-	users, err := a.database.UserService.GetAllUsers(r.Context.Request.Context(), page)
+
+	// Check if username parameter exists
+	usernameParam := r.Context.URLParam("username")
+
+	var users []*db.User
+	if len(usernameParam) > 0 {
+		// Search by partial name
+		users, err = a.database.UserService.GetUsersByPartialName(r.Context.Request.Context(), usernameParam[0], page)
+	} else {
+		// Get all users (existing behavior)
+		users, err = a.database.UserService.GetAllUsers(r.Context.Request.Context(), page)
+	}
+
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
+
 	userList := []*User{}
 	for _, u := range users {
 		userList = append(userList, new(User).FromDBUser(u))
@@ -382,4 +396,37 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		return nil, fmt.Errorf("failed to query user profile: %w", err)
 	}
 	return newUser, nil
+}
+
+// HandleCountPendingActions handles GET /profile/pendings
+func (a *API) HandleCountPendingActions(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+	uID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	pending, err := a.database.BookingService.CountPendingActions(r.Context.Request.Context(), uID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Get pending community invites
+	pendingInvitesCount, err := a.database.CommunityService.CountUserPendingInvites(r.Context.Request.Context(), uID)
+	if err != nil {
+		log.Error().Err(err).Str("userId", r.UserID).Msg("Failed to count pending invites")
+		// Continue even if count fails, just set to 0
+		pendingInvitesCount = 0
+	}
+
+	// Create response with all pending counts
+	response := &PendingActionsResponse{
+		PendingRatingsCount:  pending.PendingRatingsCount,
+		PendingRequestsCount: pending.PendingRequestsCount,
+		PendingInvitesCount:  pendingInvitesCount,
+	}
+
+	return response, nil
 }

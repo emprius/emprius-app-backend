@@ -80,23 +80,35 @@ type UserProfile struct {
 	Bio            string    `json:"bio,omitempty"`
 }
 
+// UserCommunityInfo represents a user's role in a community
+type UserCommunityInfo struct {
+	ID   string `json:"id"`
+	Role string `json:"role"`
+}
+
+// User preview for list calls (does not send full information)
+type UserPreview struct {
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	AvatarHash  types.HexBytes `json:"avatarHash"`
+	RatingCount int            `json:"ratingCount"`
+	Rating      int            `json:"rating"`
+	Active      bool           `json:"active"`
+}
+
 // User represents the user type
 type User struct {
-	ID          string              `json:"id"`
+	UserPreview
 	Email       string              `json:"email"`
-	Name        string              `json:"name"`
 	Community   string              `json:"community"`
 	Tokens      uint64              `json:"tokens"`
-	Active      bool                `json:"active"`
-	Rating      int                 `json:"rating"`
-	AvatarHash  types.HexBytes      `json:"avatarHash"`
 	Location    Location            `json:"location"`
 	Verified    bool                `json:"verified"`
 	CreatedAt   time.Time           `json:"createdAt"`
 	LastSeen    time.Time           `json:"lastSeen"`
 	Bio         string              `json:"bio"`
-	RatingCount int                 `json:"ratingCount"`
 	InviteCodes []*SimpleInviteCode `json:"inviteCodes,omitempty"`
+	Communities []UserCommunityInfo `json:"communities,omitempty"`
 }
 
 // SimpleInviteCode represents a simplified invitation code with only essential fields
@@ -130,24 +142,42 @@ func (i *InviteCode) FromDBInviteCode(dbic *db.InviteCode) *InviteCode {
 	return i
 }
 
-// FromDBUser converts a DB User to an API User
+// FromDBUserPreview converts a DB User to an API UserPreview
+func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
+	up.ID = dbu.ID.Hex()
+	up.Name = dbu.Name
+	up.AvatarHash = dbu.AvatarHash
+	up.Rating = int(dbu.Rating)
+	up.RatingCount = dbu.RatingCount
+	up.Active = dbu.Active
+	return up
+}
+
+// FromDBUser converts a DB User to an API User (full version)
 func (u *User) FromDBUser(dbu *db.User) *User {
-	u.ID = dbu.ID.Hex()
+	// First fill UserPreview fields
+	u.UserPreview.FromDBUserPreview(dbu)
+
+	// Then fill additional User fields
 	u.Email = dbu.Email
-	u.Name = dbu.Name
 	u.Community = dbu.Community
 	u.Tokens = dbu.Tokens
-	u.Active = dbu.Active
-	u.Rating = int(dbu.Rating)
-	u.AvatarHash = dbu.AvatarHash
 	u.Location.FromDBLocation(dbu.Location)
 	u.Verified = dbu.Verified
-
-	// Set new fields from DB user or defaults if not present
 	u.Bio = dbu.Bio
 	u.CreatedAt = dbu.CreatedAt
 	u.LastSeen = dbu.LastSeen
-	u.RatingCount = dbu.RatingCount
+
+	// Convert communities
+	if len(dbu.Communities) > 0 {
+		u.Communities = make([]UserCommunityInfo, len(dbu.Communities))
+		for i, comm := range dbu.Communities {
+			u.Communities[i] = UserCommunityInfo{
+				ID:   comm.ID.Hex(),
+				Role: string(comm.Role),
+			}
+		}
+	}
 
 	return u
 }
@@ -185,6 +215,7 @@ type Tool struct {
 	Weight           uint32           `json:"weight"`
 	MaxDistance      uint32           `json:"maxDistance"`
 	ReservedDates    []db.DateRange   `json:"reservedDates"`
+	Communities      []string         `json:"communities,omitempty"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
@@ -210,6 +241,15 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 	t.Weight = dbt.Weight
 	t.MaxDistance = dbt.MaxDistance
 	t.ReservedDates = dbt.ReservedDates
+
+	// Convert communities
+	if len(dbt.Communities) > 0 {
+		t.Communities = make([]string, len(dbt.Communities))
+		for i, comm := range dbt.Communities {
+			t.Communities[i] = comm.Hex()
+		}
+	}
+
 	return t
 }
 
@@ -230,6 +270,7 @@ type ToolSearch struct {
 	MayBeFree        *bool   `json:"mayBeFree"`
 	AvailableFrom    int     `json:"availableFrom"`
 	TransportOptions []int   `json:"transportOptions"`
+	CommunityID      string  `json:"communityId,omitempty"`
 }
 
 type Info struct {
@@ -266,6 +307,15 @@ type BookingResponse struct {
 	UpdatedAt int64 `json:"updatedAt"`
 }
 
+// Booking status constants for API
+const (
+	BookingStatusAccepted  = "ACCEPTED"
+	BookingStatusRejected  = "REJECTED"
+	BookingStatusCancelled = "CANCELLED"
+	BookingStatusReturned  = "RETURNED"
+	BookingStatusPending   = "PENDING"
+)
+
 // BookingStatusUpdate represents a request to update a booking's status
 type BookingStatusUpdate struct {
 	Status string `json:"status"`
@@ -299,4 +349,11 @@ func (r *Rating) FromDB(b *db.BookingRating) *Rating {
 	r.ToUserID = b.ToUserID.Hex()
 	r.RatedAt = b.RatedAt.Unix()
 	return r
+}
+
+// PendingActionsResponse represents the response for pending actions
+type PendingActionsResponse struct {
+	PendingRatingsCount  int64 `json:"pendingRatingsCount"`
+	PendingRequestsCount int64 `json:"pendingRequestsCount"`
+	PendingInvitesCount  int64 `json:"pendingInvitesCount"`
 }

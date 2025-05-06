@@ -14,6 +14,7 @@ import (
 	"github.com/emprius/emprius-app-backend/types"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -321,9 +322,19 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 	return id, nil
 }
 
-func (a *API) toolSearch(query *ToolSearch, userLocation *Location) ([]*Tool, error) {
+func (a *API) toolSearch(query *ToolSearch, userLocation *Location, userID string) ([]*Tool, error) {
 	// Convert user location to GeoJSON format for MongoDB
 	searchLocation := db.NewLocation(userLocation.Latitude, userLocation.Longitude)
+
+	// Convert userID to ObjectID if provided
+	var userObjID *primitive.ObjectID
+	if userID != "" {
+		objID, err := primitive.ObjectIDFromHex(userID)
+		if err != nil {
+			return nil, ErrInvalidUserID.WithErr(err)
+		}
+		userObjID = &objID
+	}
 
 	opts := db.SearchToolsOptions{
 		SearchTerm:       query.SearchTerm,
@@ -333,6 +344,7 @@ func (a *API) toolSearch(query *ToolSearch, userLocation *Location) ([]*Tool, er
 		Distance:         query.Distance,
 		Location:         &searchLocation,
 		TransportOptions: query.TransportOptions,
+		UserID:           userObjID,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
@@ -383,6 +395,21 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Convert community ObjectIDs to strings
+	dbTool, err := a.toolFromDB(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Use primitive package explicitly to ensure it's not removed by the formatter
+	communityIDs := make([]string, len(dbTool.Communities))
+	for i, communityID := range dbTool.Communities {
+		// This line uses primitive.ObjectID.Hex() method
+		communityIDs[i] = communityID.Hex()
+	}
+	tool.Communities = communityIDs
+
 	return tool, nil
 }
 
@@ -487,7 +514,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	tools, err := a.toolSearch(&query, &user.Location)
+	tools, err := a.toolSearch(&query, &user.Location, r.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -507,6 +534,15 @@ func (a *API) addToolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Handle communities if provided
+	if len(t.Communities) > 0 {
+		err = a.addToolToCommunity(r.Context.Request.Context(), id, t.Communities)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &ToolID{ID: id}, nil
 }
 
@@ -595,6 +631,12 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if err := json.Unmarshal(r.Data, &t); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
+
+	err = a.addToolToCommunity(r.Context.Request.Context(), id, t.Communities)
+	if err != nil {
+		return nil, err
+	}
+
 	newID, err := a.editTool(id, &t)
 	if err != nil {
 		return nil, err

@@ -42,6 +42,50 @@ func TestUser(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 401)
 	})
 
+	t.Run("Search Users by Partial Name", func(t *testing.T) {
+		// Test search for "user" - should return all users
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users?username=user")
+		qt.Assert(t, code, qt.Equals, 200)
+		var usersResp struct {
+			Data struct {
+				Users []*api.User `json:"users"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 5) // All users match "user"
+
+		// Test search for "user1" - should return only user1
+		resp, code = c.Request(http.MethodGet, user1JWT, nil, "users?username=user1")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 1) // Only user1 matches
+		qt.Assert(t, usersResp.Data.Users[0].Name, qt.Equals, "user1")
+
+		// Test case-insensitive search
+		resp, code = c.Request(http.MethodGet, user1JWT, nil, "users?username=USER2")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 1) // Only user2 matches
+		qt.Assert(t, usersResp.Data.Users[0].Name, qt.Equals, "user2")
+
+		// Test search with no matches
+		resp, code = c.Request(http.MethodGet, user1JWT, nil, "users?username=nonexistent")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 0) // No matches
+
+		// Test search with pagination
+		resp, code = c.Request(http.MethodGet, user1JWT, nil, "users?username=user&page=0")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(usersResp.Data.Users) > 0, qt.IsTrue) // Should have results
+	})
+
 	t.Run("User Profile Operations", func(t *testing.T) {
 		// Get own profile
 		resp, code := c.Request(http.MethodGet, user1JWT, nil, "profile")

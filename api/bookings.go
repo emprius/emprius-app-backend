@@ -158,7 +158,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 	// Validate the requested status
 	var newStatus db.BookingStatus
 	switch statusUpdate.Status {
-	case "ACCEPTED":
+	case BookingStatusAccepted:
 		newStatus = db.BookingStatusAccepted
 		// Verify user is the tool owner
 		if booking.ToUserID != user.ObjectID() {
@@ -168,7 +168,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if booking.BookingStatus != db.BookingStatusPending {
 			return nil, ErrCanOnlyAcceptPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
 		}
-	case "REJECTED":
+	case BookingStatusRejected:
 		newStatus = db.BookingStatusRejected
 		// Verify user is the tool owner
 		if booking.ToUserID != user.ObjectID() {
@@ -178,7 +178,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if booking.BookingStatus != db.BookingStatusPending {
 			return nil, ErrCanOnlyDenyPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
 		}
-	case "CANCELLED":
+	case BookingStatusCancelled:
 		newStatus = db.BookingStatusCancelled
 		// Verify user is the requester
 		if booking.FromUserID != user.ObjectID() {
@@ -188,7 +188,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if booking.BookingStatus != db.BookingStatusPending {
 			return nil, ErrCanOnlyCancelPending.WithErr(fmt.Errorf("booking status is %s", booking.BookingStatus))
 		}
-	case "RETURNED":
+	case BookingStatusReturned:
 		newStatus = db.BookingStatusReturned
 		// Verify user is the tool owner
 		if booking.ToUserID != user.ObjectID() {
@@ -353,6 +353,30 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(fmt.Errorf("tool owner not found: %w", err))
 	}
 
+	// Check if the tool belongs to any communities
+	if len(tool.Communities) > 0 {
+		// Check if the user is a member of any of the tool's communities
+		userIsMember := false
+		for _, toolCommunityID := range tool.Communities {
+			toolCommunityIDStr := toolCommunityID.Hex()
+			for _, userCommunity := range fromUser.Communities {
+				if toolCommunityIDStr == userCommunity.ID {
+					userIsMember = true
+					break
+				}
+			}
+			if userIsMember {
+				break
+			}
+		}
+
+		if !userIsMember {
+			return nil, ErrUserNotCommunityMember.WithErr(
+				fmt.Errorf("user is not a member of any community this tool belongs to"),
+			)
+		}
+	}
+
 	// Validate dates
 	startDate := time.Unix(req.StartDate, 0)
 	endDate := time.Unix(req.EndDate, 0)
@@ -475,21 +499,4 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	}
 
 	return a.convertBookingToResponse(updatedBooking, r.UserID), nil
-}
-
-// HandleCountPendingActions handles GET /profile/pendings
-func (a *API) HandleCountPendingActions(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-	uID, err := primitive.ObjectIDFromHex(r.UserID)
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
-	}
-
-	pending, err := a.database.BookingService.CountPendingActions(r.Context.Request.Context(), uID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	return pending, nil
 }

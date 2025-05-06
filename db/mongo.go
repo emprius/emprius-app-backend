@@ -24,6 +24,7 @@ type Database struct {
 	UserService         *UserService
 	BookingService      *BookingService
 	InviteCodeService   *InviteCodeService
+	CommunityService    *CommunityService
 }
 
 // New initializes a new MongoDB connection.
@@ -53,6 +54,7 @@ func New(uri string) (*Database, error) {
 	database.UserService = NewUserService(database)
 	database.BookingService = NewBookingService(database.Database)
 	database.InviteCodeService = NewInviteCodeService(database)
+	database.CommunityService = NewCommunityService(database)
 	return database, nil
 }
 

@@ -55,24 +55,25 @@ type DateRange struct {
 
 // Tool represents the schema for the "tools" collection.
 type Tool struct {
-	ID               int64              `bson:"_id" json:"id"`
-	Title            string             `bson:"title" json:"title"`
-	Description      string             `bson:"description" json:"description"`
-	IsAvailable      bool               `bson:"isAvailable" json:"isAvailable"`
-	MayBeFree        bool               `bson:"mayBeFree" json:"mayBeFree"`
-	AskWithFee       bool               `bson:"askWithFee" json:"askWithFee"`
-	Cost             uint64             `bson:"cost" json:"cost"`
-	UserID           primitive.ObjectID `bson:"userId" json:"userId"`
-	Images           []Image            `bson:"images" json:"images"`
-	TransportOptions []Transport        `bson:"transportOptions" json:"transportOptions"`
-	ToolCategory     int                `bson:"toolCategory" json:"toolCategory"`
-	Location         DBLocation         `bson:"location" json:"-"`
-	Rating           int32              `bson:"rating" json:"rating"`
-	EstimatedValue   uint64             `bson:"estimatedValue" json:"estimatedValue"`
-	Height           uint32             `bson:"height" json:"height"`
-	Weight           uint32             `bson:"weight" json:"weight"`
-	MaxDistance      uint32             `bson:"maxDistance" json:"maxDistance"`
-	ReservedDates    []DateRange        `bson:"reservedDates" json:"reservedDates"`
+	ID               int64                `bson:"_id" json:"id"`
+	Title            string               `bson:"title" json:"title"`
+	Description      string               `bson:"description" json:"description"`
+	IsAvailable      bool                 `bson:"isAvailable" json:"isAvailable"`
+	MayBeFree        bool                 `bson:"mayBeFree" json:"mayBeFree"`
+	AskWithFee       bool                 `bson:"askWithFee" json:"askWithFee"`
+	Cost             uint64               `bson:"cost" json:"cost"`
+	UserID           primitive.ObjectID   `bson:"userId" json:"userId"`
+	Images           []Image              `bson:"images" json:"images"`
+	TransportOptions []Transport          `bson:"transportOptions" json:"transportOptions"`
+	ToolCategory     int                  `bson:"toolCategory" json:"toolCategory"`
+	Location         DBLocation           `bson:"location" json:"-"`
+	Rating           int32                `bson:"rating" json:"rating"`
+	EstimatedValue   uint64               `bson:"estimatedValue" json:"estimatedValue"`
+	Height           uint32               `bson:"height" json:"height"`
+	Weight           uint32               `bson:"weight" json:"weight"`
+	MaxDistance      uint32               `bson:"maxDistance" json:"maxDistance"`
+	ReservedDates    []DateRange          `bson:"reservedDates" json:"reservedDates"`
+	Communities      []primitive.ObjectID `bson:"communities,omitempty" json:"communities,omitempty"`
 }
 
 // SanitizeString ensures the search term is safe for use in regex.
@@ -188,6 +189,25 @@ func (s *ToolService) GetToolsByUserID(ctx context.Context, userID primitive.Obj
 	return tools, nil
 }
 
+// GetToolsByCommunityID retrieves all tools shared within a specific community.
+func (s *ToolService) GetToolsByCommunityID(ctx context.Context, communityID primitive.ObjectID) ([]*Tool, error) {
+	cursor, err := s.Collection.Find(ctx, bson.M{"communities": communityID})
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := cursor.Close(ctx); closeErr != nil {
+			log.Error().Err(closeErr).Msg("Error closing cursor")
+		}
+	}()
+
+	var tools []*Tool
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, err
+	}
+	return tools, nil
+}
+
 // UpdateToolFields updates specific fields of a tool.
 func (s *ToolService) UpdateToolFields(ctx context.Context, id int64, updates map[string]interface{}) error {
 	filter := bson.M{"_id": id}
@@ -221,6 +241,8 @@ type SearchToolsOptions struct {
 	Distance         int
 	Location         *DBLocation
 	TransportOptions []int
+	CommunityID      *primitive.ObjectID
+	UserID           *primitive.ObjectID // User ID for community membership filtering
 }
 
 // SearchTools finds tools by title, description, categories, cost, distance, etc.
@@ -261,6 +283,11 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 	// Only Available Tools
 	filter = append(filter, bson.E{Key: "isAvailable", Value: true})
 
+	// Community Filter
+	if opts.CommunityID != nil {
+		filter = append(filter, bson.E{Key: "communities", Value: *opts.CommunityID})
+	}
+
 	// Distance + Location Handling using $geoNear
 	if opts.Distance > 0 && opts.Location != nil {
 		pipeline := mongo.Pipeline{
@@ -289,6 +316,12 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 			return nil, err
 		}
 		log.Debug().Int("total_tools", len(tools)).Msg("Search completed with geoNear")
+
+		// Filter tools by community membership if user ID is provided
+		if opts.UserID != nil {
+			return s.filterToolsByCommunityMembership(ctx, tools, *opts.UserID)
+		}
+
 		return tools, nil
 	}
 
@@ -306,12 +339,77 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 		return nil, err
 	}
 	log.Debug().Int("total_tools", len(tools)).Msg("Search completed")
+
+	// Filter tools by community membership if user ID is provided
+	if opts.UserID != nil {
+		return s.filterToolsByCommunityMembership(ctx, tools, *opts.UserID)
+	}
+
 	return tools, nil
+}
+
+// filterToolsByCommunityMembership filters tools based on user's community membership.
+// It returns only tools that either:
+// 1. Don't belong to any community, or
+// 2. Belong to at least one community where the user is a member
+func (s *ToolService) filterToolsByCommunityMembership(
+	ctx context.Context, tools []*Tool,
+	userID primitive.ObjectID,
+) ([]*Tool, error) {
+	// Get the user to check their communities
+	userService := NewUserService(&Database{Database: s.Collection.Database()})
+	userCommunities, err := userService.GetUserCommunities(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a map of community IDs the user is a member of for quick lookup
+	userCommunityMap := make(map[string]bool)
+	for _, community := range userCommunities {
+		userCommunityMap[community.ID.Hex()] = true
+	}
+
+	// Filter the tools
+	var filteredTools []*Tool
+	for _, tool := range tools {
+		// If the tool has no communities, include it
+		if len(tool.Communities) == 0 {
+			filteredTools = append(filteredTools, tool)
+			continue
+		}
+
+		// Check if the user is a member of at least one of the tool's communities
+		userIsMember := false
+		for _, communityID := range tool.Communities {
+			if userCommunityMap[communityID.Hex()] {
+				userIsMember = true
+				break
+			}
+		}
+
+		// Include the tool only if the user is a member of at least one of its communities
+		if userIsMember {
+			filteredTools = append(filteredTools, tool)
+		}
+	}
+
+	return filteredTools, nil
 }
 
 // CountTools returns the total number of tool documents.
 func (s *ToolService) CountTools(ctx context.Context) (int64, error) {
 	return s.Collection.CountDocuments(ctx, bson.M{})
+}
+
+// UpdateToolCommunities updates the communities a tool belongs to
+func (s *ToolService) UpdateToolCommunities(ctx context.Context, toolID int64, communityIDs []primitive.ObjectID) error {
+	// Update the tool's communities field
+	_, err := s.Collection.UpdateOne(
+		ctx,
+		bson.M{"_id": toolID},
+		bson.M{"$set": bson.M{"communities": communityIDs}},
+	)
+	return err
 }
 
 // WithinCircumference checks if two GeoJSON points are within a given radius (meters).
