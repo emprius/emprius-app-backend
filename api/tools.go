@@ -639,6 +639,31 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	// Check if trying to change nomadic status
+	if tool.IsNomadic != t.IsNomadic {
+		// Only the owner can change nomadic status
+		if tool.UserID != user.ObjectID() {
+			return nil, ErrOnlyOwnerCanChangeNomadicStatus.WithErr(
+				fmt.Errorf("only the owner can change a tool from nomadic to non-nomadic"),
+			)
+		}
+
+		// Check for pending bookings
+		pendingBookings, err := a.database.BookingService.GetPendingBookingsForTool(
+			r.Context.Request.Context(),
+			strconv.FormatInt(id, 10),
+		)
+		if err != nil {
+			return nil, ErrInternalServerError.WithErr(err)
+		}
+
+		if len(pendingBookings) > 0 {
+			return nil, ErrCannotChangeNomadicWithPendingBookings.WithErr(
+				fmt.Errorf("cannot change nomadic status when there are pending bookings"),
+			)
+		}
+	}
+
 	err = a.addToolToCommunity(r.Context.Request.Context(), id, t.Communities)
 	if err != nil {
 		return nil, err
