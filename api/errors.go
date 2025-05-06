@@ -270,4 +270,16 @@ var (
 		Code:    http.StatusUnprocessableEntity,
 		Message: "tool is nomadic",
 	}
+	ErrNomadicToolWithPastBooking = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "nomadic tool cannot be booked when there is a booking planned or in process",
+	}
+	ErrOnlyOwnerCanChangeNomadicStatus = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "only the owner can change a tool from nomadic to non-nomadic",
+	}
+	ErrCannotChangeNomadicWithPendingBookings = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "cannot change nomadic status when there are pending bookings",
+	}
 )

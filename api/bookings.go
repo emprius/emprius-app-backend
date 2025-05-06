@@ -283,7 +283,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if tool.IsNomadic {
 			return nil, ErrToolNomadic
 		}
-	case "PICKED":
+	case BookingStatusPicked:
 		newStatus = db.BookingStatusPicked
 
 		// Get the tool to check if it's nomadic and who is the actual user
@@ -564,6 +564,27 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		if !withinDistance {
 			return nil, ErrToolLocationTooFar.WithErr(
 				fmt.Errorf("tool is too far away (max distance: %d km)", tool.MaxDistance),
+			)
+		}
+	}
+
+	// Check if the tool is nomadic with past bookings
+	if tool.IsNomadic && len(tool.ReservedDates) > 0 {
+		// Find the last reserved date
+		lastReservedDate := time.Time{}
+		now := time.Now()
+
+		for _, dateRange := range tool.ReservedDates {
+			endDate := time.Unix(int64(dateRange.To), 0)
+			if endDate.After(lastReservedDate) {
+				lastReservedDate = endDate
+			}
+		}
+
+		// If the last reserved date is before today, return an error
+		if !lastReservedDate.IsZero() && lastReservedDate.After(now) {
+			return nil, ErrNomadicToolWithPastBooking.WithErr(
+				fmt.Errorf("nomadic tool cannot be booked when there is a booking planned or in process"),
 			)
 		}
 	}

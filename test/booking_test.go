@@ -1425,4 +1425,100 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, bookingResp.Data.ToolID, qt.Equals, fmt.Sprint(nonCommunityToolID))
 	})
+
+	t.Run("Nomadic Tool with Future Booking", func(t *testing.T) {
+		// Create a new user for this test
+		ownerJWT := c.RegisterAndLogin("nomadic-future-owner@test.com", "nomadic-future-owner", "ownerpass")
+		renter1JWT := c.RegisterAndLogin("nomadic-future-renter1@test.com", "nomadic-future-renter1", "renterpass")
+		renter2JWT := c.RegisterAndLogin("nomadic-future-renter2@test.com", "nomadic-future-renter2", "renterpass")
+
+		// Create a nomadic tool
+		createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
+			"title":          "Nomadic Tool with Future Booking",
+			"description":    "This tool has a future booking",
+			"toolCategory":   1,
+			"estimatedValue": 100,
+			"isNomadic":      true,
+		}, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolIDResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(createToolResp, &toolIDResp)
+		qt.Assert(t, err, qt.IsNil)
+		nomadicToolID := toolIDResp.Data.ID
+
+		// Create a booking with future dates
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+		resp, code := c.Request(http.MethodPost, renter1JWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "First booking for nomadic tool test",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Owner accepts the booking
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Now try to create a new booking for the same nomadic tool with overlapping dates
+		// This should fail because the tool already has an accepted booking
+		resp, code = c.Request(http.MethodPost, renter2JWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: tomorrow.Add(12 * time.Hour).Unix(),
+				EndDate:   dayAfterTomorrow.Add(12 * time.Hour).Unix(),
+				Contact:   "test2@example.com",
+				Comments:  "Second booking for nomadic tool test (should fail)",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 400, qt.Commentf("Response: %s", string(resp)))
+
+		// Try to create a new booking for the same nomadic tool with non-overlapping dates
+		// This should also fail because the tool is nomadic and already has an accepted booking
+		nextWeek := time.Now().Add(7 * 24 * time.Hour)
+		weekAfterNext := time.Now().Add(14 * 24 * time.Hour)
+
+		resp, code = c.Request(http.MethodPost, renter2JWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: nextWeek.Unix(),
+				EndDate:   weekAfterNext.Unix(),
+				Contact:   "test2@example.com",
+				Comments:  "Third booking for nomadic tool test (should fail)",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 400, qt.Commentf("Response: %s", string(resp)))
+
+		// Verify the error message indicates the tool is already booked
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err = json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "nomadic tool cannot be booked when there is a booking planned or in process")
+	})
 }

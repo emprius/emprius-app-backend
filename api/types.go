@@ -321,6 +321,7 @@ const (
 	BookingStatusCancelled = "CANCELLED"
 	BookingStatusReturned  = "RETURNED"
 	BookingStatusPending   = "PENDING"
+	BookingStatusPicked    = "PICKED"
 )
 
 // BookingStatusUpdate represents a request to update a booking's status

@@ -325,6 +325,35 @@ func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.
 	return bookings, nil
 }
 
+// GetPendingBookingsForTool returns all pending bookings for a specific tool.
+func (s *BookingService) GetPendingBookingsForTool(ctx context.Context, toolID string) ([]*Booking, error) {
+	filter := bson.M{
+		"toolId":        toolID,
+		"bookingStatus": BookingStatusPending,
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var results []Booking
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	bookings := make([]*Booking, len(results))
+	for i := range results {
+		bookings[i] = &results[i]
+	}
+	return bookings, nil
+}
+
 // calculateTokenCost calculates the total token cost for a booking
 func (s *BookingService) calculateTokenCost(booking *Booking, tool *Tool) uint64 {
 	days := uint64(math.Ceil(booking.EndDate.Sub(booking.StartDate).Hours() / 24))
