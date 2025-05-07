@@ -280,9 +280,10 @@ func TestTools(t *testing.T) {
 			found5km := false
 			foundUpdated := false
 			for _, tool := range searchResp.Data.Tools {
-				if tool.Title == "Tool at 5km" {
+				switch tool.Title {
+				case "Tool at 5km":
 					found5km = true
-				} else if tool.Title == "Updated Tool" {
+				case "Updated Tool":
 					foundUpdated = true
 				}
 			}
@@ -305,9 +306,10 @@ func TestTools(t *testing.T) {
 			found15km := false
 			foundAnother := false
 			for _, tool := range searchResp.Data.Tools {
-				if tool.Title == "Tool at 15km" {
+				switch tool.Title {
+				case "Tool at 15km":
 					found15km = true
-				} else if tool.Title == "Another Tool" {
+				case "Another Tool":
 					foundAnother = true
 				}
 			}
@@ -324,7 +326,8 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 5)
 			found25km := false
 			for _, tool := range searchResp.Data.Tools {
-				if tool.Title == "Tool at 25km" {
+				switch tool.Title {
+				case "Tool at 25km":
 					found25km = true
 				}
 			}
@@ -651,5 +654,99 @@ func TestTools(t *testing.T) {
 		}
 		qt.Assert(t, foundCommunityTool, qt.Equals, true, qt.Commentf("Owner should see community tool"))
 		qt.Assert(t, foundNonCommunityTool, qt.Equals, true, qt.Commentf("Owner should see non-community tool"))
+	})
+
+	t.Run("Nomadic Tool Editing Restrictions", func(t *testing.T) {
+		// Create a user for this test
+		ownerJWT, _ := c.RegisterAndLoginWithID("nomadic-edit-owner@test.com", "nomadic-edit-owner", "ownerpass")
+		// nonOwnerJWT := c.RegisterAndLogin("nomadic-edit-nonowner@test.com", "nomadic-edit-nonowner", "nonownerpass")
+		renterJWT := c.RegisterAndLogin("nomadic-edit-renter@test.com", "nomadic-edit-renter", "renterpass")
+
+		// Create a nomadic tool
+		createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
+			"title":          "Nomadic Tool for Edit Test",
+			"description":    "This tool is used to test editing restrictions",
+			"toolCategory":   1,
+			"estimatedValue": 100,
+			"isNomadic":      true,
+		}, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolIDResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(createToolResp, &toolIDResp)
+		qt.Assert(t, err, qt.IsNil)
+		nomadicToolID := toolIDResp.Data.ID
+
+		// Create a booking for the nomadic tool to test the pending bookings restriction
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+		resp, code := c.Request(http.MethodPost, renterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Booking for nomadic tool edit test",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the booking ID to reject it
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Test case 1: Owner trying to change nomadic status with pending bookings (should fail)
+		resp, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"isNomadic": false,
+			},
+			"tools", fmt.Sprint(nomadicToolID),
+		)
+		qt.Assert(t, code, qt.Equals, 400) // Bad Request
+
+		// Verify error message
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err = json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "cannot change nomadic status when there are pending bookings")
+
+		// Owner rejects the booking
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "REJECTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Test case 2: Owner can change nomadic status after rejecting all pending bookings
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"isNomadic": false,
+			},
+			"tools", fmt.Sprint(nomadicToolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify the tool is no longer nomadic
+		getToolResp, code := c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(nomadicToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+		var toolDetails struct {
+			Data api.Tool `json:"data"`
+		}
+		err = json.Unmarshal(getToolResp, &toolDetails)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, toolDetails.Data.IsNomadic, qt.Equals, false)
 	})
 }

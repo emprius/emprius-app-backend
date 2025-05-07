@@ -104,9 +104,9 @@ func newRatingCollection(db *mongo.Database) *mongo.Collection {
 func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
 	// Use an aggregation pipeline to efficiently find bookings that need to be rated
 	pipeline := mongo.Pipeline{
-		// Stage 1: Match returned bookings where the user is involved
+		// Stage 1: Match returned or picked bookings where the user is involved
 		{{Key: "$match", Value: bson.M{
-			"bookingStatus": BookingStatusReturned,
+			"bookingStatus": bson.M{"$in": []BookingStatus{BookingStatusReturned, BookingStatusPicked}},
 			"$or": []bson.M{
 				{"fromUserId": userID},
 				{"toUserId": userID},
@@ -538,12 +538,12 @@ func (s *BookingService) RateBooking(
 	}
 
 	// Verify booking is in RETURNED state
-	if booking.BookingStatus != BookingStatusReturned {
-		return fmt.Errorf("booking must be in RETURNED state to be rated")
+	if booking.BookingStatus != BookingStatusReturned && booking.BookingStatus != BookingStatusPicked {
+		return fmt.Errorf("booking must be in RETURNED or PICKED state to be rated")
 	}
 
 	// Verify that the user is involved in the booking
-	if !(booking.FromUserID == raterID || booking.ToUserID == raterID) {
+	if booking.FromUserID != raterID && booking.ToUserID != raterID {
 		return fmt.Errorf("user is not involved in this booking")
 	}
 
@@ -782,7 +782,7 @@ func (s *BookingService) CountPendingActions(
 			Key: "$facet", Value: bson.D{
 				{Key: "pendingRatings", Value: bson.A{
 					bson.D{{Key: "$match", Value: bson.M{
-						"bookingStatus": BookingStatusReturned,
+						"bookingStatus": bson.M{"$in": []BookingStatus{BookingStatusReturned, BookingStatusPicked}},
 						"$or": []bson.M{
 							{"fromUserId": userID},
 							{"toUserId": userID},
@@ -811,6 +811,7 @@ func (s *BookingService) CountPendingActions(
 					}}},
 					bson.D{{Key: "$count", Value: "count"}},
 				}},
+
 				{Key: "pendingRequests", Value: bson.A{
 					bson.D{{Key: "$match", Value: bson.M{
 						"toUserId":      userID,

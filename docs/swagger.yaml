@@ -115,6 +115,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DateRange'
+        isNomadic:
+          type: boolean
+          description: Whether the tool can be passed from one user to another without returning to the owner
+        actualUserId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the current user holding the nomadic tool
         communities:
           type: array
           items:
@@ -348,11 +355,14 @@ components:
           description: Additional comments about the booking
         bookingStatus:
           type: string
-          enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, RETURNED]
+          enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, RETURNED, PICKED]
           description: Current status of the booking
         isRated:
           type: boolean
           description: Whether this booking has been rated by any party=
+        isNomadic:
+          type: boolean
+          description: Whether this booking is for a nomadic tool
         # Legacy fields marked as deprecated
         rating:
           type: integer
@@ -1471,7 +1481,7 @@ paths:
           description: Community not found
         '500':
           description: Internal server error
-          
+
   /communities/{communityId}/tools:
     get:
       tags:

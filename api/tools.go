@@ -130,6 +130,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		Location:         t.Location.ToDBLocation(),
 		TransportOptions: transportOptions,
 		ReservedDates:    []db.DateRange{}, // Initialize empty array
+		IsNomadic:        t.IsNomadic,
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
@@ -143,7 +144,10 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 
 func toolID(ownerID string) int64 {
 	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("%s%d", ownerID, time.Now().UnixNano())))
+	_, err := fmt.Fprintf(hasher, "%s%d", ownerID, time.Now().UnixNano())
+	if err != nil {
+		log.Error().Err(err).Msg("Error writing to hasher")
+	}
 	hash := hasher.Sum(nil)
 	// Convert the first 4 bytes of the hash to an absolute int64
 	return int64(math.Abs(float64(int64(binary.BigEndian.Uint32(hash[:4])))))
@@ -209,6 +213,8 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 	if newTool.AskWithFee != nil {
 		tool.AskWithFee = *newTool.AskWithFee
 	}
+	// Update nomadic status
+	tool.IsNomadic = newTool.IsNomadic
 	if newTool.EstimatedValue != nil {
 		tool.EstimatedValue = *newTool.EstimatedValue
 		tool.Cost = *newTool.EstimatedValue / types.FactorCostToPrice
@@ -314,6 +320,7 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 		"images":           tool.Images,
 		"location":         tool.Location,
 		"transportOptions": tool.TransportOptions,
+		"isNomadic":        tool.IsNomadic,
 	}
 	err = a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 	if err != nil {
@@ -630,6 +637,31 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	t := Tool{}
 	if err := json.Unmarshal(r.Data, &t); err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Check if trying to change nomadic status
+	if tool.IsNomadic != t.IsNomadic {
+		// Only the owner can change nomadic status
+		if tool.UserID != user.ObjectID() {
+			return nil, ErrOnlyOwnerCanChangeNomadicStatus.WithErr(
+				fmt.Errorf("only the owner can change a tool from nomadic to non-nomadic"),
+			)
+		}
+
+		// Check for pending bookings
+		pendingBookings, err := a.database.BookingService.GetPendingBookingsForTool(
+			r.Context.Request.Context(),
+			strconv.FormatInt(id, 10),
+		)
+		if err != nil {
+			return nil, ErrInternalServerError.WithErr(err)
+		}
+
+		if len(pendingBookings) > 0 {
+			return nil, ErrCannotChangeNomadicWithPendingBookings.WithErr(
+				fmt.Errorf("cannot change nomadic status when there are pending bookings"),
+			)
+		}
 	}
 
 	err = a.addToolToCommunity(r.Context.Request.Context(), id, t.Communities)

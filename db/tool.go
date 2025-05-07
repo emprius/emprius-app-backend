@@ -63,6 +63,7 @@ type Tool struct {
 	AskWithFee       bool                 `bson:"askWithFee" json:"askWithFee"`
 	Cost             uint64               `bson:"cost" json:"cost"`
 	UserID           primitive.ObjectID   `bson:"userId" json:"userId"`
+	ActualUserID     primitive.ObjectID   `bson:"actualUserId,omitempty" json:"actualUserId,omitempty"`
 	Images           []Image              `bson:"images" json:"images"`
 	TransportOptions []Transport          `bson:"transportOptions" json:"transportOptions"`
 	ToolCategory     int                  `bson:"toolCategory" json:"toolCategory"`
@@ -73,6 +74,7 @@ type Tool struct {
 	Weight           uint32               `bson:"weight" json:"weight"`
 	MaxDistance      uint32               `bson:"maxDistance" json:"maxDistance"`
 	ReservedDates    []DateRange          `bson:"reservedDates" json:"reservedDates"`
+	IsNomadic        bool                 `bson:"isNomadic" json:"isNomadic"`
 	Communities      []primitive.ObjectID `bson:"communities,omitempty" json:"communities,omitempty"`
 }
 

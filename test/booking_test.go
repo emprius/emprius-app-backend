@@ -109,9 +109,10 @@ func TestBookings(t *testing.T) {
 		// Verify one booking is accepted and one is pending
 		var hasAccepted, hasPending bool
 		for _, booking := range requestsResp.Data {
-			if booking.BookingStatus == "ACCEPTED" {
+			switch booking.BookingStatus {
+			case "ACCEPTED":
 				hasAccepted = true
-			} else if booking.BookingStatus == "PENDING" {
+			case "PENDING":
 				hasPending = true
 			}
 		}
@@ -132,9 +133,10 @@ func TestBookings(t *testing.T) {
 		hasAccepted = false
 		hasPending = false
 		for _, booking := range petitionsResp.Data {
-			if booking.BookingStatus == "ACCEPTED" {
+			switch booking.BookingStatus {
+			case "ACCEPTED":
 				hasAccepted = true
-			} else if booking.BookingStatus == "PENDING" {
+			case "PENDING":
 				hasPending = true
 			}
 		}
@@ -746,6 +748,157 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, testBookingRating.Requester.RatingComment, qt.Not(qt.IsNil))
 			qt.Assert(t, *testBookingRating.Requester.RatingComment, qt.Equals, "Good experience with the tool")
 		})
+
+		// Test nomadic tool feature
+		t.Run("IsNomadic Tool", func(t *testing.T) {
+			// Create a new user for this test
+			ownerJWT := c.RegisterAndLogin("nomadic-owner@test.com", "nomadic-owner", "ownerpass")
+			renterJWT, renterID := c.RegisterAndLoginWithID("nomadic-renter@test.com", "nomadic-renter", "renterpass")
+
+			// Create a nomadic tool
+			createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
+				"title":          "IsNomadic Tool",
+				"description":    "This tool changes location when rented",
+				"toolCategory":   1,
+				"estimatedValue": 100,
+				"isNomadic":      true,
+			}, "tools")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var toolIDResp struct {
+				Data struct {
+					ID int64 `json:"id"`
+				} `json:"data"`
+			}
+			err := json.Unmarshal(createToolResp, &toolIDResp)
+			qt.Assert(t, err, qt.IsNil)
+			nomadicToolID := toolIDResp.Data.ID
+
+			// Get the tool to verify it's nomadic
+			getToolResp, code := c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(nomadicToolID))
+			qt.Assert(t, code, qt.Equals, 200)
+			var toolDetails struct {
+				Data api.Tool `json:"data"`
+			}
+			err = json.Unmarshal(getToolResp, &toolDetails)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, toolDetails.Data.IsNomadic, qt.IsTrue)
+
+			// Create a booking for the nomadic tool
+			resp, code = c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(nomadicToolID),
+					StartDate: time.Now().Add(24 * time.Hour).Unix(),
+					EndDate:   time.Now().Add(48 * time.Hour).Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Booking for nomadic tool test",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var bookingResp struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			bookingID := bookingResp.Data.ID
+
+			// Owner accepts the booking
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", bookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to mark as picked without auth
+			_, code = c.Request(http.MethodPut, "",
+				&api.BookingStatusUpdate{
+					Status: "PICKED",
+				}, "bookings", bookingID)
+			qt.Assert(t, code, qt.Equals, 401)
+
+			// Try to mark as picked by renter (should fail)
+			_, code = c.Request(http.MethodPut, renterJWT,
+				&api.BookingStatusUpdate{
+					Status: "PICKED",
+				}, "bookings", bookingID)
+			qt.Assert(t, code, qt.Equals, 403)
+
+			// Mark as picked by owner
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "PICKED",
+				}, "bookings", bookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Get the booking to verify it's marked as PICKED
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "PICKED")
+
+			// Get the tool to verify actualUserId is set to the renter
+			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(nomadicToolID))
+			qt.Assert(t, code, qt.Equals, 200)
+			var toolDetailsAfterPick struct {
+				Data api.Tool `json:"data"`
+			}
+			err = json.Unmarshal(resp, &toolDetailsAfterPick)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, toolDetailsAfterPick.Data.ActualUserID, qt.Equals, renterID)
+
+			// Create a non-nomadic tool for comparison
+			regularToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
+				"title":          "Regular Tool",
+				"description":    "This is a regular non-nomadic tool",
+				"toolCategory":   1,
+				"estimatedValue": 100,
+				"isNomadic":      false,
+			}, "tools")
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var regularToolIDResp struct {
+				Data struct {
+					ID int64 `json:"id"`
+				} `json:"data"`
+			}
+			err = json.Unmarshal(regularToolResp, &regularToolIDResp)
+			qt.Assert(t, err, qt.IsNil)
+			regularToolID := regularToolIDResp.Data.ID
+
+			// Create a booking for the regular tool
+			resp, code = c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(regularToolID),
+					StartDate: time.Now().Add(72 * time.Hour).Unix(),
+					EndDate:   time.Now().Add(96 * time.Hour).Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Booking for regular tool test",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+			regularBookingID := bookingResp.Data.ID
+
+			// Owner accepts the booking
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", regularBookingID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to mark regular tool as picked (should fail because it's not nomadic)
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "PICKED",
+				}, "bookings", regularBookingID)
+			qt.Assert(t, code, qt.Equals, 422) // Unprocessable Entity - tool is not nomadic
+		})
 	})
 
 	t.Run("IsRated Attribute", func(t *testing.T) {
@@ -1271,5 +1424,103 @@ func TestBookings(t *testing.T) {
 		err = json.Unmarshal(data, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, bookingResp.Data.ToolID, qt.Equals, fmt.Sprint(nonCommunityToolID))
+	})
+
+	t.Run("Nomadic Tool with Future Booking", func(t *testing.T) {
+		// Create a new user for this test
+		ownerJWT := c.RegisterAndLogin("nomadic-future-owner@test.com", "nomadic-future-owner", "ownerpass")
+		renter1JWT := c.RegisterAndLogin("nomadic-future-renter1@test.com", "nomadic-future-renter1", "renterpass")
+		renter2JWT := c.RegisterAndLogin("nomadic-future-renter2@test.com", "nomadic-future-renter2", "renterpass")
+
+		// Create a nomadic tool
+		createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
+			"title":          "Nomadic Tool with Future Booking",
+			"description":    "This tool has a future booking",
+			"toolCategory":   1,
+			"estimatedValue": 100,
+			"isNomadic":      true,
+		}, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolIDResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(createToolResp, &toolIDResp)
+		qt.Assert(t, err, qt.IsNil)
+		nomadicToolID := toolIDResp.Data.ID
+
+		// Create a booking with future dates
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+		resp, code := c.Request(http.MethodPost, renter1JWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "First booking for nomadic tool test",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Owner accepts the booking
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Now try to create a new booking for the same nomadic tool with overlapping dates
+		// This should fail because the tool already has an accepted booking
+		resp, code = c.Request(http.MethodPost, renter2JWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: tomorrow.Add(12 * time.Hour).Unix(),
+				EndDate:   dayAfterTomorrow.Add(12 * time.Hour).Unix(),
+				Contact:   "test2@example.com",
+				Comments:  "Second booking for nomadic tool test (should fail)",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 400, qt.Commentf("Response: %s", string(resp)))
+
+		// Try to create a new booking for the same nomadic tool with non-overlapping dates
+		// This should also fail because the tool is nomadic and already has an accepted booking
+		nextWeek := time.Now().Add(7 * 24 * time.Hour)
+		weekAfterNext := time.Now().Add(14 * 24 * time.Hour)
+
+		resp, code = c.Request(http.MethodPost, renter2JWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: nextWeek.Unix(),
+				EndDate:   weekAfterNext.Unix(),
+				Contact:   "test2@example.com",
+				Comments:  "Third booking for nomadic tool test (should fail)",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 400, qt.Commentf("Response: %s", string(resp)))
+
+		// Verify the error message indicates the tool is already booked
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err = json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains,
+			"nomadic tool cannot be booked when there is a booking planned or in process",
+		)
 	})
 }

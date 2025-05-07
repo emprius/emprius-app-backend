@@ -210,6 +210,10 @@ var (
 		Code:    http.StatusConflict,
 		Message: "too many invite code requests, please try again later",
 	}
+	ErrCanOnlyPickAccepted = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "can only pick accepted bookings",
+	}
 )
 
 // Server errors
@@ -257,5 +261,25 @@ var (
 	ErrInvalidTransportOption = &HTTPError{
 		Code:    http.StatusUnprocessableEntity,
 		Message: "invalid transport option",
+	}
+	ErrToolNotNomadic = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "tool is not nomadic",
+	}
+	ErrToolNomadic = &HTTPError{
+		Code:    http.StatusUnprocessableEntity,
+		Message: "tool is nomadic",
+	}
+	ErrNomadicToolWithPastBooking = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "nomadic tool cannot be booked when there is a booking planned or in process",
+	}
+	ErrOnlyOwnerCanChangeNomadicStatus = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "only the owner can change a tool from nomadic to non-nomadic",
+	}
+	ErrCannotChangeNomadicWithPendingBookings = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "cannot change nomadic status when there are pending bookings",
 	}
 )
