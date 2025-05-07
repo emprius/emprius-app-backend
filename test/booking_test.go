@@ -1519,6 +1519,8 @@ func TestBookings(t *testing.T) {
 		err = json.Unmarshal(resp, &errorResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
-		qt.Assert(t, errorResp.Header.Message, qt.Contains, "nomadic tool cannot be booked when there is a booking planned or in process")
+		qt.Assert(t, errorResp.Header.Message, qt.Contains,
+			"nomadic tool cannot be booked when there is a booking planned or in process",
+		)
 	})
 }

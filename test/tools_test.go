@@ -659,7 +659,7 @@ func TestTools(t *testing.T) {
 	t.Run("Nomadic Tool Editing Restrictions", func(t *testing.T) {
 		// Create a user for this test
 		ownerJWT, _ := c.RegisterAndLoginWithID("nomadic-edit-owner@test.com", "nomadic-edit-owner", "ownerpass")
-		//nonOwnerJWT := c.RegisterAndLogin("nomadic-edit-nonowner@test.com", "nomadic-edit-nonowner", "nonownerpass")
+		// nonOwnerJWT := c.RegisterAndLogin("nomadic-edit-nonowner@test.com", "nomadic-edit-nonowner", "nonownerpass")
 		renterJWT := c.RegisterAndLogin("nomadic-edit-renter@test.com", "nomadic-edit-renter", "renterpass")
 
 		// Create a nomadic tool
