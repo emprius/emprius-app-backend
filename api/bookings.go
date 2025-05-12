@@ -21,7 +21,7 @@ func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID 
 
 	// Check if the booking is rated by the authenticated user
 	if len(authenticatedUserID) > 0 && authenticatedUserID[0] != "" &&
-		booking.BookingStatus == db.BookingStatusReturned { // todo(kon): add picked status when nomadic tools implemented
+		booking.BookingStatus == db.BookingStatusReturned || booking.BookingStatus == db.BookingStatusPicked {
 		userID, err := primitive.ObjectIDFromHex(authenticatedUserID[0])
 		if err == nil {
 			// Get ratings for this booking
