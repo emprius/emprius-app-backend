@@ -427,7 +427,13 @@ func (s *ToolService) UpdateToolCommunities(ctx context.Context, toolID int64, c
 }
 
 // AddToolHistoryEntry adds a new entry to a tool's history
-func (s *ToolService) AddToolHistoryEntry(ctx context.Context, toolID int64, userID primitive.ObjectID, location DBLocation, bookingID primitive.ObjectID) error {
+func (s *ToolService) AddToolHistoryEntry(
+	ctx context.Context,
+	toolID int64,
+	userID primitive.ObjectID,
+	location DBLocation,
+	bookingID primitive.ObjectID,
+) error {
 	// Create a new history entry
 	entry := ToolHistoryEntry{
 		ID:         primitive.NewObjectID(),
@@ -469,7 +475,11 @@ func (s *ToolService) GetToolHistory(ctx context.Context, toolID int64) ([]ToolH
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var results []struct {
 		HistoryEntry ToolHistoryEntry `bson:"historyEntry"`
