@@ -196,28 +196,39 @@ type UsersWrapper struct {
 	Users []*User `json:"users"`
 }
 
+// ToolHistoryEntry represents an entry in a nomadic tool's history
+type ToolHistoryEntry struct {
+	ID         string   `json:"id"`
+	UserID     string   `json:"userId"`
+	UserName   string   `json:"userName"`
+	PickupDate int64    `json:"pickupDate"` // Unix timestamp
+	Location   Location `json:"location"`
+	BookingID  string   `json:"bookingId,omitempty"`
+}
+
 // Tool is the type of the tool
 type Tool struct {
-	ID               int64            `json:"id"`
-	UserID           string           `json:"userId"`
-	ActualUserID     string           `json:"actualUserId,omitempty"`
-	Title            string           `json:"title"`
-	Description      string           `json:"description"`
-	IsAvailable      *bool            `json:"isAvailable"`
-	MayBeFree        *bool            `json:"mayBeFree"`
-	AskWithFee       *bool            `json:"askWithFee"`
-	Cost             uint64           `json:"cost"`
-	Images           []types.HexBytes `json:"images"`
-	TransportOptions []int            `json:"transportOptions"`
-	Category         int              `json:"toolCategory"`
-	Location         Location         `json:"location"`
-	EstimatedValue   *uint64          `json:"estimatedValue"`
-	Height           uint32           `json:"height"`
-	Weight           uint32           `json:"weight"`
-	MaxDistance      uint32           `json:"maxDistance"`
-	ReservedDates    []db.DateRange   `json:"reservedDates"`
-	IsNomadic        bool             `json:"isNomadic"`
-	Communities      []string         `json:"communities,omitempty"`
+	ID               int64              `json:"id"`
+	UserID           string             `json:"userId"`
+	ActualUserID     string             `json:"actualUserId,omitempty"`
+	Title            string             `json:"title"`
+	Description      string             `json:"description"`
+	IsAvailable      *bool              `json:"isAvailable"`
+	MayBeFree        *bool              `json:"mayBeFree"`
+	AskWithFee       *bool              `json:"askWithFee"`
+	Cost             uint64             `json:"cost"`
+	Images           []types.HexBytes   `json:"images"`
+	TransportOptions []int              `json:"transportOptions"`
+	Category         int                `json:"toolCategory"`
+	Location         Location           `json:"location"`
+	EstimatedValue   *uint64            `json:"estimatedValue"`
+	Height           uint32             `json:"height"`
+	Weight           uint32             `json:"weight"`
+	MaxDistance      uint32             `json:"maxDistance"`
+	ReservedDates    []db.DateRange     `json:"reservedDates"`
+	IsNomadic        bool               `json:"isNomadic"`
+	Communities      []string           `json:"communities,omitempty"`
+	HistoryEntries   []ToolHistoryEntry `json:"historyEntries,omitempty"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.

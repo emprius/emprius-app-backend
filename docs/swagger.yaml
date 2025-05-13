@@ -1074,6 +1074,64 @@ paths:
           description: Tool not found
         '500':
           description: Internal server error
+          
+  /tools/{id}/history:
+    get:
+      tags:
+        - Tools
+      summary: Get history for a nomadic tool
+      description: Get the complete history of locations and users for a nomadic tool
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: History of the nomadic tool
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: objectid
+                      description: MongoDB ObjectID of the history entry
+                    userId:
+                      type: string
+                      format: objectid
+                      description: MongoDB ObjectID of the user who had the tool
+                    userName:
+                      type: string
+                      description: Name of the user who had the tool
+                    pickupDate:
+                      type: integer
+                      format: int64
+                      description: When the tool was picked up (Unix timestamp)
+                    location:
+                      $ref: '#/components/schemas/Location'
+                      description: Location where the tool was picked up
+                    bookingId:
+                      type: string
+                      format: objectid
+                      description: MongoDB ObjectID of the associated booking
+        '400':
+          description: Invalid tool ID
+        '401':
+          description: Unauthorized
+        '404':
+          description: Tool not found
+        '422':
+          description: Tool is not nomadic
+        '500':
+          description: Internal server error
 
   /bookings:
     post:

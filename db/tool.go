@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"regexp"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
@@ -53,6 +54,16 @@ type DateRange struct {
 	To   uint32 `bson:"to" json:"to"`
 }
 
+// ToolHistoryEntry represents an entry in a nomadic tool's history
+type ToolHistoryEntry struct {
+	ID         primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	ToolID     int64              `bson:"toolId" json:"toolId"`
+	UserID     primitive.ObjectID `bson:"userId" json:"userId"`
+	PickupDate time.Time          `bson:"pickupDate" json:"pickupDate"`
+	Location   DBLocation         `bson:"location" json:"location"`
+	BookingID  primitive.ObjectID `bson:"bookingId,omitempty" json:"bookingId,omitempty"`
+}
+
 // Tool represents the schema for the "tools" collection.
 type Tool struct {
 	ID               int64                `bson:"_id" json:"id"`
@@ -76,6 +87,7 @@ type Tool struct {
 	ReservedDates    []DateRange          `bson:"reservedDates" json:"reservedDates"`
 	IsNomadic        bool                 `bson:"isNomadic" json:"isNomadic"`
 	Communities      []primitive.ObjectID `bson:"communities,omitempty" json:"communities,omitempty"`
+	HistoryEntries   []ToolHistoryEntry   `bson:"historyEntries,omitempty" json:"historyEntries,omitempty"`
 }
 
 // SanitizeString ensures the search term is safe for use in regex.
@@ -412,6 +424,69 @@ func (s *ToolService) UpdateToolCommunities(ctx context.Context, toolID int64, c
 		bson.M{"$set": bson.M{"communities": communityIDs}},
 	)
 	return err
+}
+
+// AddToolHistoryEntry adds a new entry to a tool's history
+func (s *ToolService) AddToolHistoryEntry(ctx context.Context, toolID int64, userID primitive.ObjectID, location DBLocation, bookingID primitive.ObjectID) error {
+	// Create a new history entry
+	entry := ToolHistoryEntry{
+		ID:         primitive.NewObjectID(),
+		ToolID:     toolID,
+		UserID:     userID,
+		PickupDate: time.Now(),
+		Location:   location,
+		BookingID:  bookingID,
+	}
+
+	// Update the tool document to add the new history entry
+	filter := bson.M{"_id": toolID}
+	update := bson.M{"$push": bson.M{"historyEntries": entry}}
+
+	_, err := s.Collection.UpdateOne(ctx, filter, update)
+	return err
+}
+
+// GetToolHistory retrieves the history entries for a tool
+func (s *ToolService) GetToolHistory(ctx context.Context, toolID int64) ([]ToolHistoryEntry, error) {
+	// Create an aggregation pipeline to get the tool history with user details
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: bson.M{"_id": toolID}}},
+		{{Key: "$unwind", Value: "$historyEntries"}},
+		{{Key: "$lookup", Value: bson.M{
+			"from":         "users",
+			"localField":   "historyEntries.userId",
+			"foreignField": "_id",
+			"as":           "userDetails",
+		}}},
+		{{Key: "$project", Value: bson.M{
+			"historyEntry": "$historyEntries",
+			"userName":     bson.M{"$arrayElemAt": []interface{}{"$userDetails.name", 0}},
+		}}},
+		{{Key: "$sort", Value: bson.M{"historyEntry.pickupDate": -1}}},
+	}
+
+	cursor, err := s.Collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []struct {
+		HistoryEntry ToolHistoryEntry `bson:"historyEntry"`
+		UserName     string           `bson:"userName"`
+	}
+
+	if err := cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	// Convert the results to ToolHistoryEntry objects
+	entries := make([]ToolHistoryEntry, len(results))
+	for i, result := range results {
+		entries[i] = result.HistoryEntry
+	}
+
+	return entries, nil
 }
 
 // WithinCircumference checks if two GeoJSON points are within a given radius (meters).

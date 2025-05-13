@@ -132,6 +132,9 @@ func (a *API) router() http.Handler {
 		// GET /tools/{id}/ratings
 		log.Info().Msg("register route GET /tools/{id}/ratings")
 		r.Get("/tools/{id}/ratings", a.routerHandler(a.HandleGetToolRatings))
+		// GET /tools/{id}/history
+		log.Info().Msg("register route GET /tools/{id}/history")
+		r.Get("/tools/{id}/history", a.routerHandler(a.toolHistoryHandler))
 		// POST /tools
 		log.Info().Msg("register route POST /tools")
 		r.Post("/tools", a.routerHandler(a.addToolHandler))
