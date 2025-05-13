@@ -749,4 +749,92 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, toolDetails.Data.IsNomadic, qt.Equals, false)
 	})
+
+	t.Run("Nomadic Tool History", func(t *testing.T) {
+		// Create users for this test
+		ownerJWT, _ := c.RegisterAndLoginWithID("nomadic-history-owner@test.com", "nomadic-history-owner", "ownerpass")
+		renterJWT, _ := c.RegisterAndLoginWithID("nomadic-history-renter@test.com", "nomadic-history-renter", "renterpass")
+
+		// Create a nomadic tool
+		createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
+			"title":          "Nomadic Tool with History",
+			"description":    "This tool is used to test history tracking",
+			"toolCategory":   1,
+			"estimatedValue": 100,
+			"isNomadic":      true,
+			"location": map[string]interface{}{
+				"latitude":  41695384,
+				"longitude": 2492793,
+			},
+		}, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolIDResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(createToolResp, &toolIDResp)
+		qt.Assert(t, err, qt.IsNil)
+		nomadicToolID := toolIDResp.Data.ID
+
+		// Create a booking for the nomadic tool
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+		resp, code := c.Request(http.MethodPost, renterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Booking for nomadic tool history test",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the booking ID
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Owner accepts the booking
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Owner marks the booking as picked up (this should create a history entry)
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "PICKED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the tool history
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(nomadicToolID), "history")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify the history contains an entry
+		var historyResp struct {
+			Data []api.ToolHistoryEntry `json:"data"`
+		}
+		err = json.Unmarshal(resp, &historyResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(historyResp.Data) > 0, qt.Equals, true, qt.Commentf("Tool history should have at least one entry"))
+
+		// Verify the history entry contains the expected data
+		if len(historyResp.Data) > 0 {
+			entry := historyResp.Data[0]
+			qt.Assert(t, entry.BookingID, qt.Equals, bookingID)
+			qt.Assert(t, entry.PickupDate > 0, qt.Equals, true)
+			qt.Assert(t, entry.Location.Latitude != 0, qt.Equals, true)
+			qt.Assert(t, entry.Location.Longitude != 0, qt.Equals, true)
+		}
+	})
 }

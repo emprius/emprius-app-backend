@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/emprius/emprius-app-backend/types"
-
 	"github.com/emprius/emprius-app-backend/db"
+	"github.com/emprius/emprius-app-backend/types"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -21,7 +21,7 @@ func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID 
 
 	// Check if the booking is rated by the authenticated user
 	if len(authenticatedUserID) > 0 && authenticatedUserID[0] != "" &&
-		booking.BookingStatus == db.BookingStatusReturned { // todo(kon): add picked status when nomadic tools implemented
+		booking.BookingStatus == db.BookingStatusReturned || booking.BookingStatus == db.BookingStatusPicked {
 		userID, err := primitive.ObjectIDFromHex(authenticatedUserID[0])
 		if err == nil {
 			// Get ratings for this booking
@@ -344,6 +344,19 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		err = a.database.ToolService.UpdateToolFields(r.Context.Request.Context(), toolID, updates)
 		if err != nil {
 			return nil, ErrInternalServerError.WithErr(err)
+		}
+
+		// Add a history entry for the tool
+		err = a.database.ToolService.AddToolHistoryEntry(
+			r.Context.Request.Context(),
+			toolID,
+			booking.FromUserID,
+			renter.Location.ToDBLocation(),
+			bookingID,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to add tool history entry")
+			// Continue even if history entry fails
 		}
 
 	default:

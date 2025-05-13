@@ -610,6 +610,73 @@ func (a *API) HandleGetToolRatings(r *Request) (interface{}, error) {
 	return unifiedRatings, nil
 }
 
+// getToolHistory retrieves the history of a nomadic tool
+func (a *API) getToolHistory(toolID int64) ([]ToolHistoryEntry, error) {
+	// Get the tool history from the database
+	dbEntries, err := a.database.ToolService.GetToolHistory(context.Background(), toolID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Convert DB entries to API entries
+	entries := make([]ToolHistoryEntry, len(dbEntries))
+	for i, entry := range dbEntries {
+		entries[i] = ToolHistoryEntry{
+			ID:         entry.ID.Hex(),
+			UserID:     entry.UserID.Hex(),
+			PickupDate: entry.PickupDate.Unix(),
+		}
+		entries[i].Location.FromDBLocation(entry.Location)
+
+		if !entry.BookingID.IsZero() {
+			entries[i].BookingID = entry.BookingID.Hex()
+		}
+
+		// Get user name
+		user, err := a.getUserByID(entry.UserID.Hex())
+		if err == nil {
+			entries[i].UserName = user.Name
+		}
+	}
+
+	return entries, nil
+}
+
+// toolHistoryHandler handles GET /tools/{id}/history
+func (a *API) toolHistoryHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	idParam := r.Context.URLParam("id")
+	if idParam == nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
+	}
+
+	id, err := strconv.ParseInt(idParam[0], 10, 64)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get the tool to check if it's nomadic
+	tool, err := a.toolFromDB(id)
+	if err != nil {
+		return nil, err
+	}
+
+	if !tool.IsNomadic {
+		return nil, ErrToolNotNomadic.WithErr(fmt.Errorf("tool with id %d is not nomadic", id))
+	}
+
+	// Get the tool history
+	history, err := a.getToolHistory(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return history, nil
+}
+
 func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
