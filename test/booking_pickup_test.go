@@ -1,0 +1,145 @@
+package test
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"testing"
+	"time"
+
+	"github.com/emprius/emprius-app-backend/api"
+	"github.com/emprius/emprius-app-backend/test/utils"
+	qt "github.com/frankban/quicktest"
+)
+
+func TestBookingPickupPlace(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create two users: tool owner and renter
+	ownerJWT, _ := c.RegisterAndLoginWithID("pickup-owner@test.com", "pickup-owner", "ownerpass")
+	renterJWT, _ := c.RegisterAndLoginWithID("pickup-renter@test.com", "pickup-renter", "renterpass")
+
+	// Create a third user who is not involved in the booking
+	uninvolvedJWT, _ := c.RegisterAndLoginWithID("pickup-uninvolved@test.com", "pickup-uninvolved", "uninvolvedpass")
+
+	// Owner creates a tool
+	toolID := c.CreateTool(ownerJWT, "Pickup Test Tool")
+
+	// Renter creates a booking
+	tomorrow := time.Now().Add(24 * time.Hour)
+	dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+	resp, code := c.Request(http.MethodPost, renterJWT,
+		api.CreateBookingRequest{
+			ToolID:    fmt.Sprint(toolID),
+			StartDate: tomorrow.Unix(),
+			EndDate:   dayAfterTomorrow.Unix(),
+			Contact:   "test@example.com",
+			Comments:  "Test booking for pickup place",
+		},
+		"bookings",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var bookingResp struct {
+		Data api.BookingResponse `json:"data"`
+	}
+	var notInvolvedResp struct {
+		Data api.BookingResponse `json:"data"`
+	}
+	err := json.Unmarshal(resp, &bookingResp)
+	qt.Assert(t, err, qt.IsNil)
+	bookingID := bookingResp.Data.ID
+
+	// Verify pickup place is not included in the response for a pending booking
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.IsNil)
+
+	// Owner accepts the booking
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "ACCEPTED",
+		}, "bookings", bookingID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	// Test 1: Renter (involved user) gets the booking with pickup place
+	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	err = json.Unmarshal(resp, &bookingResp)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (renter)"))
+
+	// Test 2: Owner (involved user) gets the booking with pickup place
+	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	err = json.Unmarshal(resp, &bookingResp)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (owner)"))
+
+	// Test 3: Uninvolved user gets the booking without pickup place
+	resp, code = c.Request(http.MethodGet, uninvolvedJWT, nil, "bookings", bookingID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	err = json.Unmarshal(resp, &notInvolvedResp)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, notInvolvedResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
+	qt.Assert(t, notInvolvedResp.Data.PickupPlace, qt.IsNil, qt.Commentf("Pickup place should not be included for uninvolved user"))
+
+	// Test 4: Check pickup place in outgoing requests list for renter
+	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var outgoingResp struct {
+		Data []api.BookingResponse `json:"data"`
+	}
+	err = json.Unmarshal(resp, &outgoingResp)
+	qt.Assert(t, err, qt.IsNil)
+
+	var foundBooking bool
+	for _, booking := range outgoingResp.Data {
+		if booking.ID == bookingID {
+			foundBooking = true
+			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included in outgoing requests for involved user"))
+			break
+		}
+	}
+	qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in outgoing requests"))
+
+	// Test 5: Check pickup place in incoming requests list for owner
+	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var incomingResp struct {
+		Data []api.BookingResponse `json:"data"`
+	}
+	err = json.Unmarshal(resp, &incomingResp)
+	qt.Assert(t, err, qt.IsNil)
+
+	foundBooking = false
+	for _, booking := range incomingResp.Data {
+		if booking.ID == bookingID {
+			foundBooking = true
+			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included in incoming requests for involved user"))
+			break
+		}
+	}
+	qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in incoming requests"))
+
+	// Test 6: Mark booking as returned and verify pickup place is no longer included
+	_, code = c.Request(http.MethodPut, ownerJWT,
+		&api.BookingStatusUpdate{
+			Status: "RETURNED",
+		}, "bookings", bookingID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", bookingID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	err = json.Unmarshal(resp, &notInvolvedResp)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, notInvolvedResp.Data.BookingStatus, qt.Equals, "RETURNED")
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (owner)"))
+}

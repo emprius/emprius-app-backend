@@ -324,17 +324,18 @@ type CreateBookingRequest struct {
 
 // BookingResponse represents the API response for a booking
 type BookingResponse struct {
-	ID            string `json:"id"`
-	ToolID        string `json:"toolId"`
-	FromUserID    string `json:"fromUserId"`
-	ToUserID      string `json:"toUserId"`
-	StartDate     int64  `json:"startDate"`
-	EndDate       int64  `json:"endDate"`
-	Contact       string `json:"contact"`
-	Comments      string `json:"comments"`
-	BookingStatus string `json:"bookingStatus"`
-	IsRated       *bool  `json:"isRated"`
-	IsNomadic     bool   `json:"isNomadic"`
+	ID            string    `json:"id"`
+	ToolID        string    `json:"toolId"`
+	FromUserID    string    `json:"fromUserId"`
+	ToUserID      string    `json:"toUserId"`
+	StartDate     int64     `json:"startDate"`
+	EndDate       int64     `json:"endDate"`
+	Contact       string    `json:"contact"`
+	Comments      string    `json:"comments"`
+	BookingStatus string    `json:"bookingStatus"`
+	IsRated       *bool     `json:"isRated"`
+	IsNomadic     bool      `json:"isNomadic"`
+	PickupPlace   *Location `json:"pickupPlace,omitempty"`
 
 	// Legacy fields for backward compatibility
 	CreatedAt int64 `json:"createdAt"`

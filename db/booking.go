@@ -39,6 +39,7 @@ type Booking struct {
 	IsNomadic     bool               `bson:"isNomadic" json:"isNomadic"`
 	CreatedAt     time.Time          `bson:"createdAt" json:"createdAt"`
 	UpdatedAt     time.Time          `bson:"updatedAt" json:"updatedAt"`
+	PickupPlace   *DBLocation        `bson:"pickupPlace,omitempty" json:"pickupPlace,omitempty"`
 }
 
 // BookingService handles all booking related database operations
@@ -354,6 +355,34 @@ func (s *BookingService) GetPendingBookingsForTool(ctx context.Context, toolID s
 	return bookings, nil
 }
 
+// GetBookingsForTool returns all bookings for a specific tool.
+func (s *BookingService) GetBookingsForTool(ctx context.Context, toolID string) ([]*Booking, error) {
+	filter := bson.M{
+		"toolId": toolID,
+	}
+
+	cursor, err := s.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var results []Booking
+	if err = cursor.All(ctx, &results); err != nil {
+		return nil, err
+	}
+
+	bookings := make([]*Booking, len(results))
+	for i := range results {
+		bookings[i] = &results[i]
+	}
+	return bookings, nil
+}
+
 // calculateTokenCost calculates the total token cost for a booking
 func (s *BookingService) calculateTokenCost(booking *Booking, tool *Tool) uint64 {
 	days := uint64(math.Ceil(booking.EndDate.Sub(booking.StartDate).Hours() / 24))
@@ -492,6 +521,25 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 		}
 	}
 
+	return nil
+}
+
+// SetPickupPlace sets the pickup place for a booking
+func (s *BookingService) SetPickupPlace(ctx context.Context, id primitive.ObjectID, location DBLocation) error {
+	update := bson.M{
+		"$set": bson.M{
+			"pickupPlace": location,
+			"updatedAt":   time.Now(),
+		},
+	}
+
+	result, err := s.collection.UpdateOne(ctx, bson.M{"_id": id}, update)
+	if err != nil {
+		return err
+	}
+	if result.MatchedCount == 0 {
+		return ErrBookingNotFound
+	}
 	return nil
 }
 
