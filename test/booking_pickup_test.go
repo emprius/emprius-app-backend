@@ -68,7 +68,8 @@ func TestBookingPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &bookingResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
-	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (renter)"))
+	// Pickup place should be included for involved user (renter)
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil))
 
 	// Test 2: Owner (involved user) gets the booking with pickup place
 	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingID)
@@ -77,7 +78,8 @@ func TestBookingPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &bookingResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
-	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (owner)"))
+	// Pickup place should be included for involved user (owner)
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil))
 
 	// Test 3: Uninvolved user gets the booking without pickup place
 	resp, code = c.Request(http.MethodGet, uninvolvedJWT, nil, "bookings", bookingID)
@@ -86,7 +88,8 @@ func TestBookingPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &notInvolvedResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, notInvolvedResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
-	qt.Assert(t, notInvolvedResp.Data.PickupPlace, qt.IsNil, qt.Commentf("Pickup place should not be included for uninvolved user"))
+	// Pickup place should not be included for uninvolved user
+	qt.Assert(t, notInvolvedResp.Data.PickupPlace, qt.IsNil)
 
 	// Test 4: Check pickup place in outgoing requests list for renter
 	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
@@ -102,11 +105,13 @@ func TestBookingPickupPlace(t *testing.T) {
 	for _, booking := range outgoingResp.Data {
 		if booking.ID == bookingID {
 			foundBooking = true
-			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included in outgoing requests for involved user"))
+			// Pickup place should be included in outgoing requests for involved user
+			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil))
 			break
 		}
 	}
-	qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in outgoing requests"))
+	// Booking should be found in outgoing requests
+	qt.Assert(t, foundBooking, qt.IsTrue)
 
 	// Test 5: Check pickup place in incoming requests list for owner
 	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
@@ -122,11 +127,13 @@ func TestBookingPickupPlace(t *testing.T) {
 	for _, booking := range incomingResp.Data {
 		if booking.ID == bookingID {
 			foundBooking = true
-			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included in incoming requests for involved user"))
+			// Pickup place should be included in incoming requests for involved user
+			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil))
 			break
 		}
 	}
-	qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in incoming requests"))
+	// Booking should be found in incoming requests
+	qt.Assert(t, foundBooking, qt.IsTrue)
 
 	// Test 6: Mark booking as returned and verify pickup place is no longer included
 	_, code = c.Request(http.MethodPut, ownerJWT,
@@ -141,7 +148,8 @@ func TestBookingPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &notInvolvedResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, notInvolvedResp.Data.BookingStatus, qt.Equals, "RETURNED")
-	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (owner)"))
+	// Pickup place should be included for involved user (owner)
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil))
 }
 
 func TestNomadicToolPickupPlace(t *testing.T) {
@@ -216,7 +224,8 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &bookingResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
-	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (renter) when ACCEPTED"))
+	// Pickup place should be included for involved user (renter) when ACCEPTED
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil))
 
 	// Test 2: Owner (involved user) gets the booking with pickup place when ACCEPTED
 	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingID)
@@ -225,7 +234,8 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &bookingResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
-	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (owner) when ACCEPTED"))
+	// Pickup place should be included for involved user (owner) when ACCEPTED
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil))
 
 	// Test 3: Uninvolved user gets the booking without pickup place when ACCEPTED
 	resp, code = c.Request(http.MethodGet, uninvolvedJWT, nil, "bookings", bookingID)
@@ -234,7 +244,8 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &notInvolvedResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, notInvolvedResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
-	qt.Assert(t, notInvolvedResp.Data.PickupPlace, qt.IsNil, qt.Commentf("Pickup place should not be included for uninvolved user when ACCEPTED"))
+	// Pickup place should not be included for uninvolved user when ACCEPTED
+	qt.Assert(t, notInvolvedResp.Data.PickupPlace, qt.IsNil)
 
 	// Mark as picked by owner
 	_, code = c.Request(http.MethodPut, ownerJWT,
@@ -250,7 +261,8 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &bookingResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "PICKED")
-	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (renter) when PICKED"))
+	// Pickup place should be included for involved user (renter) when PICKED
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil))
 
 	// Test 5: Owner (involved user) gets the booking with pickup place when PICKED
 	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", bookingID)
@@ -259,7 +271,8 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &bookingResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "PICKED")
-	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included for involved user (owner) when PICKED"))
+	// Pickup place should be included for involved user (owner) when PICKED
+	qt.Assert(t, bookingResp.Data.PickupPlace, qt.Not(qt.IsNil))
 
 	// Test 6: Uninvolved user gets the booking without pickup place when PICKED
 	resp, code = c.Request(http.MethodGet, uninvolvedJWT, nil, "bookings", bookingID)
@@ -268,7 +281,8 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	err = json.Unmarshal(resp, &notInvolvedResp)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, notInvolvedResp.Data.BookingStatus, qt.Equals, "PICKED")
-	qt.Assert(t, notInvolvedResp.Data.PickupPlace, qt.IsNil, qt.Commentf("Pickup place should not be included for uninvolved user when PICKED"))
+	// Pickup place should not be included for uninvolved user when PICKED
+	qt.Assert(t, notInvolvedResp.Data.PickupPlace, qt.IsNil)
 
 	// Test 7: Check pickup place in outgoing requests list for renter when PICKED
 	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
@@ -284,11 +298,13 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	for _, booking := range outgoingResp.Data {
 		if booking.ID == bookingID {
 			foundBooking = true
-			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included in outgoing requests for involved user when PICKED"))
+			// Pickup place should be included in outgoing requests for involved user when PICKED
+			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil))
 			break
 		}
 	}
-	qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in outgoing requests"))
+	// Booking should be found in outgoing requests
+	qt.Assert(t, foundBooking, qt.IsTrue)
 
 	// Test 8: Check pickup place in incoming requests list for owner when PICKED
 	resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
@@ -304,9 +320,11 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	for _, booking := range incomingResp.Data {
 		if booking.ID == bookingID {
 			foundBooking = true
-			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil), qt.Commentf("Pickup place should be included in incoming requests for involved user when PICKED"))
+			// Pickup place should be included in incoming requests for involved user when PICKED
+			qt.Assert(t, booking.PickupPlace, qt.Not(qt.IsNil))
 			break
 		}
 	}
-	qt.Assert(t, foundBooking, qt.IsTrue, qt.Commentf("Booking should be found in incoming requests"))
+	// Booking should be found in incoming requests
+	qt.Assert(t, foundBooking, qt.IsTrue)
 }

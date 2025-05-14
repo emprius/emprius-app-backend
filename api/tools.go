@@ -169,14 +169,6 @@ func (a *API) toolFromDB(id int64) (*db.Tool, error) {
 	return tool, nil
 }
 
-func (a *API) tool(id int64) (*Tool, error) {
-	tool, err := a.toolFromDB(id)
-	if err != nil {
-		return nil, err
-	}
-	return new(Tool).FromDBTool(tool), nil
-}
-
 func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
 	user, err := a.getUserByID(userID)
 	if err != nil {

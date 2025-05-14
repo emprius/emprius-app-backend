@@ -7,6 +7,11 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+const (
+	testEntityID = "test-entity-id"
+	testSalt     = "test-salt"
+)
+
 func TestGenerateObfuscatedLocation(t *testing.T) {
 	// Test case 1: Basic functionality
 	t.Run("Basic Functionality", func(t *testing.T) {
@@ -15,8 +20,8 @@ func TestGenerateObfuscatedLocation(t *testing.T) {
 			Type:        "Point",
 			Coordinates: []float64{2.1734, 41.3851}, // Barcelona coordinates
 		}
-		entityID := "test-entity-id"
-		salt := "test-salt"
+		entityID := testEntityID
+		salt := testSalt
 		radiusMeters := 1000.0
 
 		// Generate obfuscated location
@@ -46,8 +51,8 @@ func TestGenerateObfuscatedLocation(t *testing.T) {
 			Type:        "Point",
 			Coordinates: []float64{2.1734, 41.3851}, // Barcelona coordinates
 		}
-		entityID := "test-entity-id"
-		salt := "test-salt"
+		entityID := testEntityID
+		salt := testSalt
 		radiusMeters := 1000.0
 
 		// Generate obfuscated location twice with the same inputs
@@ -70,7 +75,7 @@ func TestGenerateObfuscatedLocation(t *testing.T) {
 		}
 		entityID1 := "test-entity-id-1"
 		entityID2 := "test-entity-id-2"
-		salt := "test-salt"
+		salt := testSalt
 		radiusMeters := 1000.0
 
 		// Generate obfuscated locations with different entity IDs
@@ -91,7 +96,7 @@ func TestGenerateObfuscatedLocation(t *testing.T) {
 			Type:        "Point",
 			Coordinates: []float64{2.1734, 41.3851}, // Barcelona coordinates
 		}
-		entityID := "test-entity-id"
+		entityID := testEntityID
 		salt1 := "test-salt-1"
 		salt2 := "test-salt-2"
 		radiusMeters := 1000.0
@@ -114,8 +119,8 @@ func TestGenerateObfuscatedLocation(t *testing.T) {
 			Type:        "Point",
 			Coordinates: []float64{2.1734, 41.3851}, // Barcelona coordinates
 		}
-		entityID := "test-entity-id"
-		salt := "test-salt"
+		entityID := testEntityID
+		salt := testSalt
 		radiusMeters1 := 1000.0
 		radiusMeters2 := 2000.0
 
