@@ -329,16 +329,21 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking status is %s, must be ACCEPTED", booking.BookingStatus))
 		}
 
-		// Get the renter user to update the tool location
+		// Get the renter user to update the tool obfuscatedLocation
 		renter, err := a.getUserByID(booking.FromUserID.Hex())
 		if err != nil {
 			return nil, ErrUserNotFound.WithErr(err)
 		}
 
-		// Update the tool's location and actualUserId
+		// Get obfuscated obfuscatedLocation
+		newLocation := renter.Location.ToDBLocation()
+		obfuscatedLocation := db.ObfuscateLocation(newLocation, booking.FromUserID)
+
+		// Update the tool's obfuscatedLocation and actualUserId
 		updates := map[string]interface{}{
-			"location":     renter.Location.ToDBLocation(),
-			"actualUserId": booking.FromUserID,
+			"obfuscatedLocation": obfuscatedLocation,
+			"location":           newLocation,
+			"actualUserId":       booking.FromUserID,
 		}
 
 		err = a.database.ToolService.UpdateToolFields(r.Context.Request.Context(), toolID, updates)
@@ -351,7 +356,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			r.Context.Request.Context(),
 			toolID,
 			booking.FromUserID,
-			renter.Location.ToDBLocation(),
+			obfuscatedLocation,
 			bookingID,
 		)
 		if err != nil {
