@@ -3,17 +3,25 @@ package db
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"math"
 	"math/rand"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 const (
 	// DefaultObfuscationRadiusMeters is the default radius for location obfuscation in meters
 	DefaultObfuscationRadiusMeters = 1000
-	// LocationSalt is used to add randomness to the obfuscation algorithm
-	LocationSalt = "emprius-location-salt-v1"
 )
+
+// locationSalt is used to add randomness to the obfuscation algorithm
+// It will be set during initialization
+var locationSalt = "emprius-location-salt-v1" // Default value for backward compatibility
+
+// SetLocationSalt sets the salt used for location obfuscation
+func SetLocationSalt(salt string) {
+	locationSalt = salt
+}
 
 // GenerateObfuscatedLocation generates a deterministically randomized location within the specified radius
 func GenerateObfuscatedLocation(location DBLocation, entityID string, salt string, radiusMeters float64) DBLocation {
@@ -50,5 +58,5 @@ func GenerateObfuscatedLocation(location DBLocation, entityID string, salt strin
 
 // ObfuscateLocation generates an obfuscated location for a user
 func ObfuscateLocation(location DBLocation, seedId primitive.ObjectID) DBLocation {
-	return GenerateObfuscatedLocation(location, seedId.Hex(), LocationSalt, DefaultObfuscationRadiusMeters)
+	return GenerateObfuscatedLocation(location, seedId.Hex(), locationSalt, DefaultObfuscationRadiusMeters)
 }

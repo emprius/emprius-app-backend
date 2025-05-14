@@ -28,10 +28,15 @@ type Database struct {
 }
 
 // New initializes a new MongoDB connection.
-func New(uri string) (*Database, error) {
+func New(uri string, secret ...string) (*Database, error) {
 	// For in-memory testing, use a random database name
 	if uri == ":memory:" {
 		uri = "mongodb://localhost:27017"
+	}
+
+	// Set the location salt if provided
+	if len(secret) > 0 && secret[0] != "" {
+		SetLocationSalt(secret[0])
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
