@@ -33,15 +33,15 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		_, code := c.Request(http.MethodPost, "",
 			api.Tool{
-				Title:          "Test Tool",
-				Description:    "Test tool description",
-				MayBeFree:      boolPtr(true),
-				AskWithFee:     boolPtr(false),
-				Category:       1,
-				EstimatedValue: uint64Ptr(10000),
-				Height:         30,
-				Weight:         40,
-				IsAvailable:    boolPtr(true),
+				Title:         "Test Tool",
+				Description:   "Test tool description",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Height:        30,
+				Weight:        40,
+				IsAvailable:   boolPtr(true),
 				Location: api.Location{
 					Latitude:  41920384, // 41.920384 * 1e6 (~25 km north)
 					Longitude: 2492793,  // 2.492793 * 1e6
@@ -57,14 +57,14 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		resp, code := c.Request(http.MethodPost, userJWT,
 			api.Tool{
-				Title:          "Test Tool",
-				Description:    "Test tool description",
-				MayBeFree:      boolPtr(true),
-				AskWithFee:     boolPtr(false),
-				Category:       1,
-				EstimatedValue: uint64Ptr(20000),
-				Height:         30,
-				Weight:         40,
+				Title:         "Test Tool",
+				Description:   "Test tool description",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(20000),
+				Height:        30,
+				Weight:        40,
 				Location: api.Location{
 					Latitude:  41920384, // 41.920384 * 1e6 (~25 km north)
 					Longitude: 2492793,  // 2.492793 * 1e6
@@ -90,15 +90,15 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		_, code = c.Request(http.MethodPost, userJWT,
 			api.Tool{
-				Title:          "Another Tool",
-				Description:    "Another tool description",
-				MayBeFree:      boolPtr(false), // This will be relevant for filtering
-				AskWithFee:     boolPtr(true),
-				Category:       1,
-				EstimatedValue: uint64Ptr(20000),
-				Height:         40,
-				Weight:         50,
-				IsAvailable:    boolPtr(true),
+				Title:         "Another Tool",
+				Description:   "Another tool description",
+				MayBeFree:     boolPtr(false), // This will be relevant for filtering
+				AskWithFee:    boolPtr(true),
+				Category:      1,
+				ToolValuation: uint64Ptr(20000),
+				Height:        40,
+				Weight:        50,
+				IsAvailable:   boolPtr(true),
 				Location: api.Location{
 					Latitude:  41785384, // 41.785384 * 1e6 (~9 km from updated location)
 					Longitude: 2492793,  // 2.492793 * 1e6
@@ -128,15 +128,15 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		resp, code = c.Request(http.MethodPut, userJWT,
 			api.Tool{
-				Title:          "Updated Tool",
-				Description:    "Updated description",
-				MayBeFree:      boolPtr(false),
-				AskWithFee:     boolPtr(true),
-				Category:       1,
-				EstimatedValue: uint64Ptr(20000),
-				Height:         40,
-				Weight:         50,
-				IsAvailable:    boolPtr(true),
+				Title:         "Updated Tool",
+				Description:   "Updated description",
+				MayBeFree:     boolPtr(false),
+				AskWithFee:    boolPtr(true),
+				Category:      1,
+				ToolValuation: uint64Ptr(20000),
+				Height:        40,
+				Weight:        50,
+				IsAvailable:   boolPtr(true),
 				Location: api.Location{
 					Latitude:  41695384, // 41.695384 * 1e6 (center)
 					Longitude: 2492793,  // 2.492793 * 1e6
@@ -204,15 +204,15 @@ func TestTools(t *testing.T) {
 			// Tool at ~5 km
 			_, code = c.Request(http.MethodPost, userJWT,
 				api.Tool{
-					Title:          "Tool at 5km",
-					Description:    "Tool at 5km away",
-					MayBeFree:      boolPtr(true),  // different from "Updated Tool"
-					AskWithFee:     boolPtr(false), // cost=10 => included by maxCost=15
-					Category:       1,
-					EstimatedValue: uint64Ptr(10000),
-					Height:         30,
-					Weight:         40,
-					IsAvailable:    boolPtr(true),
+					Title:         "Tool at 5km",
+					Description:   "Tool at 5km away",
+					MayBeFree:     boolPtr(true),  // different from "Updated Tool"
+					AskWithFee:    boolPtr(false), // cost=10 => included by maxCost=15
+					Category:      1,
+					ToolValuation: uint64Ptr(10000),
+					Height:        30,
+					Weight:        40,
+					IsAvailable:   boolPtr(true),
 					Location: api.Location{
 						Latitude:  41745384, // 41.745384 * 1e6 (~5 km from center)
 						Longitude: 2492793,  // 2.492793 * 1e6
@@ -225,15 +225,15 @@ func TestTools(t *testing.T) {
 			// Tool at ~15 km
 			_, code = c.Request(http.MethodPost, userJWT,
 				api.Tool{
-					Title:          "Tool at 15km",
-					Description:    "Tool at 15km away",
-					MayBeFree:      boolPtr(true),
-					AskWithFee:     boolPtr(false),
-					Category:       1,
-					EstimatedValue: uint64Ptr(20000),
-					Height:         30,
-					Weight:         40,
-					IsAvailable:    boolPtr(true),
+					Title:         "Tool at 15km",
+					Description:   "Tool at 15km away",
+					MayBeFree:     boolPtr(true),
+					AskWithFee:    boolPtr(false),
+					Category:      1,
+					ToolValuation: uint64Ptr(20000),
+					Height:        30,
+					Weight:        40,
+					IsAvailable:   boolPtr(true),
 					Location: api.Location{
 						Latitude:  41845384, // 41.845384 * 1e6 (~15 km from center)
 						Longitude: 2492793,  // 2.492793 * 1e6
@@ -246,15 +246,15 @@ func TestTools(t *testing.T) {
 			// Tool at ~25 km
 			_, code = c.Request(http.MethodPost, userJWT,
 				api.Tool{
-					Title:          "Tool at 25km",
-					Description:    "Tool at 25km away",
-					MayBeFree:      boolPtr(true),
-					AskWithFee:     boolPtr(false),
-					Category:       1,
-					EstimatedValue: uint64Ptr(20000),
-					Height:         30,
-					Weight:         40,
-					IsAvailable:    boolPtr(true),
+					Title:         "Tool at 25km",
+					Description:   "Tool at 25km away",
+					MayBeFree:     boolPtr(true),
+					AskWithFee:    boolPtr(false),
+					Category:      1,
+					ToolValuation: uint64Ptr(20000),
+					Height:        30,
+					Weight:        40,
+					IsAvailable:   boolPtr(true),
 					Location: api.Location{
 						Latitude:  41945384, // 41.945384 * 1e6 (~25 km from center)
 						Longitude: 2492793,  // 2.492793 * 1e6
@@ -429,14 +429,14 @@ func TestTools(t *testing.T) {
 		// Create a tool
 		resp, code := c.Request(http.MethodPost, userJWT,
 			api.Tool{
-				Title:          "Tool for Rating",
-				Description:    "Tool to test ratings",
-				MayBeFree:      boolPtr(true),
-				AskWithFee:     boolPtr(false),
-				Category:       1,
-				EstimatedValue: uint64Ptr(10000),
-				Height:         30,
-				Weight:         40,
+				Title:         "Tool for Rating",
+				Description:   "Tool to test ratings",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Height:        30,
+				Weight:        40,
 				Location: api.Location{
 					Latitude:  41920384,
 					Longitude: 2492793,

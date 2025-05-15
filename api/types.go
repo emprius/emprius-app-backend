@@ -216,27 +216,28 @@ type ToolHistoryEntry struct {
 
 // Tool is the type of the tool
 type Tool struct {
-	ID               int64              `json:"id"`
-	UserID           string             `json:"userId"`
-	ActualUserID     string             `json:"actualUserId,omitempty"`
-	Title            string             `json:"title"`
-	Description      string             `json:"description"`
-	IsAvailable      *bool              `json:"isAvailable"`
-	MayBeFree        *bool              `json:"mayBeFree"`
-	AskWithFee       *bool              `json:"askWithFee"`
-	Cost             uint64             `json:"cost"`
-	Images           []types.HexBytes   `json:"images"`
-	TransportOptions []int              `json:"transportOptions"`
-	Category         int                `json:"toolCategory"`
-	Location         Location           `json:"location"`
-	EstimatedValue   *uint64            `json:"estimatedValue"`
-	Height           uint32             `json:"height"`
-	Weight           uint32             `json:"weight"`
-	MaxDistance      uint32             `json:"maxDistance"`
-	ReservedDates    []db.DateRange     `json:"reservedDates"`
-	IsNomadic        bool               `json:"isNomadic"`
-	Communities      []string           `json:"communities,omitempty"`
-	HistoryEntries   []ToolHistoryEntry `json:"historyEntries,omitempty"`
+	ID                 int64              `json:"id"`
+	UserID             string             `json:"userId"`
+	ActualUserID       string             `json:"actualUserId,omitempty"`
+	Title              string             `json:"title"`
+	Description        string             `json:"description"`
+	IsAvailable        *bool              `json:"isAvailable"`
+	MayBeFree          *bool              `json:"mayBeFree"`
+	AskWithFee         *bool              `json:"askWithFee"`
+	Images             []types.HexBytes   `json:"images"`
+	TransportOptions   []int              `json:"transportOptions"`
+	Category           int                `json:"toolCategory"`
+	Location           Location           `json:"location"`
+	Cost               uint64             `json:"cost"`
+	ToolValuation      *uint64            `json:"toolValuation"`
+	EstimatedDailyCost uint64             `json:"estimatedDailyCost"`
+	Height             uint32             `json:"height"`
+	Weight             uint32             `json:"weight"`
+	MaxDistance        uint32             `json:"maxDistance"`
+	ReservedDates      []db.DateRange     `json:"reservedDates"`
+	IsNomadic          bool               `json:"isNomadic"`
+	Communities        []string           `json:"communities,omitempty"`
+	HistoryEntries     []ToolHistoryEntry `json:"historyEntries,omitempty"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
@@ -268,7 +269,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool, useRealLocation ...bool) *Tool {
 		t.Location.FromDBLocation(dbt.ObfuscatedLocation)
 	}
 
-	t.EstimatedValue = &dbt.EstimatedValue
+	t.ToolValuation = &dbt.ToolValuation
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
 	t.MaxDistance = dbt.MaxDistance

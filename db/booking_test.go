@@ -72,12 +72,12 @@ func TestBookingService_RatingCalculation(t *testing.T) {
 
 	// Create test tool
 	tool := &Tool{
-		ID:             1,
-		Title:          "Test Tool",
-		Description:    "Test Description",
-		IsAvailable:    true,
-		UserID:         toUser.ID,
-		EstimatedValue: 10000,
+		ID:            1,
+		Title:         "Test Tool",
+		Description:   "Test Description",
+		IsAvailable:   true,
+		UserID:        toUser.ID,
+		ToolValuation: 10000,
 		Location: DBLocation{
 			Type:        "Point",
 			Coordinates: []float64{2.492793, 41.695384},
@@ -533,14 +533,14 @@ func TestBookingService_CountPendingActions(t *testing.T) {
 
 	// Create a nomadic tool
 	nomadicTool := &Tool{
-		ID:             1,
-		Title:          "IsNomadic Tool",
-		Description:    "This is a nomadic tool",
-		IsAvailable:    true,
-		UserID:         owner.ID,
-		ActualUserID:   actualUser.ID, // The actual user has the tool
-		EstimatedValue: 10000,
-		IsNomadic:      true,
+		ID:            1,
+		Title:         "IsNomadic Tool",
+		Description:   "This is a nomadic tool",
+		IsAvailable:   true,
+		UserID:        owner.ID,
+		ActualUserID:  actualUser.ID, // The actual user has the tool
+		ToolValuation: 10000,
+		IsNomadic:     true,
 		Location: DBLocation{
 			Type:        "Point",
 			Coordinates: []float64{2.1, 41.1},
@@ -551,13 +551,13 @@ func TestBookingService_CountPendingActions(t *testing.T) {
 
 	// Create a non-nomadic tool
 	nonNomadicTool := &Tool{
-		ID:             2,
-		Title:          "Regular Tool",
-		Description:    "This is a regular tool",
-		IsAvailable:    true,
-		UserID:         owner.ID,
-		EstimatedValue: 5000,
-		IsNomadic:      false,
+		ID:            2,
+		Title:         "Regular Tool",
+		Description:   "This is a regular tool",
+		IsAvailable:   true,
+		UserID:        owner.ID,
+		ToolValuation: 5000,
+		IsNomadic:     false,
 		Location: DBLocation{
 			Type:        "Point",
 			Coordinates: []float64{2.2, 41.2},
@@ -682,14 +682,14 @@ func TestNomadicTool(t *testing.T) {
 
 	// Create a nomadic test tool
 	nomadicTool := &Tool{
-		ID:             1,
-		Title:          "IsNomadic Tool",
-		Description:    "This is a nomadic tool",
-		IsAvailable:    true,
-		UserID:         owner.ID,
-		EstimatedValue: 10000,
-		IsNomadic:      true,          // This is a nomadic tool
-		ReservedDates:  []DateRange{}, // Initialize empty reserved dates array
+		ID:            1,
+		Title:         "IsNomadic Tool",
+		Description:   "This is a nomadic tool",
+		IsAvailable:   true,
+		UserID:        owner.ID,
+		ToolValuation: 10000,
+		IsNomadic:     true,          // This is a nomadic tool
+		ReservedDates: []DateRange{}, // Initialize empty reserved dates array
 		Location: DBLocation{
 			Type:        "Point",
 			Coordinates: []float64{2.1, 41.1}, // Initially at owner's location
