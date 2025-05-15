@@ -49,7 +49,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	}
 
 	if t.ToolValuation == nil {
-		return 0, ErrInvalidEstimatedValue
+		return 0, ErrInvalidToolValuationValue
 	}
 
 	user, err := a.getUserByID(userID)
@@ -126,6 +126,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		MayBeFree:          *t.MayBeFree,
 		AskWithFee:         *t.AskWithFee,
 		Cost:               t.Cost,
+		EstimatedDailyCost: t.EstimatedDailyCost,
 		ToolCategory:       t.Category,
 		Rating:             50,
 		ToolValuation:      *t.ToolValuation,
@@ -321,8 +322,9 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 		"mayBeFree":          tool.MayBeFree,
 		"askWithFee":         tool.AskWithFee,
 		"cost":               tool.Cost,
+		"estimatedDailyCost": tool.EstimatedDailyCost,
 		"toolCategory":       tool.ToolCategory,
-		"estimatedValue":     tool.ToolValuation,
+		"toolValuation":      tool.ToolValuation,
 		"height":             tool.Height,
 		"weight":             tool.Weight,
 		"maxDistance":        tool.MaxDistance,

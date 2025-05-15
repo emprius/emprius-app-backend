@@ -124,7 +124,7 @@ curl -X POST http://localhost:3333/tools \
       "latitude": 42202259,
       "longitude": 1815044
     },
-    "estimatedValue": 20,
+    "toolValuation": 20,
     "height": 30,
     "weight": 40
   }'

@@ -63,7 +63,7 @@ curl -s $HOST/tools -X POST -H "$jwt" -H 'Content-Type: application/json' -d '{
     "latitude": 42202259,
     "longitude": 1815044
   },
-  "estimatedValue": 20,
+  "toolValuation": 20,
   "height": 30,
   "weight": 40
 }' | jq .

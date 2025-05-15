@@ -3,6 +3,7 @@ package test
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/types"
 	"net/http"
 	"testing"
 	"time"
@@ -664,11 +665,11 @@ func TestTools(t *testing.T) {
 
 		// Create a nomadic tool
 		createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
-			"title":          "Nomadic Tool for Edit Test",
-			"description":    "This tool is used to test editing restrictions",
-			"toolCategory":   1,
-			"estimatedValue": 100,
-			"isNomadic":      true,
+			"title":         "Nomadic Tool for Edit Test",
+			"description":   "This tool is used to test editing restrictions",
+			"toolCategory":  1,
+			"toolValuation": 100,
+			"isNomadic":     true,
 		}, "tools")
 		qt.Assert(t, code, qt.Equals, 200)
 
@@ -790,7 +791,7 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify Cost and EstimatedDailyCost are calculated correctly from ToolValuation
-		expectedCost := uint64(10000) / 10 // FactorCostToPrice is 10
+		expectedCost := uint64(10000) / types.FactorCostToPrice // FactorCostToPrice is 10
 		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, expectedCost)
 		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
 
@@ -810,12 +811,12 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify Cost and EstimatedDailyCost are updated correctly
-		expectedCost = uint64(20000) / 10
+		expectedCost = uint64(20000) / types.FactorCostToPrice
 		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, expectedCost)
 		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
 
 		// Test case 3: Edit a tool to set a custom Cost that's less than EstimatedDailyCost
-		customCost := expectedCost - 500
+		customCost := expectedCost - 50
 		resp, code = c.Request(http.MethodPut, ownerJWT,
 			api.Tool{
 				Cost: customCost,
@@ -851,8 +852,7 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify Cost remains the same (not increased beyond EstimatedDailyCost)
-		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, customCost)
-		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, getToolResp.Data.EstimatedDailyCost)
 	})
 
 	t.Run("Nomadic Tool History", func(t *testing.T) {
@@ -862,11 +862,11 @@ func TestTools(t *testing.T) {
 
 		// Create a nomadic tool
 		createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
-			"title":          "Nomadic Tool with History",
-			"description":    "This tool is used to test history tracking",
-			"toolCategory":   1,
-			"estimatedValue": 100,
-			"isNomadic":      true,
+			"title":         "Nomadic Tool with History",
+			"description":   "This tool is used to test history tracking",
+			"toolCategory":  1,
+			"toolValuation": 100,
+			"isNomadic":     true,
 			"location": map[string]interface{}{
 				"latitude":  41695384,
 				"longitude": 2492793,

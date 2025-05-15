@@ -270,6 +270,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool, useRealLocation ...bool) *Tool {
 	}
 
 	t.ToolValuation = &dbt.ToolValuation
+	t.EstimatedDailyCost = dbt.EstimatedDailyCost
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
 	t.MaxDistance = dbt.MaxDistance
