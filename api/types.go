@@ -154,7 +154,8 @@ func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
 }
 
 // FromDBUser converts a DB User to an API User (full version)
-func (u *User) FromDBUser(dbu *db.User) *User {
+// If useRealLocation is true, the real location is used instead of the obfuscated one
+func (u *User) FromDBUser(dbu *db.User, useRealLocation ...bool) *User {
 	// First fill UserPreview fields
 	u.UserPreview.FromDBUserPreview(dbu)
 
@@ -162,7 +163,14 @@ func (u *User) FromDBUser(dbu *db.User) *User {
 	u.Email = dbu.Email
 	u.Community = dbu.Community
 	u.Tokens = dbu.Tokens
-	u.Location.FromDBLocation(dbu.Location)
+
+	// Use real location if explicitly requested, otherwise use obfuscated location
+	if len(useRealLocation) > 0 && useRealLocation[0] {
+		u.Location.FromDBLocation(dbu.Location)
+	} else {
+		u.Location.FromDBLocation(dbu.ObfuscatedLocation)
+	}
+
 	u.Verified = dbu.Verified
 	u.Bio = dbu.Bio
 	u.CreatedAt = dbu.CreatedAt
@@ -232,7 +240,8 @@ type Tool struct {
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
-func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
+// If useRealLocation is true, the real location is used instead of the obfuscated one
+func (t *Tool) FromDBTool(dbt *db.Tool, useRealLocation ...bool) *Tool {
 	t.ID = dbt.ID
 	t.UserID = dbt.UserID.Hex()
 	if !dbt.ActualUserID.IsZero() {
@@ -251,7 +260,14 @@ func (t *Tool) FromDBTool(dbt *db.Tool) *Tool {
 		t.TransportOptions = append(t.TransportOptions, int(dbt.TransportOptions[i].ID))
 	}
 	t.Category = dbt.ToolCategory
-	t.Location.FromDBLocation(dbt.Location)
+
+	// Use real location if explicitly requested, otherwise use obfuscated location
+	if len(useRealLocation) > 0 && useRealLocation[0] {
+		t.Location.FromDBLocation(dbt.Location)
+	} else {
+		t.Location.FromDBLocation(dbt.ObfuscatedLocation)
+	}
+
 	t.EstimatedValue = &dbt.EstimatedValue
 	t.Height = dbt.Height
 	t.Weight = dbt.Weight
@@ -308,17 +324,18 @@ type CreateBookingRequest struct {
 
 // BookingResponse represents the API response for a booking
 type BookingResponse struct {
-	ID            string `json:"id"`
-	ToolID        string `json:"toolId"`
-	FromUserID    string `json:"fromUserId"`
-	ToUserID      string `json:"toUserId"`
-	StartDate     int64  `json:"startDate"`
-	EndDate       int64  `json:"endDate"`
-	Contact       string `json:"contact"`
-	Comments      string `json:"comments"`
-	BookingStatus string `json:"bookingStatus"`
-	IsRated       *bool  `json:"isRated"`
-	IsNomadic     bool   `json:"isNomadic"`
+	ID            string    `json:"id"`
+	ToolID        string    `json:"toolId"`
+	FromUserID    string    `json:"fromUserId"`
+	ToUserID      string    `json:"toUserId"`
+	StartDate     int64     `json:"startDate"`
+	EndDate       int64     `json:"endDate"`
+	Contact       string    `json:"contact"`
+	Comments      string    `json:"comments"`
+	BookingStatus string    `json:"bookingStatus"`
+	IsRated       *bool     `json:"isRated"`
+	IsNomadic     bool      `json:"isNomadic"`
+	PickupPlace   *Location `json:"pickupPlace,omitempty"`
 
 	// Legacy fields for backward compatibility
 	CreatedAt int64 `json:"createdAt"`

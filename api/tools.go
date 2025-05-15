@@ -111,26 +111,31 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		*t.IsAvailable = true
 	}
 
+	// Create the tool with real location
+	toolId := toolID(userID)
+	realLocation := t.Location.ToDBLocation()
+
 	dbTool := db.Tool{
-		ID:               toolID(userID),
-		UserID:           user.ObjectID(),
-		Title:            db.SanitizeString(t.Title),
-		Description:      t.Description,
-		IsAvailable:      *t.IsAvailable,
-		MayBeFree:        *t.MayBeFree,
-		AskWithFee:       *t.AskWithFee,
-		Cost:             t.Cost,
-		ToolCategory:     t.Category,
-		Rating:           50,
-		EstimatedValue:   *t.EstimatedValue,
-		Height:           t.Height,
-		Weight:           t.Weight,
-		MaxDistance:      t.MaxDistance,
-		Images:           dbImages,
-		Location:         t.Location.ToDBLocation(),
-		TransportOptions: transportOptions,
-		ReservedDates:    []db.DateRange{}, // Initialize empty array
-		IsNomadic:        t.IsNomadic,
+		ID:                 toolId,
+		UserID:             user.ObjectID(),
+		Title:              db.SanitizeString(t.Title),
+		Description:        t.Description,
+		IsAvailable:        *t.IsAvailable,
+		MayBeFree:          *t.MayBeFree,
+		AskWithFee:         *t.AskWithFee,
+		Cost:               t.Cost,
+		ToolCategory:       t.Category,
+		Rating:             50,
+		EstimatedValue:     *t.EstimatedValue,
+		Height:             t.Height,
+		Weight:             t.Weight,
+		MaxDistance:        t.MaxDistance,
+		Images:             dbImages,
+		Location:           realLocation,
+		ObfuscatedLocation: db.ObfuscateLocation(realLocation, user.ObjectID()),
+		TransportOptions:   transportOptions,
+		ReservedDates:      []db.DateRange{}, // Initialize empty array
+		IsNomadic:          t.IsNomadic,
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
@@ -164,14 +169,6 @@ func (a *API) toolFromDB(id int64) (*db.Tool, error) {
 	return tool, nil
 }
 
-func (a *API) tool(id int64) (*Tool, error) {
-	tool, err := a.toolFromDB(id)
-	if err != nil {
-		return nil, err
-	}
-	return new(Tool).FromDBTool(tool), nil
-}
-
 func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
 	user, err := a.getUserByID(userID)
 	if err != nil {
@@ -188,7 +185,7 @@ func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
 	return result, nil
 }
 
-func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
+func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int64, error) {
 	tool, err := a.toolFromDB(id)
 	if err != nil {
 		return 0, err
@@ -244,6 +241,7 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 	}
 	if newTool.Location.Latitude != 0 || newTool.Location.Longitude != 0 {
 		tool.Location = newTool.Location.ToDBLocation()
+		tool.ObfuscatedLocation = db.ObfuscateLocation(tool.Location, userID)
 	}
 	if newTool.IsAvailable != nil {
 		tool.IsAvailable = *newTool.IsAvailable
@@ -306,21 +304,22 @@ func (a *API) editTool(id int64, newTool *Tool) (int64, error) {
 
 	// For updates without title change, just update the fields
 	updates := map[string]interface{}{
-		"title":            tool.Title,
-		"description":      tool.Description,
-		"isAvailable":      tool.IsAvailable,
-		"mayBeFree":        tool.MayBeFree,
-		"askWithFee":       tool.AskWithFee,
-		"cost":             tool.Cost,
-		"toolCategory":     tool.ToolCategory,
-		"estimatedValue":   tool.EstimatedValue,
-		"height":           tool.Height,
-		"weight":           tool.Weight,
-		"maxDistance":      tool.MaxDistance,
-		"images":           tool.Images,
-		"location":         tool.Location,
-		"transportOptions": tool.TransportOptions,
-		"isNomadic":        tool.IsNomadic,
+		"title":              tool.Title,
+		"description":        tool.Description,
+		"isAvailable":        tool.IsAvailable,
+		"mayBeFree":          tool.MayBeFree,
+		"askWithFee":         tool.AskWithFee,
+		"cost":               tool.Cost,
+		"toolCategory":       tool.ToolCategory,
+		"estimatedValue":     tool.EstimatedValue,
+		"height":             tool.Height,
+		"weight":             tool.Weight,
+		"maxDistance":        tool.MaxDistance,
+		"images":             tool.Images,
+		"location":           tool.Location,
+		"obfuscatedLocation": tool.ObfuscatedLocation,
+		"transportOptions":   tool.TransportOptions,
+		"isNomadic":          tool.IsNomadic,
 	}
 	err = a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 	if err != nil {
@@ -398,18 +397,32 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
-	tool, err := a.tool(id)
-	if err != nil {
-		return nil, err
-	}
 
-	// Convert community ObjectIDs to strings
+	// Get the tool from the database
 	dbTool, err := a.toolFromDB(id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use primitive package explicitly to ensure it's not removed by the formatter
+	// Determine if we should use the real location
+	useRealLocation := false
+
+	// Only show real location if user is authenticated
+	if r.UserID != "" {
+		userObjID, err := primitive.ObjectIDFromHex(r.UserID)
+		if err == nil {
+			// Fetch the tool to check the owner
+			tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), id)
+			if err == nil && tool.UserID == userObjID || err == nil && tool.ActualUserID == userObjID {
+				useRealLocation = true
+			}
+		}
+	}
+
+	// Convert DB tool to API tool with appropriate location
+	tool := new(Tool).FromDBTool(dbTool, useRealLocation)
+
+	// Convert community ObjectIDs to strings
 	communityIDs := make([]string, len(dbTool.Communities))
 	for i, communityID := range dbTool.Communities {
 		// This line uses primitive.ObjectID.Hex() method
@@ -736,7 +749,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 		return nil, err
 	}
 
-	newID, err := a.editTool(id, &t)
+	newID, err := a.editTool(id, &t, tool.UserID)
 	if err != nil {
 		return nil, err
 	}

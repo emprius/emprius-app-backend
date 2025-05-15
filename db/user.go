@@ -16,22 +16,23 @@ import (
 
 // User represents the schema for the "users" collection.
 type User struct {
-	ID          primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
-	Email       string              `bson:"email" json:"email"`
-	Name        string              `bson:"name" json:"name"`
-	Community   string              `bson:"community,omitempty" json:"community,omitempty"`
-	Password    []byte              `bson:"password" json:"-"` // Don't include password in JSON
-	Tokens      uint64              `bson:"tokens" json:"tokens" default:"1000"`
-	Active      bool                `bson:"active" json:"active" default:"true"`
-	Rating      int32               `bson:"rating" json:"rating" default:"50"`
-	RatingCount int                 `bson:"ratingCount" json:"ratingCount" default:"0"`
-	AvatarHash  types.HexBytes      `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
-	Location    DBLocation          `bson:"location" json:"location"`
-	Verified    bool                `bson:"verified" json:"verified" default:"false"`
-	CreatedAt   time.Time           `bson:"createdAt,omitempty" json:"createdAt,omitempty"`
-	LastSeen    time.Time           `bson:"lastSeen,omitempty" json:"lastSeen,omitempty"`
-	Bio         string              `bson:"bio,omitempty" json:"bio,omitempty"`
-	Communities []UserCommunityRole `bson:"communities,omitempty" json:"communities,omitempty"`
+	ID                 primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
+	Email              string              `bson:"email" json:"email"`
+	Name               string              `bson:"name" json:"name"`
+	Community          string              `bson:"community,omitempty" json:"community,omitempty"`
+	Password           []byte              `bson:"password" json:"-"` // Don't include password in JSON
+	Tokens             uint64              `bson:"tokens" json:"tokens" default:"1000"`
+	Active             bool                `bson:"active" json:"active" default:"true"`
+	Rating             int32               `bson:"rating" json:"rating" default:"50"`
+	RatingCount        int                 `bson:"ratingCount" json:"ratingCount" default:"0"`
+	AvatarHash         types.HexBytes      `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
+	Location           DBLocation          `bson:"location" json:"-"`                  // Real location, not exposed in JSON
+	ObfuscatedLocation DBLocation          `bson:"obfuscatedLocation" json:"location"` // Exposed as "location" in JSON
+	Verified           bool                `bson:"verified" json:"verified" default:"false"`
+	CreatedAt          time.Time           `bson:"createdAt,omitempty" json:"createdAt,omitempty"`
+	LastSeen           time.Time           `bson:"lastSeen,omitempty" json:"lastSeen,omitempty"`
+	Bio                string              `bson:"bio,omitempty" json:"bio,omitempty"`
+	Communities        []UserCommunityRole `bson:"communities,omitempty" json:"communities,omitempty"`
 }
 
 // UserCommunityRole represents a user's role in a community

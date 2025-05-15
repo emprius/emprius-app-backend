@@ -47,7 +47,7 @@ func New(dbPath, jwtSecret, registerToken string, maxInviteCodes, inviteCodeCool
 	}
 	log.Info().Msg("starting app backend")
 
-	database, err := db.New(dbPath)
+	database, err := db.New(dbPath, jwtSecret)
 	if err != nil {
 		return nil, err
 	}

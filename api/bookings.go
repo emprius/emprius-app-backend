@@ -39,7 +39,7 @@ func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID 
 		}
 	}
 
-	return &BookingResponse{
+	response := &BookingResponse{
 		ID:            booking.ID.Hex(),
 		ToolID:        booking.ToolID,
 		FromUserID:    booking.FromUserID.Hex(),
@@ -54,6 +54,29 @@ func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID 
 		IsRated:       &isRated, // This field indicates if the booking is rated by the authenticated user
 		IsNomadic:     booking.IsNomadic,
 	}
+
+	// Only include pickup place if the booking was accepted and the authenticated user is involved
+	if booking.BookingStatus == db.BookingStatusAccepted ||
+		booking.BookingStatus == db.BookingStatusReturned ||
+		booking.BookingStatus == db.BookingStatusPicked &&
+			booking.PickupPlace != nil &&
+			len(authenticatedUserID) > 0 &&
+			authenticatedUserID[0] != "" {
+
+		userID, err := primitive.ObjectIDFromHex(authenticatedUserID[0])
+		if err == nil {
+			// Check if the user is involved in the booking
+			isInvolved := booking.FromUserID == userID || booking.ToUserID == userID
+			if isInvolved {
+				// User is involved in the booking, include pickup place
+				pickupPlace := &Location{}
+				pickupPlace.FromDBLocation(*booking.PickupPlace)
+				response.PickupPlace = pickupPlace
+			}
+		}
+	}
+
+	return response
 }
 
 // HandleGetOutgoingRequests handles GET /bookings/requests/outgoing
@@ -202,6 +225,12 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			}
 			return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 		}
+
+		// Set the pickup place in the booking
+		err = a.database.BookingService.SetPickupPlace(r.Context.Request.Context(), bookingID, tool.Location)
+		if err != nil {
+			return nil, ErrInternalServerError.WithErr(err)
+		}
 	case BookingStatusRejected:
 		newStatus = db.BookingStatusRejected
 		// Verify user is the tool owner
@@ -329,16 +358,21 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking status is %s, must be ACCEPTED", booking.BookingStatus))
 		}
 
-		// Get the renter user to update the tool location
+		// Get the renter user to update the tool obfuscatedLocation
 		renter, err := a.getUserByID(booking.FromUserID.Hex())
 		if err != nil {
 			return nil, ErrUserNotFound.WithErr(err)
 		}
 
-		// Update the tool's location and actualUserId
+		// Get obfuscated obfuscatedLocation
+		newLocation := renter.Location.ToDBLocation()
+		obfuscatedLocation := db.ObfuscateLocation(newLocation, booking.FromUserID)
+
+		// Update the tool's obfuscatedLocation and actualUserId
 		updates := map[string]interface{}{
-			"location":     renter.Location.ToDBLocation(),
-			"actualUserId": booking.FromUserID,
+			"obfuscatedLocation": obfuscatedLocation,
+			"location":           newLocation,
+			"actualUserId":       booking.FromUserID,
 		}
 
 		err = a.database.ToolService.UpdateToolFields(r.Context.Request.Context(), toolID, updates)
@@ -351,7 +385,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			r.Context.Request.Context(),
 			toolID,
 			booking.FromUserID,
-			renter.Location.ToDBLocation(),
+			obfuscatedLocation,
 			bookingID,
 		)
 		if err != nil {

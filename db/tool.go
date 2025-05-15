@@ -66,28 +66,29 @@ type ToolHistoryEntry struct {
 
 // Tool represents the schema for the "tools" collection.
 type Tool struct {
-	ID               int64                `bson:"_id" json:"id"`
-	Title            string               `bson:"title" json:"title"`
-	Description      string               `bson:"description" json:"description"`
-	IsAvailable      bool                 `bson:"isAvailable" json:"isAvailable"`
-	MayBeFree        bool                 `bson:"mayBeFree" json:"mayBeFree"`
-	AskWithFee       bool                 `bson:"askWithFee" json:"askWithFee"`
-	Cost             uint64               `bson:"cost" json:"cost"`
-	UserID           primitive.ObjectID   `bson:"userId" json:"userId"`
-	ActualUserID     primitive.ObjectID   `bson:"actualUserId,omitempty" json:"actualUserId,omitempty"`
-	Images           []Image              `bson:"images" json:"images"`
-	TransportOptions []Transport          `bson:"transportOptions" json:"transportOptions"`
-	ToolCategory     int                  `bson:"toolCategory" json:"toolCategory"`
-	Location         DBLocation           `bson:"location" json:"-"`
-	Rating           int32                `bson:"rating" json:"rating"`
-	EstimatedValue   uint64               `bson:"estimatedValue" json:"estimatedValue"`
-	Height           uint32               `bson:"height" json:"height"`
-	Weight           uint32               `bson:"weight" json:"weight"`
-	MaxDistance      uint32               `bson:"maxDistance" json:"maxDistance"`
-	ReservedDates    []DateRange          `bson:"reservedDates" json:"reservedDates"`
-	IsNomadic        bool                 `bson:"isNomadic" json:"isNomadic"`
-	Communities      []primitive.ObjectID `bson:"communities,omitempty" json:"communities,omitempty"`
-	HistoryEntries   []ToolHistoryEntry   `bson:"historyEntries,omitempty" json:"historyEntries,omitempty"`
+	ID                 int64                `bson:"_id" json:"id"`
+	Title              string               `bson:"title" json:"title"`
+	Description        string               `bson:"description" json:"description"`
+	IsAvailable        bool                 `bson:"isAvailable" json:"isAvailable"`
+	MayBeFree          bool                 `bson:"mayBeFree" json:"mayBeFree"`
+	AskWithFee         bool                 `bson:"askWithFee" json:"askWithFee"`
+	Cost               uint64               `bson:"cost" json:"cost"`
+	UserID             primitive.ObjectID   `bson:"userId" json:"userId"`
+	ActualUserID       primitive.ObjectID   `bson:"actualUserId,omitempty" json:"actualUserId,omitempty"`
+	Images             []Image              `bson:"images" json:"images"`
+	TransportOptions   []Transport          `bson:"transportOptions" json:"transportOptions"`
+	ToolCategory       int                  `bson:"toolCategory" json:"toolCategory"`
+	Location           DBLocation           `bson:"location" json:"-"`                  // Real location, not exposed in JSON
+	ObfuscatedLocation DBLocation           `bson:"obfuscatedLocation" json:"location"` // Exposed as "location" in JSON
+	Rating             int32                `bson:"rating" json:"rating"`
+	EstimatedValue     uint64               `bson:"estimatedValue" json:"estimatedValue"`
+	Height             uint32               `bson:"height" json:"height"`
+	Weight             uint32               `bson:"weight" json:"weight"`
+	MaxDistance        uint32               `bson:"maxDistance" json:"maxDistance"`
+	ReservedDates      []DateRange          `bson:"reservedDates" json:"reservedDates"`
+	IsNomadic          bool                 `bson:"isNomadic" json:"isNomadic"`
+	Communities        []primitive.ObjectID `bson:"communities,omitempty" json:"communities,omitempty"`
+	HistoryEntries     []ToolHistoryEntry   `bson:"historyEntries,omitempty" json:"historyEntries,omitempty"`
 }
 
 // SanitizeString ensures the search term is safe for use in regex.

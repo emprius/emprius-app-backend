@@ -60,6 +60,18 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	}
 
 	id, err := a.addUser(&user)
+
+	// Generate and update obfuscated location after user is created and ID is assigned
+	if userInfo.Location != nil {
+		// Update the user with obfuscated location
+		obfuscatedLocation := db.ObfuscateLocation(user.Location, id)
+		update := bson.M{"obfuscatedLocation": obfuscatedLocation}
+		_, err := a.database.UserService.UpdateUser(context.Background(), id, update)
+		if err != nil {
+			log.Error().Err(err).Str("userId", id.Hex()).Msg("Failed to update obfuscated location")
+			// Continue even if update fails
+		}
+	}
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -240,10 +252,13 @@ func (a *API) getDBUserByID(userID string) (*db.User, error) {
 }
 
 func (a *API) userProfileHandler(r *Request) (interface{}, error) {
-	user, err := a.getUserByID(r.UserID)
+	dbUser, err := a.getDBUserByID(r.UserID)
 	if err != nil {
 		return nil, err
 	}
+
+	// Create API user from DB user with real location (true parameter)
+	user := new(User).FromDBUser(dbUser, true)
 
 	// Get user's unused invite codes
 	objID, err := primitive.ObjectIDFromHex(r.UserID)
@@ -360,6 +375,8 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	}
 	if newUserInfo.Location != nil {
 		user.Location = newUserInfo.Location.ToDBLocation()
+		// Generate obfuscated location
+		user.ObfuscatedLocation = db.ObfuscateLocation(user.Location, user.ID)
 	}
 	if newUserInfo.Active != nil {
 		user.Active = *newUserInfo.Active
@@ -378,14 +395,15 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		user.Password = hashPassword(newUserInfo.Password)
 	}
 	update := bson.M{
-		"name":       user.Name,
-		"avatarHash": user.AvatarHash,
-		"location":   user.Location,
-		"active":     user.Active,
-		"password":   user.Password,
-		"community":  user.Community,
-		"bio":        user.Bio,
-		"lastSeen":   time.Now(), // Update lastSeen when profile is updated
+		"name":               user.Name,
+		"avatarHash":         user.AvatarHash,
+		"location":           user.Location,
+		"obfuscatedLocation": user.ObfuscatedLocation,
+		"active":             user.Active,
+		"password":           user.Password,
+		"community":          user.Community,
+		"bio":                user.Bio,
+		"lastSeen":           time.Now(), // Update lastSeen when profile is updated
 	}
 	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
 	if err != nil {
