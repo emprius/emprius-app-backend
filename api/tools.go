@@ -221,8 +221,10 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 		tool.EstimatedDailyCost = tool.Cost
 	}
 	if newTool.Cost != 0 {
-		if newTool.Cost > tool.EstimatedDailyCost {
+		if newTool.Cost <= tool.EstimatedDailyCost {
 			tool.Cost = newTool.Cost
+		} else {
+			tool.Cost = tool.EstimatedDailyCost
 		}
 	}
 	if newTool.Height != 0 {
