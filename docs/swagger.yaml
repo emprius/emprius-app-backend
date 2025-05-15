@@ -99,9 +99,14 @@ components:
         rating:
           type: integer
           format: int32
-        estimatedValue:
+        toolValuation:
           type: integer
           format: uint64
+          description: The valuation of the tool set by the owner
+        estimatedDailyCost:
+          type: integer
+          format: uint64
+          description: The estimated daily cost of the tool, calculated from toolValuation
         height:
           type: integer
           format: uint32
