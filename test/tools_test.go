@@ -750,6 +750,111 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, toolDetails.Data.IsNomadic, qt.Equals, false)
 	})
 
+	t.Run("Tool Cost Management", func(t *testing.T) {
+		// Create a user for this test
+		ownerJWT := c.RegisterAndLogin("cost-test-owner@test.com", "cost-test-owner", "ownerpass")
+
+		// Test case 1: Create a tool with ToolValuation and verify Cost and EstimatedDailyCost are set correctly
+		resp, code := c.Request(http.MethodPost, ownerJWT,
+			api.Tool{
+				Title:         "Cost Test Tool",
+				Description:   "Tool to test cost calculation",
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Location: api.Location{
+					Latitude:  41695384,
+					Longitude: 2492793,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &toolResp)
+		qt.Assert(t, err, qt.IsNil)
+		toolID := toolResp.Data.ID
+
+		// Get the tool to verify cost values
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var getToolResp struct {
+			Data api.Tool `json:"data"`
+		}
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify Cost and EstimatedDailyCost are calculated correctly from ToolValuation
+		expectedCost := uint64(10000) / 10 // FactorCostToPrice is 10
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, expectedCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+
+		// Test case 2: Edit a tool to update ToolValuation and verify Cost and EstimatedDailyCost are updated
+		resp, code = c.Request(http.MethodPut, ownerJWT,
+			api.Tool{
+				ToolValuation: uint64Ptr(20000),
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the tool to verify updated cost values
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify Cost and EstimatedDailyCost are updated correctly
+		expectedCost = uint64(20000) / 10
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, expectedCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+
+		// Test case 3: Edit a tool to set a custom Cost that's less than EstimatedDailyCost
+		customCost := expectedCost - 500
+		resp, code = c.Request(http.MethodPut, ownerJWT,
+			api.Tool{
+				Cost: customCost,
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the tool to verify custom cost was applied
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify Cost was updated but EstimatedDailyCost remains the same
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, customCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+
+		// Test case 4: Attempt to set a Cost greater than EstimatedDailyCost and verify it's not applied
+		invalidCost := expectedCost + 500
+		resp, code = c.Request(http.MethodPut, ownerJWT,
+			api.Tool{
+				Cost: invalidCost,
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the tool to verify cost wasn't changed
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify Cost remains the same (not increased beyond EstimatedDailyCost)
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, customCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+	})
+
 	t.Run("Nomadic Tool History", func(t *testing.T) {
 		// Create users for this test
 		ownerJWT, _ := c.RegisterAndLoginWithID("nomadic-history-owner@test.com", "nomadic-history-owner", "ownerpass")
