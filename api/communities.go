@@ -481,11 +481,12 @@ func (a *API) updateInviteStatusHandler(r *Request) (interface{}, error) {
 	}
 
 	// Update invite status
-	if req.Status == "ACCEPTED" {
+	switch req.Status {
+	case "ACCEPTED":
 		err = a.database.CommunityService.AcceptInvite(r.Context.Request.Context(), inviteID, userID)
-	} else if req.Status == "REJECTED" {
+	case "REJECTED":
 		err = a.database.CommunityService.RejectInvite(r.Context.Request.Context(), inviteID, userID)
-	} else if req.Status == "CANCELED" {
+	case "CANCELED":
 		// Only the inviter can cancel an invite
 		err = a.database.CommunityService.CancelInvite(r.Context.Request.Context(), inviteID, userID)
 	}

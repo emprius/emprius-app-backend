@@ -157,7 +157,7 @@ func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
 // If useRealLocation is true, the real location is used instead of the obfuscated one
 func (u *User) FromDBUser(dbu *db.User, useRealLocation ...bool) *User {
 	// First fill UserPreview fields
-	u.UserPreview.FromDBUserPreview(dbu)
+	u.FromDBUserPreview(dbu)
 
 	// Then fill additional User fields
 	u.Email = dbu.Email

@@ -3,10 +3,11 @@ package test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/types"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/types"
 
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/db"
@@ -607,9 +608,10 @@ func TestTools(t *testing.T) {
 		foundCommunityTool := false
 		foundNonCommunityTool := false
 		for _, tool := range searchResp.Data.Tools {
-			if tool.ID == toolID {
+			switch tool.ID {
+			case toolID:
 				foundCommunityTool = true
-			} else if tool.ID == nonCommunityToolID {
+			case nonCommunityToolID:
 				foundNonCommunityTool = true
 			}
 		}
@@ -627,9 +629,10 @@ func TestTools(t *testing.T) {
 		foundCommunityTool = false
 		foundNonCommunityTool = false
 		for _, tool := range searchResp.Data.Tools {
-			if tool.ID == toolID {
+			switch tool.ID {
+			case toolID:
 				foundCommunityTool = true
-			} else if tool.ID == nonCommunityToolID {
+			case nonCommunityToolID:
 				foundNonCommunityTool = true
 			}
 		}
@@ -647,9 +650,10 @@ func TestTools(t *testing.T) {
 		foundCommunityTool = false
 		foundNonCommunityTool = false
 		for _, tool := range searchResp.Data.Tools {
-			if tool.ID == toolID {
+			switch tool.ID {
+			case toolID:
 				foundCommunityTool = true
-			} else if tool.ID == nonCommunityToolID {
+			case nonCommunityToolID:
 				foundNonCommunityTool = true
 			}
 		}
@@ -796,7 +800,7 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
 
 		// Test case 2: Edit a tool to update ToolValuation and verify Cost and EstimatedDailyCost are updated
-		resp, code = c.Request(http.MethodPut, ownerJWT,
+		_, code = c.Request(http.MethodPut, ownerJWT,
 			api.Tool{
 				ToolValuation: uint64Ptr(20000),
 			},
@@ -817,7 +821,7 @@ func TestTools(t *testing.T) {
 
 		// Test case 3: Edit a tool to set a custom Cost that's less than EstimatedDailyCost
 		customCost := expectedCost - 50
-		resp, code = c.Request(http.MethodPut, ownerJWT,
+		_, code = c.Request(http.MethodPut, ownerJWT,
 			api.Tool{
 				Cost: customCost,
 			},
@@ -837,7 +841,7 @@ func TestTools(t *testing.T) {
 
 		// Test case 4: Attempt to set a Cost greater than EstimatedDailyCost and verify it's not applied
 		invalidCost := expectedCost + 500
-		resp, code = c.Request(http.MethodPut, ownerJWT,
+		_, code = c.Request(http.MethodPut, ownerJWT,
 			api.Tool{
 				Cost: invalidCost,
 			},
