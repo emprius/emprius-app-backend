@@ -8,10 +8,52 @@ import (
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
+
+// RegisterUserRoutes registers all user-related routes to the provided router group
+func (a *API) RegisterUserRoutes(r chi.Router) {
+	// GET /profile
+	log.Info().Msg("register route GET /profile")
+	r.Get("/profile", a.routerHandler(a.userProfileHandler))
+	// POST /profile/invites
+	log.Info().Msg("register route POST /profile/invites")
+	r.Post("/profile/invites", a.routerHandler(a.userInviteCodesHandler))
+	// GET /profile/pendings
+	log.Info().Msg("register route GET /profile/pendings")
+	r.Get("/profile/pendings", a.routerHandler(a.HandleCountPendingActions))
+	// GET /refresh
+	log.Info().Msg("register route GET /refresh")
+	r.Get("/refresh", a.routerHandler(a.refreshHandler))
+	// POST /profile
+	log.Info().Msg("register route POST /profile")
+	r.Post("/profile", a.routerHandler(a.userProfileUpdateHandler))
+	// GET /users
+	log.Info().Msg("register route GET /users")
+	r.Get("/users", a.routerHandler(a.usersHandler))
+	// GET /users/{id}
+	log.Info().Msg("register route GET /users/{id}")
+	r.Get("/users/{id}", a.routerHandler(a.getUserHandler))
+	// GET /users/{id}/ratings
+	log.Info().Msg("register route GET /users/{id}/ratings")
+	r.Get("/users/{id}/ratings", a.routerHandler(a.HandleGetUserRatings))
+	// GET /users/{userId}/communities
+	log.Info().Msg("register route GET /users/{userId}/communities")
+	r.Get("/users/{userId}/communities", a.routerHandler(a.getUserCommunitiesHandler))
+}
+
+// RegisterPublicUserRoutes registers all public user-related routes to the provided router group
+func (a *API) RegisterPublicUserRoutes(r chi.Router) {
+	// POST /login
+	log.Info().Msg("register route POST /login")
+	r.Post("/login", a.routerHandler(a.loginHandler))
+	// POST /register
+	log.Info().Msg("register route POST /register")
+	r.Post("/register", a.routerHandler(a.registerHandler))
+}
 
 // registerHandler handles the register request. It creates a new user in the database.
 func (a *API) registerHandler(r *Request) (interface{}, error) {

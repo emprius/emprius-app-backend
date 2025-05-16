@@ -12,11 +12,43 @@ import (
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+// RegisterToolRoutes registers all tool-related routes to the provided router group
+func (a *API) RegisterToolRoutes(r chi.Router) {
+	// GET /tools
+	log.Info().Msg("register route GET /tools")
+	r.Get("/tools", a.routerHandler(a.ownToolsHandler))
+	// GET /tools/search
+	log.Info().Msg("register route GET /tools/search")
+	r.Get("/tools/search", a.routerHandler(a.toolSearchHandler))
+	// GET /tools/user/{id}
+	log.Info().Msg("register route GET /tools/user/{id}")
+	r.Get("/tools/user/{id}", a.routerHandler(a.userToolsHandler))
+	// GET /tools/{id}
+	log.Info().Msg("register route GET /tools/{id}")
+	r.Get("/tools/{id}", a.routerHandler(a.toolHandler))
+	// GET /tools/{id}/ratings
+	log.Info().Msg("register route GET /tools/{id}/ratings")
+	r.Get("/tools/{id}/ratings", a.routerHandler(a.HandleGetToolRatings))
+	// GET /tools/{id}/history
+	log.Info().Msg("register route GET /tools/{id}/history")
+	r.Get("/tools/{id}/history", a.routerHandler(a.toolHistoryHandler))
+	// POST /tools
+	log.Info().Msg("register route POST /tools")
+	r.Post("/tools", a.routerHandler(a.addToolHandler))
+	// PUT /tools/{id}
+	log.Info().Msg("register route PUT /tools/{id}")
+	r.Put("/tools/{id}", a.routerHandler(a.editToolHandler))
+	// DELETE /tools/{id}
+	log.Info().Msg("register route DELETE /tools/{id}")
+	r.Delete("/tools/{id}", a.routerHandler(a.deleteToolHandler))
+}
 
 func (a *API) toolCategories() []db.ToolCategory {
 	categories, err := a.database.ToolCategoryService.GetAllToolCategories(context.Background())
