@@ -14,6 +14,34 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// RegisterBookingRoutes registers all booking-related routes to the provided router group
+func (a *API) RegisterBookingRoutes(r chi.Router) {
+	// POST /bookings
+	log.Info().Msg("register route POST /bookings")
+	r.Post("/bookings", a.routerHandler(a.HandleCreateBooking))
+	// GET /bookings/requests/outgoing
+	log.Info().Msg("register route GET /bookings/requests/outgoing")
+	r.Get("/bookings/requests/outgoing", a.routerHandler(a.HandleGetOutgoingRequests))
+	// GET /bookings/requests/incoming
+	log.Info().Msg("register route GET /bookings/requests/incoming")
+	r.Get("/bookings/requests/incoming", a.routerHandler(a.HandleGetIncomingRequests))
+	// PUT /bookings/{bookingId}
+	log.Info().Msg("register route PUT /bookings/{bookingId}")
+	r.Put("/bookings/{bookingId}", a.routerHandler(a.HandleUpdateBookingStatus))
+	// GET /bookings/{bookingId}
+	log.Info().Msg("register route GET /bookings/{bookingId}")
+	r.Get("/bookings/{bookingId}", a.routerHandler(a.HandleGetBooking))
+	// GET /bookings/ratings/pending
+	log.Info().Msg("register route GET /bookings/ratings/pending")
+	r.Get("/bookings/ratings/pending", a.routerHandler(a.HandleGetPendingRatings))
+	// POST /bookings/{bookingId}/ratings
+	log.Info().Msg("register route POST /bookings/{bookingId}/ratings")
+	r.Post("/bookings/{bookingId}/ratings", a.routerHandler(a.HandleRateBooking))
+	// GET /bookings/{bookingId}/ratings
+	log.Info().Msg("register route GET /bookings/{bookingId}/ratings")
+	r.Get("/bookings/{bookingId}/ratings", a.routerHandler(a.HandleGetBookingRatings))
+}
+
 // convertBookingToResponse converts a db.Booking into a BookingResponse.
 // The IsRated field is set based on whether the authenticated user has rated the booking.
 func (a *API) convertBookingToResponse(booking *db.Booking, authenticatedUserID ...string) *BookingResponse {
