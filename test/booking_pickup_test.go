@@ -164,11 +164,11 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 
 	// Owner creates a nomadic tool
 	createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
-		"title":          "Nomadic Pickup Test Tool",
-		"description":    "This tool changes location when rented",
-		"toolCategory":   1,
-		"estimatedValue": 100,
-		"isNomadic":      true,
+		"title":         "Nomadic Pickup Test Tool",
+		"description":   "This tool changes location when rented",
+		"toolCategory":  1,
+		"toolValuation": 100,
+		"isNomadic":     true,
 	}, "tools")
 	qt.Assert(t, code, qt.Equals, 200)
 

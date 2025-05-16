@@ -164,15 +164,15 @@ func (s *TestService) RegisterAndLoginWithID(email, name, password string) (stri
 func (s *TestService) CreateTool(jwt string, title string) int64 {
 	resp, code := s.Request(http.MethodPost, jwt,
 		map[string]interface{}{
-			"title":          title,
-			"description":    "Test tool",
-			"mayBeFree":      true,
-			"askWithFee":     false,
-			"cost":           10,
-			"toolCategory":   1,
-			"estimatedValue": 20,
-			"height":         30,
-			"weight":         40,
+			"title":         title,
+			"description":   "Test tool",
+			"mayBeFree":     true,
+			"askWithFee":    false,
+			"cost":          10,
+			"toolCategory":  1,
+			"toolValuation": 20,
+			"height":        30,
+			"weight":        40,
 			"location": map[string]interface{}{
 				"latitude":  41695384, // 41.695384 * 1e6
 				"longitude": 2492793,  // 2.492793 * 1e6

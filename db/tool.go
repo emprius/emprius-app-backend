@@ -72,7 +72,6 @@ type Tool struct {
 	IsAvailable        bool                 `bson:"isAvailable" json:"isAvailable"`
 	MayBeFree          bool                 `bson:"mayBeFree" json:"mayBeFree"`
 	AskWithFee         bool                 `bson:"askWithFee" json:"askWithFee"`
-	Cost               uint64               `bson:"cost" json:"cost"`
 	UserID             primitive.ObjectID   `bson:"userId" json:"userId"`
 	ActualUserID       primitive.ObjectID   `bson:"actualUserId,omitempty" json:"actualUserId,omitempty"`
 	Images             []Image              `bson:"images" json:"images"`
@@ -81,7 +80,9 @@ type Tool struct {
 	Location           DBLocation           `bson:"location" json:"-"`                  // Real location, not exposed in JSON
 	ObfuscatedLocation DBLocation           `bson:"obfuscatedLocation" json:"location"` // Exposed as "location" in JSON
 	Rating             int32                `bson:"rating" json:"rating"`
-	EstimatedValue     uint64               `bson:"estimatedValue" json:"estimatedValue"`
+	Cost               uint64               `bson:"cost" json:"cost"`
+	EstimatedDailyCost uint64               `json:"estimatedDailyCost"`
+	ToolValuation      uint64               `bson:"toolValuation" json:"toolValuation"`
 	Height             uint32               `bson:"height" json:"height"`
 	Weight             uint32               `bson:"weight" json:"weight"`
 	MaxDistance        uint32               `bson:"maxDistance" json:"maxDistance"`

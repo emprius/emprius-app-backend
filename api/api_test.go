@@ -51,13 +51,13 @@ func uint64Ptr(i uint64) *uint64 {
 }
 
 var testTool1 = Tool{
-	Title:          "tool1",
-	Description:    "tool1 description",
-	MayBeFree:      boolPtr(true),
-	AskWithFee:     boolPtr(false),
-	EstimatedValue: uint64Ptr(10000),
-	Cost:           10000 / types.FactorCostToPrice,
-	Images:         []types.HexBytes{},
+	Title:         "tool1",
+	Description:   "tool1 description",
+	MayBeFree:     boolPtr(true),
+	AskWithFee:    boolPtr(false),
+	ToolValuation: uint64Ptr(10000),
+	Cost:          10000 / types.FactorCostToPrice,
+	Images:        []types.HexBytes{},
 	Location: Location{
 		Latitude:  41778407, // 41.778407 * 1e6 (~10km north)
 		Longitude: 2491027,  // 2.491027 * 1e6

@@ -234,7 +234,7 @@ var (
 		Code:    http.StatusUnprocessableEntity,
 		Message: "title and description must not be empty",
 	}
-	ErrInvalidEstimatedValue = &HTTPError{
+	ErrInvalidToolValuationValue = &HTTPError{
 		Code:    http.StatusUnprocessableEntity,
 		Message: "estimated value must be greater than 0",
 	}

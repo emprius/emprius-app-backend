@@ -48,8 +48,8 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		return 0, ErrEmptyTitleOrDescription
 	}
 
-	if t.EstimatedValue == nil {
-		return 0, ErrInvalidEstimatedValue
+	if t.ToolValuation == nil {
+		return 0, ErrInvalidToolValuationValue
 	}
 
 	user, err := a.getUserByID(userID)
@@ -96,14 +96,16 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	}
 
 	// Set the cost based on the estimated value.
-	if *t.EstimatedValue != 0 {
-		t.Cost = *t.EstimatedValue / types.FactorCostToPrice
+	if *t.ToolValuation != 0 {
+		t.Cost = *t.ToolValuation / types.FactorCostToPrice
 		if t.Cost == 0 {
 			t.Cost = 1
 		}
 	} else {
 		t.Cost = 0
 	}
+	// Set the estimated daily cost to the same as the cost
+	t.EstimatedDailyCost = t.Cost
 
 	// Set the availability to true by default
 	if t.IsAvailable == nil {
@@ -124,9 +126,10 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		MayBeFree:          *t.MayBeFree,
 		AskWithFee:         *t.AskWithFee,
 		Cost:               t.Cost,
+		EstimatedDailyCost: t.EstimatedDailyCost,
 		ToolCategory:       t.Category,
 		Rating:             50,
-		EstimatedValue:     *t.EstimatedValue,
+		ToolValuation:      *t.ToolValuation,
 		Height:             t.Height,
 		Weight:             t.Weight,
 		MaxDistance:        t.MaxDistance,
@@ -212,9 +215,18 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 	}
 	// Update nomadic status
 	tool.IsNomadic = newTool.IsNomadic
-	if newTool.EstimatedValue != nil {
-		tool.EstimatedValue = *newTool.EstimatedValue
-		tool.Cost = *newTool.EstimatedValue / types.FactorCostToPrice
+
+	if newTool.ToolValuation != nil {
+		tool.ToolValuation = *newTool.ToolValuation
+		tool.Cost = *newTool.ToolValuation / types.FactorCostToPrice
+		tool.EstimatedDailyCost = tool.Cost
+	}
+	if newTool.Cost != 0 {
+		if newTool.Cost <= tool.EstimatedDailyCost {
+			tool.Cost = newTool.Cost
+		} else {
+			tool.Cost = tool.EstimatedDailyCost
+		}
 	}
 	if newTool.Height != 0 {
 		tool.Height = newTool.Height
@@ -310,8 +322,9 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 		"mayBeFree":          tool.MayBeFree,
 		"askWithFee":         tool.AskWithFee,
 		"cost":               tool.Cost,
+		"estimatedDailyCost": tool.EstimatedDailyCost,
 		"toolCategory":       tool.ToolCategory,
-		"estimatedValue":     tool.EstimatedValue,
+		"toolValuation":      tool.ToolValuation,
 		"height":             tool.Height,
 		"weight":             tool.Weight,
 		"maxDistance":        tool.MaxDistance,
@@ -727,7 +740,6 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 				fmt.Errorf("only the owner can change a tool from nomadic to non-nomadic"),
 			)
 		}
-
 		// Check for pending bookings
 		pendingBookings, err := a.database.BookingService.GetPendingBookingsForTool(
 			r.Context.Request.Context(),
@@ -736,7 +748,6 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 		if err != nil {
 			return nil, ErrInternalServerError.WithErr(err)
 		}
-
 		if len(pendingBookings) > 0 {
 			return nil, ErrCannotChangeNomadicWithPendingBookings.WithErr(
 				fmt.Errorf("cannot change nomadic status when there are pending bookings"),

@@ -83,10 +83,10 @@ func TestLocationObfuscation(t *testing.T) {
 		// Create a tool with a specific location
 		resp, code := c.Request(http.MethodPost, ownerJWT,
 			api.Tool{
-				Title:          "Location Test Tool",
-				Description:    "Tool for testing location obfuscation",
-				Category:       1,
-				EstimatedValue: func() *uint64 { v := uint64(100); return &v }(),
+				Title:         "Location Test Tool",
+				Description:   "Tool for testing location obfuscation",
+				Category:      1,
+				ToolValuation: func() *uint64 { v := uint64(100); return &v }(),
 				Location: api.Location{
 					Latitude:  testLatitude,
 					Longitude: testLongitude,
@@ -153,10 +153,10 @@ func TestLocationObfuscation(t *testing.T) {
 		// Create a tool with a specific location
 		resp, code := c.Request(http.MethodPost, ownerJWT,
 			api.Tool{
-				Title:          "Search Test Tool",
-				Description:    "Tool for testing search with obfuscated locations",
-				Category:       1,
-				EstimatedValue: func() *uint64 { v := uint64(100); return &v }(),
+				Title:         "Search Test Tool",
+				Description:   "Tool for testing search with obfuscated locations",
+				Category:      1,
+				ToolValuation: func() *uint64 { v := uint64(100); return &v }(),
 				Location: api.Location{
 					Latitude:  testLatitude,
 					Longitude: testLongitude,

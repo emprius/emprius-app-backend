@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emprius/emprius-app-backend/types"
+
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/test/utils"
@@ -33,15 +35,15 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		_, code := c.Request(http.MethodPost, "",
 			api.Tool{
-				Title:          "Test Tool",
-				Description:    "Test tool description",
-				MayBeFree:      boolPtr(true),
-				AskWithFee:     boolPtr(false),
-				Category:       1,
-				EstimatedValue: uint64Ptr(10000),
-				Height:         30,
-				Weight:         40,
-				IsAvailable:    boolPtr(true),
+				Title:         "Test Tool",
+				Description:   "Test tool description",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Height:        30,
+				Weight:        40,
+				IsAvailable:   boolPtr(true),
 				Location: api.Location{
 					Latitude:  41920384, // 41.920384 * 1e6 (~25 km north)
 					Longitude: 2492793,  // 2.492793 * 1e6
@@ -57,14 +59,14 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		resp, code := c.Request(http.MethodPost, userJWT,
 			api.Tool{
-				Title:          "Test Tool",
-				Description:    "Test tool description",
-				MayBeFree:      boolPtr(true),
-				AskWithFee:     boolPtr(false),
-				Category:       1,
-				EstimatedValue: uint64Ptr(20000),
-				Height:         30,
-				Weight:         40,
+				Title:         "Test Tool",
+				Description:   "Test tool description",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(20000),
+				Height:        30,
+				Weight:        40,
 				Location: api.Location{
 					Latitude:  41920384, // 41.920384 * 1e6 (~25 km north)
 					Longitude: 2492793,  // 2.492793 * 1e6
@@ -90,15 +92,15 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		_, code = c.Request(http.MethodPost, userJWT,
 			api.Tool{
-				Title:          "Another Tool",
-				Description:    "Another tool description",
-				MayBeFree:      boolPtr(false), // This will be relevant for filtering
-				AskWithFee:     boolPtr(true),
-				Category:       1,
-				EstimatedValue: uint64Ptr(20000),
-				Height:         40,
-				Weight:         50,
-				IsAvailable:    boolPtr(true),
+				Title:         "Another Tool",
+				Description:   "Another tool description",
+				MayBeFree:     boolPtr(false), // This will be relevant for filtering
+				AskWithFee:    boolPtr(true),
+				Category:      1,
+				ToolValuation: uint64Ptr(20000),
+				Height:        40,
+				Weight:        50,
+				IsAvailable:   boolPtr(true),
 				Location: api.Location{
 					Latitude:  41785384, // 41.785384 * 1e6 (~9 km from updated location)
 					Longitude: 2492793,  // 2.492793 * 1e6
@@ -128,15 +130,15 @@ func TestTools(t *testing.T) {
 		//----------------------------------------------------------------------
 		resp, code = c.Request(http.MethodPut, userJWT,
 			api.Tool{
-				Title:          "Updated Tool",
-				Description:    "Updated description",
-				MayBeFree:      boolPtr(false),
-				AskWithFee:     boolPtr(true),
-				Category:       1,
-				EstimatedValue: uint64Ptr(20000),
-				Height:         40,
-				Weight:         50,
-				IsAvailable:    boolPtr(true),
+				Title:         "Updated Tool",
+				Description:   "Updated description",
+				MayBeFree:     boolPtr(false),
+				AskWithFee:    boolPtr(true),
+				Category:      1,
+				ToolValuation: uint64Ptr(20000),
+				Height:        40,
+				Weight:        50,
+				IsAvailable:   boolPtr(true),
 				Location: api.Location{
 					Latitude:  41695384, // 41.695384 * 1e6 (center)
 					Longitude: 2492793,  // 2.492793 * 1e6
@@ -204,15 +206,15 @@ func TestTools(t *testing.T) {
 			// Tool at ~5 km
 			_, code = c.Request(http.MethodPost, userJWT,
 				api.Tool{
-					Title:          "Tool at 5km",
-					Description:    "Tool at 5km away",
-					MayBeFree:      boolPtr(true),  // different from "Updated Tool"
-					AskWithFee:     boolPtr(false), // cost=10 => included by maxCost=15
-					Category:       1,
-					EstimatedValue: uint64Ptr(10000),
-					Height:         30,
-					Weight:         40,
-					IsAvailable:    boolPtr(true),
+					Title:         "Tool at 5km",
+					Description:   "Tool at 5km away",
+					MayBeFree:     boolPtr(true),  // different from "Updated Tool"
+					AskWithFee:    boolPtr(false), // cost=10 => included by maxCost=15
+					Category:      1,
+					ToolValuation: uint64Ptr(10000),
+					Height:        30,
+					Weight:        40,
+					IsAvailable:   boolPtr(true),
 					Location: api.Location{
 						Latitude:  41745384, // 41.745384 * 1e6 (~5 km from center)
 						Longitude: 2492793,  // 2.492793 * 1e6
@@ -225,15 +227,15 @@ func TestTools(t *testing.T) {
 			// Tool at ~15 km
 			_, code = c.Request(http.MethodPost, userJWT,
 				api.Tool{
-					Title:          "Tool at 15km",
-					Description:    "Tool at 15km away",
-					MayBeFree:      boolPtr(true),
-					AskWithFee:     boolPtr(false),
-					Category:       1,
-					EstimatedValue: uint64Ptr(20000),
-					Height:         30,
-					Weight:         40,
-					IsAvailable:    boolPtr(true),
+					Title:         "Tool at 15km",
+					Description:   "Tool at 15km away",
+					MayBeFree:     boolPtr(true),
+					AskWithFee:    boolPtr(false),
+					Category:      1,
+					ToolValuation: uint64Ptr(20000),
+					Height:        30,
+					Weight:        40,
+					IsAvailable:   boolPtr(true),
 					Location: api.Location{
 						Latitude:  41845384, // 41.845384 * 1e6 (~15 km from center)
 						Longitude: 2492793,  // 2.492793 * 1e6
@@ -246,15 +248,15 @@ func TestTools(t *testing.T) {
 			// Tool at ~25 km
 			_, code = c.Request(http.MethodPost, userJWT,
 				api.Tool{
-					Title:          "Tool at 25km",
-					Description:    "Tool at 25km away",
-					MayBeFree:      boolPtr(true),
-					AskWithFee:     boolPtr(false),
-					Category:       1,
-					EstimatedValue: uint64Ptr(20000),
-					Height:         30,
-					Weight:         40,
-					IsAvailable:    boolPtr(true),
+					Title:         "Tool at 25km",
+					Description:   "Tool at 25km away",
+					MayBeFree:     boolPtr(true),
+					AskWithFee:    boolPtr(false),
+					Category:      1,
+					ToolValuation: uint64Ptr(20000),
+					Height:        30,
+					Weight:        40,
+					IsAvailable:   boolPtr(true),
 					Location: api.Location{
 						Latitude:  41945384, // 41.945384 * 1e6 (~25 km from center)
 						Longitude: 2492793,  // 2.492793 * 1e6
@@ -429,14 +431,14 @@ func TestTools(t *testing.T) {
 		// Create a tool
 		resp, code := c.Request(http.MethodPost, userJWT,
 			api.Tool{
-				Title:          "Tool for Rating",
-				Description:    "Tool to test ratings",
-				MayBeFree:      boolPtr(true),
-				AskWithFee:     boolPtr(false),
-				Category:       1,
-				EstimatedValue: uint64Ptr(10000),
-				Height:         30,
-				Weight:         40,
+				Title:         "Tool for Rating",
+				Description:   "Tool to test ratings",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Height:        30,
+				Weight:        40,
 				Location: api.Location{
 					Latitude:  41920384,
 					Longitude: 2492793,
@@ -606,9 +608,10 @@ func TestTools(t *testing.T) {
 		foundCommunityTool := false
 		foundNonCommunityTool := false
 		for _, tool := range searchResp.Data.Tools {
-			if tool.ID == toolID {
+			switch tool.ID {
+			case toolID:
 				foundCommunityTool = true
-			} else if tool.ID == nonCommunityToolID {
+			case nonCommunityToolID:
 				foundNonCommunityTool = true
 			}
 		}
@@ -626,9 +629,10 @@ func TestTools(t *testing.T) {
 		foundCommunityTool = false
 		foundNonCommunityTool = false
 		for _, tool := range searchResp.Data.Tools {
-			if tool.ID == toolID {
+			switch tool.ID {
+			case toolID:
 				foundCommunityTool = true
-			} else if tool.ID == nonCommunityToolID {
+			case nonCommunityToolID:
 				foundNonCommunityTool = true
 			}
 		}
@@ -646,9 +650,10 @@ func TestTools(t *testing.T) {
 		foundCommunityTool = false
 		foundNonCommunityTool = false
 		for _, tool := range searchResp.Data.Tools {
-			if tool.ID == toolID {
+			switch tool.ID {
+			case toolID:
 				foundCommunityTool = true
-			} else if tool.ID == nonCommunityToolID {
+			case nonCommunityToolID:
 				foundNonCommunityTool = true
 			}
 		}
@@ -664,11 +669,11 @@ func TestTools(t *testing.T) {
 
 		// Create a nomadic tool
 		createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
-			"title":          "Nomadic Tool for Edit Test",
-			"description":    "This tool is used to test editing restrictions",
-			"toolCategory":   1,
-			"estimatedValue": 100,
-			"isNomadic":      true,
+			"title":         "Nomadic Tool for Edit Test",
+			"description":   "This tool is used to test editing restrictions",
+			"toolCategory":  1,
+			"toolValuation": 100,
+			"isNomadic":     true,
 		}, "tools")
 		qt.Assert(t, code, qt.Equals, 200)
 
@@ -750,6 +755,110 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, toolDetails.Data.IsNomadic, qt.Equals, false)
 	})
 
+	t.Run("Tool Cost Management", func(t *testing.T) {
+		// Create a user for this test
+		ownerJWT := c.RegisterAndLogin("cost-test-owner@test.com", "cost-test-owner", "ownerpass")
+
+		// Test case 1: Create a tool with ToolValuation and verify Cost and EstimatedDailyCost are set correctly
+		resp, code := c.Request(http.MethodPost, ownerJWT,
+			api.Tool{
+				Title:         "Cost Test Tool",
+				Description:   "Tool to test cost calculation",
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Location: api.Location{
+					Latitude:  41695384,
+					Longitude: 2492793,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &toolResp)
+		qt.Assert(t, err, qt.IsNil)
+		toolID := toolResp.Data.ID
+
+		// Get the tool to verify cost values
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var getToolResp struct {
+			Data api.Tool `json:"data"`
+		}
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify Cost and EstimatedDailyCost are calculated correctly from ToolValuation
+		expectedCost := uint64(10000) / types.FactorCostToPrice // FactorCostToPrice is 10
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, expectedCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+
+		// Test case 2: Edit a tool to update ToolValuation and verify Cost and EstimatedDailyCost are updated
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			api.Tool{
+				ToolValuation: uint64Ptr(20000),
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the tool to verify updated cost values
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify Cost and EstimatedDailyCost are updated correctly
+		expectedCost = uint64(20000) / types.FactorCostToPrice
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, expectedCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+
+		// Test case 3: Edit a tool to set a custom Cost that's less than EstimatedDailyCost
+		customCost := expectedCost - 50
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			api.Tool{
+				Cost: customCost,
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the tool to verify custom cost was applied
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify Cost was updated but EstimatedDailyCost remains the same
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, customCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+
+		// Test case 4: Attempt to set a Cost greater than EstimatedDailyCost and verify it's not applied
+		invalidCost := expectedCost + 500
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			api.Tool{
+				Cost: invalidCost,
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get the tool to verify cost wasn't changed
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools", fmt.Sprint(toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify Cost remains the same (not increased beyond EstimatedDailyCost)
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, getToolResp.Data.EstimatedDailyCost)
+	})
+
 	t.Run("Nomadic Tool History", func(t *testing.T) {
 		// Create users for this test
 		ownerJWT, _ := c.RegisterAndLoginWithID("nomadic-history-owner@test.com", "nomadic-history-owner", "ownerpass")
@@ -757,11 +866,11 @@ func TestTools(t *testing.T) {
 
 		// Create a nomadic tool
 		createToolResp, code := c.Request(http.MethodPost, ownerJWT, map[string]interface{}{
-			"title":          "Nomadic Tool with History",
-			"description":    "This tool is used to test history tracking",
-			"toolCategory":   1,
-			"estimatedValue": 100,
-			"isNomadic":      true,
+			"title":         "Nomadic Tool with History",
+			"description":   "This tool is used to test history tracking",
+			"toolCategory":  1,
+			"toolValuation": 100,
+			"isNomadic":     true,
 			"location": map[string]interface{}{
 				"latitude":  41695384,
 				"longitude": 2492793,
