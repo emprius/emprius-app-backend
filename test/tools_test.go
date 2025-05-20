@@ -948,6 +948,93 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, entry.Location.Longitude != 0, qt.Equals, true)
 		}
 	})
+
+	t.Run("Tool Pagination", func(t *testing.T) {
+		// Create a user for this test
+		userJWT := c.RegisterAndLogin("pagination-test@test.com", "pagination-test", "paginationpass")
+
+		// Create multiple tools for pagination testing
+		toolNames := []string{
+			"Pagination Tool 1", "Pagination Tool 2", "Pagination Tool 3",
+			"Pagination Tool 4", "Pagination Tool 5", "Pagination Tool 6",
+			"Pagination Tool 7", "Pagination Tool 8", "Pagination Tool 9",
+			"Pagination Tool 10", "Pagination Tool 11", "Pagination Tool 12",
+		}
+
+		for _, name := range toolNames {
+			c.CreateTool(userJWT, name)
+		}
+
+		// Test case 1: Default pagination (page 0, default page size)
+		resp, code := c.Request(http.MethodGet, userJWT, nil, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var paginatedResp struct {
+			Data struct {
+				Tools      []api.Tool         `json:"tools"`
+				Pagination api.PaginationInfo `json:"pagination"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify pagination info
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 0)
+		qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 16) // Default page size from db/constants.go
+		qt.Assert(t, paginatedResp.Data.Pagination.Total >= int64(len(toolNames)), qt.Equals, true)
+		qt.Assert(t, paginatedResp.Data.Pagination.Pages > 0, qt.Equals, true)
+
+		// Verify we got the first page of tools (should be up to 16 tools)
+		qt.Assert(t, len(paginatedResp.Data.Tools) <= 16, qt.Equals, true)
+		qt.Assert(t, len(paginatedResp.Data.Tools) > 0, qt.Equals, true)
+
+		// Test case 2: Custom page size
+		resp, code = c.Request(http.MethodGet, userJWT, nil, "tools?pageSize=5")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify pagination info with custom page size
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 0)
+		qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 5)
+		qt.Assert(t, len(paginatedResp.Data.Tools), qt.Equals, 5)
+
+		// Test case 3: Second page
+		resp, code = c.Request(http.MethodGet, userJWT, nil, "tools?page=1&pageSize=5")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify pagination info for second page
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 1)
+		qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 5)
+		qt.Assert(t, len(paginatedResp.Data.Tools), qt.Equals, 5)
+
+		// Test case 4: Search with pagination
+		resp, code = c.Request(http.MethodGet, userJWT, nil, "tools?search=Pagination&page=0&pageSize=3")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify search results with pagination
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 0)
+		qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 3)
+		qt.Assert(t, len(paginatedResp.Data.Tools) > 0, qt.Equals, true)
+		qt.Assert(t, len(paginatedResp.Data.Tools) <= 3, qt.Equals, true)
+
+		// Verify search results contain the search term
+		for _, tool := range paginatedResp.Data.Tools {
+			qt.Assert(t, tool.Title, qt.Contains, "Pagination")
+		}
+
+		// Test case 5: Invalid page number
+		_, code = c.Request(http.MethodGet, userJWT, nil, "tools?page=invalid")
+		qt.Assert(t, code, qt.Equals, 400) // Bad Request
+
+		// Test case 6: Negative page number
+		_, code = c.Request(http.MethodGet, userJWT, nil, "tools?page=-1")
+		qt.Assert(t, code, qt.Equals, 400) // Bad Request
+	})
 }
 
 func TestToolsDistanceValidation(t *testing.T) {

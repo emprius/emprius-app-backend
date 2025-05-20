@@ -315,6 +315,20 @@ type ToolsWrapper struct {
 	Tools []*Tool `json:"tools"`
 }
 
+// PaginationInfo contains pagination metadata
+type PaginationInfo struct {
+	Current  int   `json:"current"`
+	PageSize int   `json:"pageSize"`
+	Total    int64 `json:"total"`
+	Pages    int   `json:"pages"`
+}
+
+// PaginatedToolsResponse wraps tools with pagination info
+type PaginatedToolsResponse struct {
+	Tools      []*Tool        `json:"tools"`
+	Pagination PaginationInfo `json:"pagination"`
+}
+
 // ToolSearch is the type of the tool search
 type ToolSearch struct {
 	SearchTerm       string  `json:"searchTerm"`

@@ -205,6 +205,48 @@ func (s *ToolService) GetToolsByUserID(ctx context.Context, userID primitive.Obj
 	return tools, nil
 }
 
+// GetToolsByUserIDPaginated retrieves tools owned by a user with pagination and optional search term filtering
+func (s *ToolService) GetToolsByUserIDPaginated(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	page, pageSize int,
+	searchTerm string,
+) ([]*Tool, int64, error) {
+	// Build the filter
+	filter := bson.M{"userId": userID}
+
+	// Add search term filter if provided
+	if searchTerm != "" {
+		regex := primitive.Regex{Pattern: ".*" + regexp.QuoteMeta(SanitizeString(searchTerm)) + ".*", Options: "i"}
+		filter["title"] = regex
+	}
+
+	// Count total documents for pagination
+	total, err := s.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Set up options for pagination
+	findOptions := options.Find()
+	findOptions.SetSkip(int64(page * pageSize))
+	findOptions.SetLimit(int64(pageSize))
+
+	// Execute the query
+	cursor, err := s.Collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer cursor.Close(ctx)
+
+	var tools []*Tool
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, 0, err
+	}
+
+	return tools, total, nil
+}
+
 // GetToolsByCommunityID retrieves all tools shared within a specific community.
 func (s *ToolService) GetToolsByCommunityID(ctx context.Context, communityID primitive.ObjectID) ([]*Tool, error) {
 	cursor, err := s.Collection.Find(ctx, bson.M{"communities": communityID})

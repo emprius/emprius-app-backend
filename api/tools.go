@@ -423,11 +423,53 @@ func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 	if r.UserID == "" {
 		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
 	}
-	tools, err := a.toolsByUserID(r.UserID)
+
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get search term if provided
+	searchTerm := ""
+	if searchParam := r.Context.URLParam("search"); searchParam != nil {
+		searchTerm = searchParam[0]
+	}
+
+	// Get user ObjectID
+	user, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	// Get paginated tools
+	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(
+		context.Background(),
+		user.ObjectID(),
+		page,
+		pageSize,
+		searchTerm,
+	)
 	if err != nil {
 		return nil, err
 	}
-	return &ToolsWrapper{Tools: tools}, nil
+
+	// Convert DB tools to API tools
+	apiTools := make([]*Tool, len(tools))
+	for i, t := range tools {
+		apiTools[i] = new(Tool).FromDBTool(t)
+	}
+
+	// Calculate pagination info
+	pagination := CalculatePagination(page, pageSize, total)
+
+	// Create response with pagination info
+	response := &PaginatedToolsResponse{
+		Tools:      apiTools,
+		Pagination: pagination,
+	}
+
+	return response, nil
 }
 
 func (a *API) toolHandler(r *Request) (interface{}, error) {
