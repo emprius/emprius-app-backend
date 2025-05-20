@@ -103,12 +103,12 @@ func (s *UserService) GetAllUsers(ctx context.Context, page int) ([]*User, error
 		page = 0
 	}
 
-	skip := page * defaultPageSize
+	skip := page * DefaultPageSize
 
 	opts := options.Find().
 		SetSort(bson.D{{Key: "_id", Value: 1}}). // Sort by ID for consistent pagination
 		SetSkip(int64(skip)).
-		SetLimit(int64(defaultPageSize))
+		SetLimit(int64(DefaultPageSize))
 
 	cursor, err := s.Collection.Find(ctx, bson.M{}, opts)
 	if err != nil {
@@ -159,7 +159,7 @@ func (s *UserService) GetUsersByPartialName(ctx context.Context, partialName str
 		page = 0
 	}
 
-	skip := page * defaultPageSize
+	skip := page * DefaultPageSize
 
 	// Create a case-insensitive regex pattern for partial name matching
 	pattern := "(?i).*" + regexp.QuoteMeta(SanitizeString(partialName)) + ".*"
@@ -174,7 +174,7 @@ func (s *UserService) GetUsersByPartialName(ctx context.Context, partialName str
 		// Stage 3: Skip for pagination
 		bson.D{{Key: "$skip", Value: int64(skip)}},
 		// Stage 4: Limit results
-		bson.D{{Key: "$limit", Value: int64(defaultPageSize)}},
+		bson.D{{Key: "$limit", Value: int64(DefaultPageSize)}},
 	}
 
 	// Execute the aggregation pipeline

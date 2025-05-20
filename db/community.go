@@ -179,14 +179,14 @@ func (s *CommunityService) GetCommunityUsers(ctx context.Context, communityID pr
 		page = 0
 	}
 
-	skip := page * defaultPageSize
+	skip := page * DefaultPageSize
 
 	// Find users with this community in their communities array
 	filter := bson.M{"communities.id": communityID}
 	opts := options.Find().
 		SetSort(bson.D{{Key: "name", Value: 1}}). // Sort by name
 		SetSkip(int64(skip)).
-		SetLimit(int64(defaultPageSize))
+		SetLimit(int64(DefaultPageSize))
 
 	cursor, err := s.UserService.Collection.Find(ctx, filter, opts)
 	if err != nil {
@@ -604,7 +604,7 @@ func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primit
 		page = 0
 	}
 
-	skip := page * defaultPageSize
+	skip := page * DefaultPageSize
 
 	// Use aggregation pipeline to get communities for the user
 	pipeline := []bson.M{
@@ -634,7 +634,7 @@ func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primit
 			"$skip": int64(skip),
 		},
 		{
-			"$limit": int64(defaultPageSize),
+			"$limit": int64(DefaultPageSize),
 		},
 	}
 
