@@ -432,7 +432,7 @@ func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 
 	// Get search term if provided
 	searchTerm := ""
-	if searchParam := r.Context.URLParam("search"); searchParam != nil {
+	if searchParam := r.Context.URLParam("term"); searchParam != nil {
 		searchTerm = searchParam[0]
 	}
 
