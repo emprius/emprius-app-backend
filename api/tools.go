@@ -357,43 +357,6 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 	return id, nil
 }
 
-func (a *API) toolSearch(query *ToolSearch, userLocation *Location, userID string) ([]*Tool, error) {
-	// Convert user location to GeoJSON format for MongoDB
-	searchLocation := db.NewLocation(userLocation.Latitude, userLocation.Longitude)
-
-	// Convert userID to ObjectID if provided
-	var userObjID *primitive.ObjectID
-	if userID != "" {
-		objID, err := primitive.ObjectIDFromHex(userID)
-		if err != nil {
-			return nil, ErrInvalidUserID.WithErr(err)
-		}
-		userObjID = &objID
-	}
-
-	opts := db.SearchToolsOptions{
-		SearchTerm:       query.SearchTerm,
-		Categories:       query.Categories,
-		MayBeFree:        query.MayBeFree,
-		MaxCost:          query.MaxCost,
-		Distance:         query.Distance,
-		Location:         &searchLocation,
-		TransportOptions: query.TransportOptions,
-		UserID:           userObjID,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	defer cancel()
-	tools, _, err := a.database.ToolService.SearchTools(ctx, opts)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	result := []*Tool{}
-	for _, t := range tools {
-		result = append(result, new(Tool).FromDBTool(t))
-	}
-	return result, nil
-}
-
 func (a *API) deleteTool(id int64) error {
 	filter := bson.M{"_id": id}
 	result, err := a.database.ToolService.Collection.DeleteOne(context.Background(), filter)
@@ -502,13 +465,16 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 		context.Background(),
 		id,
 		page,
-		pageSize,
 		searchTerm,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	return a.getToolListPaginatedResponse(tools, page, pageSize, total), nil
+}
+
+func (a *API) getToolListPaginatedResponse(tools []*db.Tool, page int, pageSize int, total int64) *PaginatedToolsResponse {
 	// Convert DB tools to API tools
 	apiTools := make([]*Tool, len(tools))
 	for i, t := range tools {
@@ -519,12 +485,10 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 	pagination := CalculatePagination(page, pageSize, total)
 
 	// Create response with pagination info
-	response := &PaginatedToolsResponse{
+	return &PaginatedToolsResponse{
 		Tools:      apiTools,
 		Pagination: pagination,
 	}
-
-	return response, nil
 }
 
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
@@ -599,23 +563,37 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		transportOptions = append(transportOptions, val)
 	}
 
-	query := ToolSearch{
-		SearchTerm:       searchTerm,
-		Categories:       categories,
-		MaxCost:          maxCost,
-		MayBeFree:        mayBeFree,
-		Distance:         distance,
-		TransportOptions: transportOptions,
-	}
 	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	tools, err := a.toolSearch(&query, &user.Location, r.UserID)
+	var userObjID primitive.ObjectID
+	userObjID = user.ObjectID()
+	searchLocation := db.NewLocation(user.Location.Latitude, user.Location.Longitude)
+
+	page, pageSize, err := r.Context.GetPaginationParams()
+
+	opts := db.SearchToolsOptions{
+		SearchTerm:       searchTerm,
+		Categories:       categories,
+		MayBeFree:        mayBeFree,
+		MaxCost:          maxCost,
+		Distance:         distance,
+		Location:         &searchLocation,
+		TransportOptions: transportOptions,
+		UserID:           &userObjID,
+		Page:             page,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+
+	tools, total, err := a.database.ToolService.SearchTools(ctx, opts)
+
 	if err != nil {
 		return nil, err
 	}
-	return &ToolsWrapper{Tools: tools}, nil
+
+	return a.getToolListPaginatedResponse(tools, page, pageSize, total), nil
 }
 
 func (a *API) addToolHandler(r *Request) (interface{}, error) {
