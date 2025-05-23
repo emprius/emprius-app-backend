@@ -190,7 +190,7 @@ func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
 func (s *ToolService) GetToolsByUserIDPaginated(
 	ctx context.Context,
 	userID primitive.ObjectID,
-	page, pageSize int,
+	page int,
 	searchTerm string,
 ) ([]*Tool, int64, error) {
 	// Build the filter

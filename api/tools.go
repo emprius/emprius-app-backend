@@ -499,13 +499,16 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 		context.Background(),
 		id,
 		page,
-		pageSize,
 		searchTerm,
 	)
 	if err != nil {
 		return nil, err
 	}
 
+	return a.getToolListPaginatedResponse(tools, page, pageSize, total), nil
+}
+
+func (a *API) getToolListPaginatedResponse(tools []*db.Tool, page int, pageSize int, total int64) *PaginatedToolsResponse {
 	// Convert DB tools to API tools
 	apiTools := make([]*Tool, len(tools))
 	for i, t := range tools {
@@ -516,12 +519,10 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 	pagination := CalculatePagination(page, pageSize, total)
 
 	// Create response with pagination info
-	response := &PaginatedToolsResponse{
+	return &PaginatedToolsResponse{
 		Tools:      apiTools,
 		Pagination: pagination,
 	}
-
-	return response, nil
 }
 
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
@@ -596,13 +597,26 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		transportOptions = append(transportOptions, val)
 	}
 
-	query := ToolSearch{
+	user, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+	var userObjID primitive.ObjectID
+	userObjID = user.ObjectID()
+	searchLocation := db.NewLocation(user.Location.Latitude, user.Location.Longitude)
+
+	page, pageSize, err := r.Context.GetPaginationParams()
+
+	opts := db.SearchToolsOptions{
 		SearchTerm:       searchTerm,
 		Categories:       categories,
-		MaxCost:          maxCost,
 		MayBeFree:        mayBeFree,
+		MaxCost:          maxCost,
 		Distance:         distance,
+		Location:         &searchLocation,
 		TransportOptions: transportOptions,
+		UserID:           &userObjID,
+		Page:             page,
 	}
 	user, err := a.getUserByID(r.UserID)
 	if err != nil {
@@ -612,7 +626,8 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ToolsWrapper{Tools: tools}, nil
+
+	return a.getToolListPaginatedResponse(tools, page, pageSize, total), nil
 }
 
 func (a *API) addToolHandler(r *Request) (interface{}, error) {
