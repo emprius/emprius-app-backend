@@ -461,6 +461,7 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 		context.Background(),
 		id,
 		page,
+		pageSize,
 		searchTerm,
 	)
 	if err != nil {
