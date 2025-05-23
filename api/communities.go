@@ -702,17 +702,26 @@ func (a *API) getCommunityToolsHandler(r *Request) (interface{}, error) {
 		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community with id %s not found", communityIDStr))
 	}
 
-	// Get tools for the community
-	dbTools, err := a.database.CommunityService.GetCommunityTools(r.Context.Request.Context(), communityID)
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get search term
+	searchTerm := *r.Context.GetSearchTerm()
+
+	// Get paginated tools for the community
+	dbTools, total, err := a.database.CommunityService.GetCommunityToolsPaginated(
+		r.Context.Request.Context(),
+		communityID,
+		page,
+		pageSize,
+		searchTerm,
+	)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// Convert to API response format
-	tools := make([]*Tool, len(dbTools))
-	for i, dbTool := range dbTools {
-		tools[i] = new(Tool).FromDBTool(dbTool)
-	}
-
-	return &ToolsWrapper{Tools: tools}, nil
+	return a.getToolListPaginatedResponse(dbTools, page, pageSize, total), nil
 }

@@ -34,3 +34,30 @@ func CalculatePagination(page, pageSize int, total int64) PaginationInfo {
 		Pages:    totalPages,
 	}
 }
+
+// GetSearchTerm Get search term if provided
+func (h *HTTPContext) GetSearchTerm() *string {
+	searchTerm := ""
+	if searchParam := h.URLParam("term"); searchParam != nil {
+		searchTerm = searchParam[0]
+	}
+	return &searchTerm
+}
+
+// getToolListPaginatedResponse converts DB tools to API tools and creates a paginated response
+func (a *API) getToolListPaginatedResponse(tools []*db.Tool, page int, pageSize int, total int64) *PaginatedToolsResponse {
+	// Convert DB tools to API tools
+	apiTools := make([]*Tool, len(tools))
+	for i, t := range tools {
+		apiTools[i] = new(Tool).FromDBTool(t)
+	}
+
+	// Calculate pagination info
+	pagination := CalculatePagination(page, pageSize, total)
+
+	// Create response with pagination info
+	return &PaginatedToolsResponse{
+		Tools:      apiTools,
+		Pagination: pagination,
+	}
+}

@@ -311,10 +311,6 @@ type ToolID struct {
 	ID int64 `json:"id"`
 }
 
-type ToolsWrapper struct {
-	Tools []*Tool `json:"tools"`
-}
-
 // PaginationInfo contains pagination metadata
 type PaginationInfo struct {
 	Current  int   `json:"current"`
@@ -339,6 +335,7 @@ type ToolSearch struct {
 	AvailableFrom    int     `json:"availableFrom"`
 	TransportOptions []int   `json:"transportOptions"`
 	CommunityID      string  `json:"communityId,omitempty"`
+	Page             int     `json:"page,omitempty"`
 }
 
 type Info struct {

@@ -197,9 +197,13 @@ func (s *ToolService) GetToolsByUserIDPaginated(
 	filter := bson.M{"userId": userID}
 
 	// Add search term filter if provided
+	// Add search filter if search term is provided
 	if searchTerm != "" {
-		regex := primitive.Regex{Pattern: ".*" + regexp.QuoteMeta(SanitizeString(searchTerm)) + ".*", Options: "i"}
-		filter["title"] = regex
+		searchTerm = SanitizeString(searchTerm)
+		filter["$or"] = []bson.M{
+			{"title": bson.M{"$regex": searchTerm, "$options": "i"}},
+			{"description": bson.M{"$regex": searchTerm, "$options": "i"}},
+		}
 	}
 
 	// Count total documents for pagination
