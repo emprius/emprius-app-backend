@@ -186,25 +186,6 @@ func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
 	return tools, nil
 }
 
-// GetToolsByUserID retrieves all tools owned by a given user.
-//func (s *ToolService) GetToolsByUserID(ctx context.Context, userID primitive.ObjectID) ([]*Tool, error) {
-//	cursor, err := s.Collection.Find(ctx, bson.M{"userId": userID})
-//	if err != nil {
-//		return nil, err
-//	}
-//	defer func() {
-//		if closeErr := cursor.Close(ctx); closeErr != nil {
-//			log.Error().Err(closeErr).Msg("Error closing cursor")
-//		}
-//	}()
-//
-//	var tools []*Tool
-//	if err := cursor.All(ctx, &tools); err != nil {
-//		return nil, err
-//	}
-//	return tools, nil
-//}
-
 // GetToolsByUserIDPaginated retrieves tools owned by a user with pagination and optional search term filtering
 func (s *ToolService) GetToolsByUserIDPaginated(
 	ctx context.Context,

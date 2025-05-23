@@ -177,58 +177,6 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 	return &results[0], nil
 }
 
-// todo(kon): not used
-// GetUserBookings returns paginated bookings for a user along with their associated ratings.
-//func (s *BookingService) GetUserBookings(
-//	ctx context.Context,
-//	userID primitive.ObjectID,
-//	page int,
-//) ([]*Booking, error) {
-//	if page < 0 {
-//		page = 0
-//	}
-//	skip := page * DefaultPageSize
-//
-//	pipeline := mongo.Pipeline{
-//		{{Key: "$match", Value: bson.M{
-//			"$or": []bson.M{
-//				{"fromUserId": userID},
-//				{"toUserId": userID},
-//			},
-//		}}},
-//		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
-//		{{Key: "$skip", Value: skip}},
-//		{{Key: "$limit", Value: DefaultPageSize}},
-//		{{Key: "$lookup", Value: bson.M{
-//			"from":         s.ratingsCollection.Name(),
-//			"localField":   "_id",
-//			"foreignField": "bookingId",
-//			"as":           "ratings",
-//		}}},
-//	}
-//
-//	cursor, err := s.collection.Aggregate(ctx, pipeline)
-//	if err != nil {
-//		return nil, err
-//	}
-//	defer func() {
-//		if err := cursor.Close(ctx); err != nil {
-//			log.Error().Err(err).Msg("Error closing cursor")
-//		}
-//	}()
-//
-//	var results []Booking
-//	if err = cursor.All(ctx, &results); err != nil {
-//		return nil, err
-//	}
-//	// Convert slice to []*Booking
-//	bookings := make([]*Booking, len(results))
-//	for i := range results {
-//		bookings[i] = &results[i]
-//	}
-//	return bookings, nil
-//}
-
 // GetUserRequests returns all bookings where the given user is the owner (toUserId)
 // along with their associated ratings.
 // Bookings are ordered with PENDING status first, then sorted by createdAt date (newest first).

@@ -204,22 +204,6 @@ func (a *API) toolFromDB(id int64) (*db.Tool, error) {
 	return tool, nil
 }
 
-//func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
-//	user, err := a.getUserByID(userID)
-//	if err != nil {
-//		return nil, ErrUserNotFound.WithErr(err)
-//	}
-//	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ObjectID())
-//	if err != nil {
-//		return nil, ErrInternalServerError.WithErr(err)
-//	}
-//	result := []*Tool{}
-//	for _, t := range tools {
-//		result = append(result, new(Tool).FromDBTool(t))
-//	}
-//	return result, nil
-//}
-
 func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int64, error) {
 	tool, err := a.toolFromDB(id)
 	if err != nil {
