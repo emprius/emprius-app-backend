@@ -1,9 +1,10 @@
 package api
 
 import (
-	"github.com/emprius/emprius-app-backend/db"
 	"math"
 	"strconv"
+
+	"github.com/emprius/emprius-app-backend/db"
 )
 
 // GetPaginationParams extracts pagination parameters from the request

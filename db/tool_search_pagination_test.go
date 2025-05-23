@@ -99,11 +99,26 @@ func TestSearchToolsPagination(t *testing.T) {
 	t.Run("Pagination with search term", func(t *testing.T) {
 		// Insert some tools with specific titles for search testing
 		searchTools := []Tool{
-			{ID: 100, UserID: userID, Title: "Special Hammer", Description: "A special hammer", IsAvailable: true, Location: location, ToolCategory: 1},
-			{ID: 101, UserID: userID, Title: "Special Drill", Description: "A special drill", IsAvailable: true, Location: location, ToolCategory: 1},
-			{ID: 102, UserID: userID, Title: "Special Saw", Description: "A special saw", IsAvailable: true, Location: location, ToolCategory: 1},
-			{ID: 103, UserID: userID, Title: "Special Wrench", Description: "A special wrench", IsAvailable: true, Location: location, ToolCategory: 1},
-			{ID: 104, UserID: userID, Title: "Special Screwdriver", Description: "A special screwdriver", IsAvailable: true, Location: location, ToolCategory: 1},
+			{
+				ID: 100, UserID: userID, Title: "Special Hammer", Description: "A special hammer",
+				IsAvailable: true, Location: location, ToolCategory: 1,
+			},
+			{
+				ID: 101, UserID: userID, Title: "Special Drill", Description: "A special drill",
+				IsAvailable: true, Location: location, ToolCategory: 1,
+			},
+			{
+				ID: 102, UserID: userID, Title: "Special Saw", Description: "A special saw",
+				IsAvailable: true, Location: location, ToolCategory: 1,
+			},
+			{
+				ID: 103, UserID: userID, Title: "Special Wrench", Description: "A special wrench",
+				IsAvailable: true, Location: location, ToolCategory: 1,
+			},
+			{
+				ID: 104, UserID: userID, Title: "Special Screwdriver", Description: "A special screwdriver",
+				IsAvailable: true, Location: location, ToolCategory: 1,
+			},
 		}
 
 		for _, tool := range searchTools {
@@ -315,16 +330,40 @@ func TestSearchToolsPaginationWithFilters(t *testing.T) {
 	userID := primitive.NewObjectID()
 	testTools := []Tool{
 		// Category 1 tools (cheap)
-		{ID: 1, UserID: userID, Title: "Cheap Hammer", Description: "Basic hammer", IsAvailable: true, Location: location, ToolCategory: 1, Cost: 100},
-		{ID: 2, UserID: userID, Title: "Cheap Drill", Description: "Basic drill", IsAvailable: true, Location: location, ToolCategory: 1, Cost: 150},
-		{ID: 3, UserID: userID, Title: "Cheap Saw", Description: "Basic saw", IsAvailable: true, Location: location, ToolCategory: 1, Cost: 200},
-		{ID: 4, UserID: userID, Title: "Cheap Wrench", Description: "Basic wrench", IsAvailable: true, Location: location, ToolCategory: 1, Cost: 120},
-		{ID: 5, UserID: userID, Title: "Cheap Screwdriver", Description: "Basic screwdriver", IsAvailable: true, Location: location, ToolCategory: 1, Cost: 80},
+		{
+			ID: 1, UserID: userID, Title: "Cheap Hammer", Description: "Basic hammer",
+			IsAvailable: true, Location: location, ToolCategory: 1, Cost: 100,
+		},
+		{
+			ID: 2, UserID: userID, Title: "Cheap Drill", Description: "Basic drill",
+			IsAvailable: true, Location: location, ToolCategory: 1, Cost: 150,
+		},
+		{
+			ID: 3, UserID: userID, Title: "Cheap Saw", Description: "Basic saw",
+			IsAvailable: true, Location: location, ToolCategory: 1, Cost: 200,
+		},
+		{
+			ID: 4, UserID: userID, Title: "Cheap Wrench", Description: "Basic wrench",
+			IsAvailable: true, Location: location, ToolCategory: 1, Cost: 120,
+		},
+		{
+			ID: 5, UserID: userID, Title: "Cheap Screwdriver", Description: "Basic screwdriver",
+			IsAvailable: true, Location: location, ToolCategory: 1, Cost: 80,
+		},
 
 		// Category 2 tools (expensive)
-		{ID: 6, UserID: userID, Title: "Pro Hammer", Description: "Professional hammer", IsAvailable: true, Location: location, ToolCategory: 2, Cost: 500},
-		{ID: 7, UserID: userID, Title: "Pro Drill", Description: "Professional drill", IsAvailable: true, Location: location, ToolCategory: 2, Cost: 800},
-		{ID: 8, UserID: userID, Title: "Pro Saw", Description: "Professional saw", IsAvailable: true, Location: location, ToolCategory: 2, Cost: 1000},
+		{
+			ID: 6, UserID: userID, Title: "Pro Hammer", Description: "Professional hammer",
+			IsAvailable: true, Location: location, ToolCategory: 2, Cost: 500,
+		},
+		{
+			ID: 7, UserID: userID, Title: "Pro Drill", Description: "Professional drill",
+			IsAvailable: true, Location: location, ToolCategory: 2, Cost: 800,
+		},
+		{
+			ID: 8, UserID: userID, Title: "Pro Saw", Description: "Professional saw",
+			IsAvailable: true, Location: location, ToolCategory: 2, Cost: 1000,
+		},
 	}
 
 	for _, tool := range testTools {

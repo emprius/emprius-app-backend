@@ -505,7 +505,6 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 		pageSize,
 		searchTerm,
 	)
-
 	if err != nil {
 		return nil, err
 	}
