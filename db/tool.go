@@ -237,7 +237,12 @@ func (s *ToolService) GetToolsByUserIDPaginated(
 	if err != nil {
 		return nil, 0, err
 	}
-	defer cursor.Close(ctx)
+
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
 
 	var tools []*Tool
 	if err := cursor.All(ctx, &tools); err != nil {
