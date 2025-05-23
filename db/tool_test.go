@@ -471,7 +471,7 @@ func TestSearchTitleAndDescription(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			opts := SearchToolsOptions{SearchTerm: tt.searchTerm}
-			foundTools, err := toolService.SearchTools(ctx, opts)
+			foundTools, _, err := toolService.SearchTools(ctx, opts)
 			qt.Assert(t, err, qt.IsNil, qt.Commentf("SearchTools failed with term: %s", tt.searchTerm))
 
 			// Extract IDs from found tools
