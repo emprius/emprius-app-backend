@@ -191,6 +191,7 @@ func (s *ToolService) GetToolsByUserIDPaginated(
 	ctx context.Context,
 	userID primitive.ObjectID,
 	page int,
+	pageSize int,
 	searchTerm string,
 ) ([]*Tool, int64, error) {
 	// Build the filter
@@ -216,12 +217,16 @@ func (s *ToolService) GetToolsByUserIDPaginated(
 		page = 0
 	}
 
-	skip := page * DefaultPageSize
+	if pageSize < 0 {
+		pageSize = DefaultPageSize
+	}
+
+	skip := page * pageSize
 
 	// Set up options for pagination
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(skip))
-	findOptions.SetLimit(int64(DefaultPageSize))
+	findOptions.SetLimit(int64(pageSize))
 
 	// Execute the query
 	cursor, err := s.Collection.Find(ctx, filter, findOptions)
