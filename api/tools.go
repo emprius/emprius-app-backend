@@ -204,21 +204,21 @@ func (a *API) toolFromDB(id int64) (*db.Tool, error) {
 	return tool, nil
 }
 
-func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
-	user, err := a.getUserByID(userID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	result := []*Tool{}
-	for _, t := range tools {
-		result = append(result, new(Tool).FromDBTool(t))
-	}
-	return result, nil
-}
+//func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
+//	user, err := a.getUserByID(userID)
+//	if err != nil {
+//		return nil, ErrUserNotFound.WithErr(err)
+//	}
+//	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ObjectID())
+//	if err != nil {
+//		return nil, ErrInternalServerError.WithErr(err)
+//	}
+//	result := []*Tool{}
+//	for _, t := range tools {
+//		result = append(result, new(Tool).FromDBTool(t))
+//	}
+//	return result, nil
+//}
 
 func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int64, error) {
 	tool, err := a.toolFromDB(id)
@@ -396,7 +396,7 @@ func (a *API) toolSearch(query *ToolSearch, searchLocation db.DBLocation, userID
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
-	tools, err := a.database.ToolService.SearchTools(ctx, opts)
+	tools, _, err := a.database.ToolService.SearchTools(ctx, opts)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -417,59 +417,6 @@ func (a *API) deleteTool(id int64) error {
 		return ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
 	}
 	return nil
-}
-
-func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-
-	// Get pagination parameters
-	page, pageSize, err := r.Context.GetPaginationParams()
-	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
-	}
-
-	// Get search term if provided
-	searchTerm := ""
-	if searchParam := r.Context.URLParam("term"); searchParam != nil {
-		searchTerm = searchParam[0]
-	}
-
-	// Get user ObjectID
-	user, err := a.getUserByID(r.UserID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-
-	// Get paginated tools
-	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(
-		context.Background(),
-		user.ObjectID(),
-		page,
-		pageSize,
-		searchTerm,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// Convert DB tools to API tools
-	apiTools := make([]*Tool, len(tools))
-	for i, t := range tools {
-		apiTools[i] = new(Tool).FromDBTool(t)
-	}
-
-	// Calculate pagination info
-	pagination := CalculatePagination(page, pageSize, total)
-
-	// Create response with pagination info
-	response := &PaginatedToolsResponse{
-		Tools:      apiTools,
-		Pagination: pagination,
-	}
-
-	return response, nil
 }
 
 func (a *API) toolHandler(r *Request) (interface{}, error) {
@@ -527,11 +474,71 @@ func (a *API) userToolsHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing user id"))
 	}
 
-	tools, err := a.toolsByUserID(id[0])
+	userID, err := primitive.ObjectIDFromHex(id[0])
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(fmt.Errorf("invalid user id format: %s", r.Context.URLParam("id")))
+	}
+
+	return a.getUserTools(r, userID)
+}
+
+func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get user ObjectID
+	user, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	return a.getUserTools(r, user.ObjectID())
+}
+
+// Util function to DRY to get tools from a user with pagination and search term
+func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, error) {
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get search term if provided
+	searchTerm := ""
+	if searchParam := r.Context.URLParam("term"); searchParam != nil {
+		searchTerm = searchParam[0]
+	}
+
+	// Get paginated tools
+	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(
+		context.Background(),
+		id,
+		page,
+		pageSize,
+		searchTerm,
+	)
+
 	if err != nil {
 		return nil, err
 	}
-	return &ToolsWrapper{Tools: tools}, nil
+
+	// Convert DB tools to API tools
+	apiTools := make([]*Tool, len(tools))
+	for i, t := range tools {
+		apiTools[i] = new(Tool).FromDBTool(t)
+	}
+
+	// Calculate pagination info
+	pagination := CalculatePagination(page, pageSize, total)
+
+	// Create response with pagination info
+	response := &PaginatedToolsResponse{
+		Tools:      apiTools,
+		Pagination: pagination,
+	}
+
+	return response, nil
 }
 
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
