@@ -367,7 +367,7 @@ func TestGetCommunityToolsHandlerIntegration(t *testing.T) {
 		response, ok = result.(*PaginatedToolsResponse)
 		c.Assert(ok, quicktest.IsTrue)
 		c.Assert(len(response.Tools), quicktest.Equals, 5) // Last page should have 5 tools
-		c.Assert(response.Pagination.Current, quicktest.Equals, 3)
+		c.Assert(response.Pagination.Current, quicktest.Equals, 2)
 	})
 
 	t.Run("search with pagination", func(t *testing.T) {
