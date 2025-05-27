@@ -1,6 +1,9 @@
 package api
 
 import (
+	"context"
+	"github.com/rs/zerolog/log"
+	"go.mongodb.org/mongo-driver/bson"
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
@@ -155,7 +158,7 @@ func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
 
 // FromDBUser converts a DB User to an API User (full version)
 // If useRealLocation is true, the real location is used instead of the obfuscated one
-func (u *User) FromDBUser(dbu *db.User, useRealLocation ...bool) *User {
+func (u *User) FromDBUser(dbu *db.User, dbc *db.Database, useRealLocation ...bool) *User {
 	// First fill UserPreview fields
 	u.FromDBUserPreview(dbu)
 
@@ -185,6 +188,21 @@ func (u *User) FromDBUser(dbu *db.User, useRealLocation ...bool) *User {
 				Role: string(comm.Role),
 			}
 		}
+	}
+
+	// Get rating count (number of ratings received by this user)
+	filter := bson.M{
+		"rateeId": u.ID,
+		"raterId": bson.M{"$ne": u.ID}, // exclude self-ratings
+	}
+
+	ratingCount, err := dbc.Database.Collection("ratings").CountDocuments(context.Background(), filter)
+	if err != nil {
+		log.Error().Err(err).Str("userId", u.ID).Msg("Failed to count user ratings")
+		// Continue even if count fails, just set to 0
+		u.RatingCount = 0
+	} else {
+		u.RatingCount = int(ratingCount)
 	}
 
 	return u
