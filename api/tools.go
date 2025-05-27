@@ -548,7 +548,6 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 	userObjID := user.ID
-	//searchLocation := db.NewLocation(user.Location.Latitude, user.Location.Longitude)
 
 	page, pageSize, err := r.Context.GetPaginationParams()
 	if err != nil {
