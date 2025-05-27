@@ -7,6 +7,7 @@ import (
 	"time"
 
 	qt "github.com/frankban/quicktest"
+	"github.com/go-chi/chi/v5"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
@@ -281,4 +282,26 @@ func TestImageErrors(t *testing.T) {
 	// Test invalid image hash
 	_, err = a.image([]byte("invalid hash"))
 	c.Assert(ErrImageNotFound.IsErr(err), qt.IsTrue)
+}
+
+func TestRouterCreation(t *testing.T) {
+	c := qt.New(t)
+	a := testAPI(t)
+
+	// Verify that the router is created successfully
+	router := a.router()
+	c.Assert(router, qt.Not(qt.IsNil))
+
+	// Verify that the API instance has all the necessary registration methods
+	// This is a compile-time check to ensure the methods exist
+	_ = func() {
+		r := chi.NewRouter()
+		a.RegisterUserRoutes(r)
+		a.RegisterToolRoutes(r)
+		a.RegisterBookingRoutes(r)
+		a.RegisterCommunityRoutes(r)
+		a.RegisterImageRoutes(r)
+		a.RegisterPublicUserRoutes(r)
+		a.RegisterPublicImageRoutes(r)
+	}
 }

@@ -12,11 +12,43 @@ import (
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+// RegisterToolRoutes registers all tool-related routes to the provided router group
+func (a *API) RegisterToolRoutes(r chi.Router) {
+	// GET /tools
+	log.Info().Msg("register route GET /tools")
+	r.Get("/tools", a.routerHandler(a.ownToolsHandler))
+	// GET /tools/search
+	log.Info().Msg("register route GET /tools/search")
+	r.Get("/tools/search", a.routerHandler(a.toolSearchHandler))
+	// GET /tools/user/{id}
+	log.Info().Msg("register route GET /tools/user/{id}")
+	r.Get("/tools/user/{id}", a.routerHandler(a.userToolsHandler))
+	// GET /tools/{id}
+	log.Info().Msg("register route GET /tools/{id}")
+	r.Get("/tools/{id}", a.routerHandler(a.toolHandler))
+	// GET /tools/{id}/ratings
+	log.Info().Msg("register route GET /tools/{id}/ratings")
+	r.Get("/tools/{id}/ratings", a.routerHandler(a.HandleGetToolRatings))
+	// GET /tools/{id}/history
+	log.Info().Msg("register route GET /tools/{id}/history")
+	r.Get("/tools/{id}/history", a.routerHandler(a.toolHistoryHandler))
+	// POST /tools
+	log.Info().Msg("register route POST /tools")
+	r.Post("/tools", a.routerHandler(a.addToolHandler))
+	// PUT /tools/{id}
+	log.Info().Msg("register route PUT /tools/{id}")
+	r.Put("/tools/{id}", a.routerHandler(a.editToolHandler))
+	// DELETE /tools/{id}
+	log.Info().Msg("register route DELETE /tools/{id}")
+	r.Delete("/tools/{id}", a.routerHandler(a.deleteToolHandler))
+}
 
 func (a *API) toolCategories() []db.ToolCategory {
 	categories, err := a.database.ToolCategoryService.GetAllToolCategories(context.Background())
@@ -172,22 +204,6 @@ func (a *API) toolFromDB(id int64) (*db.Tool, error) {
 	return tool, nil
 }
 
-func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
-	user, err := a.getUserByID(userID)
-	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
-	}
-	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	result := []*Tool{}
-	for _, t := range tools {
-		result = append(result, new(Tool).FromDBTool(t))
-	}
-	return result, nil
-}
-
 func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int64, error) {
 	tool, err := a.toolFromDB(id)
 	if err != nil {
@@ -341,40 +357,6 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 	return id, nil
 }
 
-func (a *API) toolSearch(query *ToolSearch, searchLocation db.DBLocation, userID string) ([]*Tool, error) {
-	// Convert userID to ObjectID if provided
-	var userObjID *primitive.ObjectID
-	if userID != "" {
-		objID, err := primitive.ObjectIDFromHex(userID)
-		if err != nil {
-			return nil, ErrInvalidUserID.WithErr(err)
-		}
-		userObjID = &objID
-	}
-
-	opts := db.SearchToolsOptions{
-		SearchTerm:       query.SearchTerm,
-		Categories:       query.Categories,
-		MayBeFree:        query.MayBeFree,
-		MaxCost:          query.MaxCost,
-		Distance:         query.Distance,
-		Location:         &searchLocation,
-		TransportOptions: query.TransportOptions,
-		UserID:           userObjID,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
-	defer cancel()
-	tools, err := a.database.ToolService.SearchTools(ctx, opts)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	result := []*Tool{}
-	for _, t := range tools {
-		result = append(result, new(Tool).FromDBTool(t))
-	}
-	return result, nil
-}
-
 func (a *API) deleteTool(id int64) error {
 	filter := bson.M{"_id": id}
 	result, err := a.database.ToolService.Collection.DeleteOne(context.Background(), filter)
@@ -385,17 +367,6 @@ func (a *API) deleteTool(id int64) error {
 		return ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
 	}
 	return nil
-}
-
-func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
-	if r.UserID == "" {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
-	}
-	tools, err := a.toolsByUserID(r.UserID)
-	if err != nil {
-		return nil, err
-	}
-	return &ToolsWrapper{Tools: tools}, nil
 }
 
 func (a *API) toolHandler(r *Request) (interface{}, error) {
@@ -453,11 +424,51 @@ func (a *API) userToolsHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing user id"))
 	}
 
-	tools, err := a.toolsByUserID(id[0])
+	userID, err := primitive.ObjectIDFromHex(id[0])
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(fmt.Errorf("invalid user id format: %s", r.Context.URLParam("id")))
+	}
+
+	return a.getUserTools(r, userID)
+}
+
+func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get user ObjectID
+	user, err := a.getUserByID(r.UserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	return a.getUserTools(r, user.ID)
+}
+
+// Util function to DRY to get tools from a user with pagination and search term
+func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, error) {
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	searchTerm := *r.Context.GetSearchTerm()
+
+	// Get paginated tools
+	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(
+		context.Background(),
+		id,
+		page,
+		pageSize,
+		searchTerm,
+	)
 	if err != nil {
 		return nil, err
 	}
-	return &ToolsWrapper{Tools: tools}, nil
+
+	return a.getToolListPaginatedResponse(tools, page, pageSize, total), nil
 }
 
 func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
@@ -532,23 +543,38 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 		transportOptions = append(transportOptions, val)
 	}
 
-	query := ToolSearch{
-		SearchTerm:       searchTerm,
-		Categories:       categories,
-		MaxCost:          maxCost,
-		MayBeFree:        mayBeFree,
-		Distance:         distance,
-		TransportOptions: transportOptions,
-	}
 	user, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	tools, err := a.toolSearch(&query, user.Location, r.UserID)
+	userObjID := user.ID
+
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	opts := db.SearchToolsOptions{
+		SearchTerm:       searchTerm,
+		Categories:       categories,
+		MayBeFree:        mayBeFree,
+		MaxCost:          maxCost,
+		Distance:         distance,
+		Location:         &user.Location,
+		TransportOptions: transportOptions,
+		UserID:           &userObjID,
+		Page:             page,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+
+	tools, total, err := a.database.ToolService.SearchTools(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
-	return &ToolsWrapper{Tools: tools}, nil
+
+	return a.getToolListPaginatedResponse(tools, page, pageSize, total), nil
 }
 
 func (a *API) addToolHandler(r *Request) (interface{}, error) {

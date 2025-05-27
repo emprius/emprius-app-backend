@@ -14,6 +14,43 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// RegisterCommunityRoutes registers all community-related routes to the provided router group
+func (a *API) RegisterCommunityRoutes(r chi.Router) {
+	// POST /communities
+	log.Info().Msg("register route POST /communities")
+	r.Post("/communities", a.routerHandler(a.createCommunityHandler))
+	// GET /communities/{communityId}
+	log.Info().Msg("register route GET /communities/{communityId}")
+	r.Get("/communities/{communityId}", a.routerHandler(a.getCommunityHandler))
+	// PUT /communities/{communityId}
+	log.Info().Msg("register route PUT /communities/{communityId}")
+	r.Put("/communities/{communityId}", a.routerHandler(a.updateCommunityHandler))
+	// DELETE /communities/{communityId}
+	log.Info().Msg("register route DELETE /communities/{communityId}")
+	r.Delete("/communities/{communityId}", a.routerHandler(a.deleteCommunityHandler))
+	// GET /communities/{communityId}/members
+	log.Info().Msg("register route GET /communities/{communityId}/members")
+	r.Get("/communities/{communityId}/members", a.routerHandler(a.getCommunityUsersHandler))
+	// GET /communities/{communityId}/tools
+	log.Info().Msg("register route GET /communities/{communityId}/tools")
+	r.Get("/communities/{communityId}/tools", a.routerHandler(a.getCommunityToolsHandler))
+	// POST /communities/{communityId}/members/{userId}
+	log.Info().Msg("register route POST /communities/{communityId}/members/{userId}")
+	r.Post("/communities/{communityId}/members/{userId}", a.routerHandler(a.inviteUserToCommunityHandler))
+	// DELETE /communities/{communityId}/members
+	log.Info().Msg("register route DELETE /communities/{communityId}/members")
+	r.Delete("/communities/{communityId}/members", a.routerHandler(a.leaveCommunityHandler))
+	// DELETE /communities/{communityId}/members/{userId}
+	log.Info().Msg("register route DELETE /communities/{communityId}/members/{userId}")
+	r.Delete("/communities/{communityId}/members/{userId}", a.routerHandler(a.leaveCommunityHandler))
+	// GET /communities/invites
+	log.Info().Msg("register route GET /communities/invites")
+	r.Get("/communities/invites", a.routerHandler(a.getUserPendingInvitesHandler))
+	// PUT /communities/invites/{inviteId}
+	log.Info().Msg("register route PUT /communities/invites/{inviteId}")
+	r.Put("/communities/invites/{inviteId}", a.routerHandler(a.updateInviteStatusHandler))
+}
+
 // CreateCommunityRequest represents the request to create a new community
 type CreateCommunityRequest struct {
 	Name  string         `json:"name"`
@@ -665,17 +702,26 @@ func (a *API) getCommunityToolsHandler(r *Request) (interface{}, error) {
 		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community with id %s not found", communityIDStr))
 	}
 
-	// Get tools for the community
-	dbTools, err := a.database.CommunityService.GetCommunityTools(r.Context.Request.Context(), communityID)
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get search term
+	searchTerm := *r.Context.GetSearchTerm()
+
+	// Get paginated tools for the community
+	dbTools, total, err := a.database.CommunityService.GetCommunityToolsPaginated(
+		r.Context.Request.Context(),
+		communityID,
+		page,
+		pageSize,
+		searchTerm,
+	)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// Convert to API response format
-	tools := make([]*Tool, len(dbTools))
-	for i, dbTool := range dbTools {
-		tools[i] = new(Tool).FromDBTool(dbTool)
-	}
-
-	return &ToolsWrapper{Tools: tools}, nil
+	return a.getToolListPaginatedResponse(dbTools, page, pageSize, total), nil
 }

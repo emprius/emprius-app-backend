@@ -179,14 +179,14 @@ func (s *CommunityService) GetCommunityUsers(ctx context.Context, communityID pr
 		page = 0
 	}
 
-	skip := page * defaultPageSize
+	skip := page * DefaultPageSize
 
 	// Find users with this community in their communities array
 	filter := bson.M{"communities.id": communityID}
 	opts := options.Find().
 		SetSort(bson.D{{Key: "name", Value: 1}}). // Sort by name
 		SetSkip(int64(skip)).
-		SetLimit(int64(defaultPageSize))
+		SetLimit(int64(DefaultPageSize))
 
 	cursor, err := s.UserService.Collection.Find(ctx, filter, opts)
 	if err != nil {
@@ -589,6 +589,64 @@ func (s *CommunityService) GetCommunityTools(ctx context.Context, communityID pr
 	return tools, nil
 }
 
+// GetCommunityToolsPaginated retrieves tools in a community with pagination and search
+func (s *CommunityService) GetCommunityToolsPaginated(ctx context.Context,
+	communityID primitive.ObjectID,
+	page int,
+	pageSize int,
+	searchTerm string,
+) ([]*Tool, int64, error) {
+	if page < 0 {
+		page = 0
+	}
+
+	if pageSize < 0 {
+		pageSize = DefaultPageSize
+	}
+
+	skip := page * pageSize
+
+	// Build the base filter
+	filter := bson.M{"communities": communityID}
+
+	// Add search filter if search term is provided
+	if searchTerm != "" {
+		searchTerm = SanitizeString(searchTerm)
+		filter["$or"] = []bson.M{
+			{"title": bson.M{"$regex": searchTerm, "$options": "i"}},
+			{"description": bson.M{"$regex": searchTerm, "$options": "i"}},
+		}
+	}
+
+	// Get total count
+	total, err := s.ToolService.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	findOptions := options.Find()
+	findOptions.SetSkip(int64(skip))
+	findOptions.SetLimit(int64(pageSize))
+	findOptions.SetSort(bson.D{{Key: "title", Value: 1}})
+	cursor, err := s.ToolService.Collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var tools []*Tool
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, 0, err
+	}
+
+	return tools, total, nil
+}
+
 // CommunityExists checks if a community exists
 func (s *CommunityService) CommunityExists(ctx context.Context, communityID primitive.ObjectID) (bool, error) {
 	count, err := s.Collection.CountDocuments(ctx, bson.M{"_id": communityID})
@@ -604,7 +662,7 @@ func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primit
 		page = 0
 	}
 
-	skip := page * defaultPageSize
+	skip := page * DefaultPageSize
 
 	// Use aggregation pipeline to get communities for the user
 	pipeline := []bson.M{
@@ -634,7 +692,7 @@ func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primit
 			"$skip": int64(skip),
 		},
 		{
-			"$limit": int64(defaultPageSize),
+			"$limit": int64(DefaultPageSize),
 		},
 	}
 

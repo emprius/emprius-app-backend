@@ -14,6 +14,7 @@ import (
 
 	stdDraw "image/draw"
 
+	"github.com/go-chi/chi/v5"
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/tiff"
@@ -24,6 +25,20 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/mongo"
 )
+
+// RegisterImageRoutes registers all image-related routes to the provided router group
+func (a *API) RegisterImageRoutes(r chi.Router) {
+	// POST /images
+	log.Info().Msg("register route POST /images")
+	r.Post("/images", a.routerHandler(a.imageUploadHandler))
+}
+
+// RegisterPublicImageRoutes registers all public image-related routes to the provided router group
+func (a *API) RegisterPublicImageRoutes(r chi.Router) {
+	// GET /images/{hash}
+	log.Info().Msg("register route GET /images/{hash}")
+	r.Get("/images/{hash}", a.routerHandler(a.imageHandler))
+}
 
 // checkIfDataIsAnImage checks if the given data is an image.
 func checkIfDataIsAnImage(data []byte) error {
