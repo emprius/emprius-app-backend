@@ -966,7 +966,7 @@ func TestToolsDistanceValidation(t *testing.T) {
 		//----------------------------------------------------------------------
 		// 1) Create "Center Tool" at the exact center location
 		//----------------------------------------------------------------------
-		resp, code := c.Request(http.MethodPost, userJWT,
+		_, code := c.Request(http.MethodPost, userJWT,
 			api.Tool{
 				Title:          "Center Tool",
 				Description:    "Tool at center location",
@@ -1060,7 +1060,7 @@ func TestToolsDistanceValidation(t *testing.T) {
 		//    (Center Tool, Tool at 5km, Tool at 9km)
 		//----------------------------------------------------------------------
 		searchURL := fmt.Sprintf("tools/search?distance=10000&latitude=%d&longitude=%d", centerLat, centerLon)
-		resp, code = c.Request(http.MethodGet, userJWT, nil, searchURL)
+		resp, code := c.Request(http.MethodGet, userJWT, nil, searchURL)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var searchResp struct {

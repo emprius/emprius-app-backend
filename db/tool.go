@@ -77,8 +77,8 @@ type Tool struct {
 	Images             []Image              `bson:"images" json:"images"`
 	TransportOptions   []Transport          `bson:"transportOptions" json:"transportOptions"`
 	ToolCategory       int                  `bson:"toolCategory" json:"toolCategory"`
-	Location           DBLocation           `bson:"location" json:"location"`                     // Real location, not exposed in JSON
-	ObfuscatedLocation DBLocation           `bson:"obfuscatedLocation" json:"obfuscatedLocation"` // Exposed as "location" in JSON
+	Location           DBLocation           `bson:"location" json:"location"`
+	ObfuscatedLocation DBLocation           `bson:"obfuscatedLocation" json:"obfuscatedLocation"`
 	Rating             int32                `bson:"rating" json:"rating"`
 	Cost               uint64               `bson:"cost" json:"cost"`
 	EstimatedDailyCost uint64               `json:"estimatedDailyCost"`
