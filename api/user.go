@@ -181,7 +181,7 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 
 	userList := []*User{}
 	for _, u := range users {
-		userList = append(userList, new(User).FromDBUser(u))
+		userList = append(userList, new(User).FromDBUser(u, a.database))
 	}
 	return &UsersWrapper{Users: userList}, nil
 }
@@ -196,8 +196,9 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(fmt.Errorf("invalid user id format: %s", r.Context.URLParam("id")))
 	}
-
-	return a.getUserByID(userID.Hex())
+	// Get user by ID
+	u, _ := a.getUserByID(userID.Hex())
+	return new(User).FromDBUser(u, a.database), nil
 }
 
 // validateObjectID checks if a string is a valid MongoDB ObjectID
@@ -208,7 +209,7 @@ func validateObjectID(id string) error {
 	return nil
 }
 
-func (a *API) getUserByID(userID string) (*User, error) {
+func (a *API) getUserByID(userID string) (*db.User, error) {
 	if err := validateObjectID(userID); err != nil {
 		return nil, err
 	}
@@ -218,25 +219,7 @@ func (a *API) getUserByID(userID string) (*User, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	// Create API user from DB user
-	apiUser := new(User).FromDBUser(user)
-
-	// Get rating count (number of ratings received by this user)
-	filter := bson.M{
-		"rateeId": objID,
-		"raterId": bson.M{"$ne": objID}, // exclude self-ratings
-	}
-
-	ratingCount, err := a.database.Database.Collection("ratings").CountDocuments(context.Background(), filter)
-	if err != nil {
-		log.Error().Err(err).Str("userId", userID).Msg("Failed to count user ratings")
-		// Continue even if count fails, just set to 0
-		apiUser.RatingCount = 0
-	} else {
-		apiUser.RatingCount = int(ratingCount)
-	}
-
-	return apiUser, nil
+	return user, nil
 }
 
 func (a *API) getDBUserByID(userID string) (*db.User, error) {
@@ -258,7 +241,7 @@ func (a *API) userProfileHandler(r *Request) (interface{}, error) {
 	}
 
 	// Create API user from DB user with real location (true parameter)
-	user := new(User).FromDBUser(dbUser, true)
+	user := new(User).FromDBUser(dbUser, a.database, true)
 
 	// Get user's unused invite codes
 	objID, err := primitive.ObjectIDFromHex(r.UserID)

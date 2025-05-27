@@ -26,8 +26,8 @@ type User struct {
 	Rating             int32               `bson:"rating" json:"rating" default:"50"`
 	RatingCount        int                 `bson:"ratingCount" json:"ratingCount" default:"0"`
 	AvatarHash         types.HexBytes      `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
-	Location           DBLocation          `bson:"location" json:"-"`                  // Real location, not exposed in JSON
-	ObfuscatedLocation DBLocation          `bson:"obfuscatedLocation" json:"location"` // Exposed as "location" in JSON
+	Location           DBLocation          `bson:"location" json:"location"`
+	ObfuscatedLocation DBLocation          `bson:"obfuscatedLocation" json:"obfuscatedLocation"`
 	Verified           bool                `bson:"verified" json:"verified" default:"false"`
 	CreatedAt          time.Time           `bson:"createdAt,omitempty" json:"createdAt,omitempty"`
 	LastSeen           time.Time           `bson:"lastSeen,omitempty" json:"lastSeen,omitempty"`

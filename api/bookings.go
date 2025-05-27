@@ -91,7 +91,7 @@ func (a *API) HandleGetOutgoingRequests(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	bookings, err := a.database.BookingService.GetUserPetitions(r.Context.Request.Context(), user.ObjectID())
+	bookings, err := a.database.BookingService.GetUserPetitions(r.Context.Request.Context(), user.ID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -116,7 +116,7 @@ func (a *API) HandleGetIncomingRequests(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), user.ObjectID())
+	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), user.ID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -185,7 +185,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 	case BookingStatusAccepted:
 		newStatus = db.BookingStatusAccepted
 		// Verify user is the tool owner
-		if booking.ToUserID != user.ObjectID() {
+		if booking.ToUserID != user.ID {
 			return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 		}
 		// Verify booking is in PENDING state
@@ -213,10 +213,10 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		isAuthorized := false
 		if tool.IsNomadic && !tool.ActualUserID.IsZero() {
 			// For nomadic tools with an actual user, the actual user should accept
-			isAuthorized = tool.ActualUserID == user.ObjectID()
+			isAuthorized = tool.ActualUserID == user.ID
 		} else {
 			// For non-nomadic tools or nomadic tools without an actual user, the owner should accept
-			isAuthorized = booking.ToUserID == user.ObjectID()
+			isAuthorized = booking.ToUserID == user.ID
 		}
 
 		if !isAuthorized {
@@ -234,7 +234,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 	case BookingStatusRejected:
 		newStatus = db.BookingStatusRejected
 		// Verify user is the tool owner
-		if booking.ToUserID != user.ObjectID() {
+		if booking.ToUserID != user.ID {
 			return nil, ErrOnlyOwnerCanDeny.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 		}
 		// Verify booking is in PENDING state
@@ -262,10 +262,10 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		isAuthorized := false
 		if tool.IsNomadic && !tool.ActualUserID.IsZero() {
 			// For nomadic tools with an actual user, the actual user should deny
-			isAuthorized = tool.ActualUserID == user.ObjectID()
+			isAuthorized = tool.ActualUserID == user.ID
 		} else {
 			// For non-nomadic tools or nomadic tools without an actual user, the owner should deny
-			isAuthorized = booking.ToUserID == user.ObjectID()
+			isAuthorized = booking.ToUserID == user.ID
 		}
 
 		if !isAuthorized {
@@ -277,7 +277,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 	case BookingStatusCancelled:
 		newStatus = db.BookingStatusCancelled
 		// Verify user is the requester
-		if booking.FromUserID != user.ObjectID() {
+		if booking.FromUserID != user.ID {
 			return nil, ErrOnlyRequesterCanCancel.WithErr(fmt.Errorf("user %s is not the requester", user.ID))
 		}
 		// Verify booking is in PENDING state
@@ -287,7 +287,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 	case BookingStatusReturned:
 		newStatus = db.BookingStatusReturned
 		// Verify user is the tool owner
-		if booking.ToUserID != user.ObjectID() {
+		if booking.ToUserID != user.ID {
 			return nil, ErrOnlyOwnerCanReturn.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
 		}
 		// Verify booking is in ACCEPTED state
@@ -340,10 +340,10 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		isAuthorized := false
 		if !tool.ActualUserID.IsZero() {
 			// For nomadic tools with an actual user, the actual user should mark as picked
-			isAuthorized = tool.ActualUserID == user.ObjectID()
+			isAuthorized = tool.ActualUserID == user.ID
 		} else {
 			// For nomadic tools without an actual user, the owner should mark as picked
-			isAuthorized = booking.ToUserID == user.ObjectID()
+			isAuthorized = booking.ToUserID == user.ID
 		}
 
 		if !isAuthorized {
@@ -364,14 +364,10 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			return nil, ErrUserNotFound.WithErr(err)
 		}
 
-		// Get obfuscated obfuscatedLocation
-		newLocation := renter.Location.ToDBLocation()
-		obfuscatedLocation := db.ObfuscateLocation(newLocation, booking.FromUserID)
-
 		// Update the tool's obfuscatedLocation and actualUserId
 		updates := map[string]interface{}{
-			"obfuscatedLocation": obfuscatedLocation,
-			"location":           newLocation,
+			"obfuscatedLocation": renter.ObfuscatedLocation,
+			"location":           renter.Location,
 			"actualUserId":       booking.FromUserID,
 		}
 
@@ -385,7 +381,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			r.Context.Request.Context(),
 			toolID,
 			booking.FromUserID,
-			obfuscatedLocation,
+			renter.ObfuscatedLocation,
 			bookingID,
 		)
 		if err != nil {
@@ -426,7 +422,7 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 
 	bookings, err := a.database.BookingService.GetPendingRatings(
 		r.Context.Request.Context(),
-		user.ObjectID(),
+		user.ID,
 	)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
@@ -566,7 +562,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		for _, toolCommunityID := range tool.Communities {
 			toolCommunityIDStr := toolCommunityID.Hex()
 			for _, userCommunity := range fromUser.Communities {
-				if toolCommunityIDStr == userCommunity.ID {
+				if toolCommunityIDStr == userCommunity.ID.Hex() {
 					userIsMember = true
 					break
 				}
@@ -599,7 +595,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 	// Check if the tool has a maximum distance restriction
 	if tool.MaxDistance > 0 {
 		// Convert API Location to DB Location
-		userDBLocation := fromUser.Location.ToDBLocation()
+		userDBLocation := fromUser.Location
 
 		// Check if the distance between the user and the tool is within the maximum distance
 		withinDistance := db.WithinCircumference(
@@ -645,7 +641,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		Comments:  req.Comments,
 		IsNomadic: tool.IsNomadic,
 	}
-	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ObjectID(), toUser.ID)
+	booking, err := a.database.BookingService.Create(r.Context.Request.Context(), dbReq, fromUser.ID, toUser.ID)
 	if err != nil {
 		if err.Error() == "booking dates conflict with existing booking" {
 			return nil, ErrBookingDatesConflict.WithErr(err)
@@ -700,7 +696,7 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	err = a.database.BookingService.RateBooking(
 		r.Context.Request.Context(),
 		bookingID,
-		user.ObjectID(),
+		user.ID,
 		rateReq.Rating,
 		rateReq.Comment,
 		dbImages,

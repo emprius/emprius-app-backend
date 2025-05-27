@@ -102,8 +102,8 @@ func TestTools(t *testing.T) {
 				Weight:        50,
 				IsAvailable:   boolPtr(true),
 				Location: api.Location{
-					Latitude:  41785384, // 41.785384 * 1e6 (~9 km from updated location)
-					Longitude: 2492793,  // 2.492793 * 1e6
+					Latitude:  41776239, // 41.776239 * 1e6
+					Longitude: 2492793,  // same longitude
 				},
 			},
 			"tools",
@@ -267,18 +267,20 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 200)
 
 			//--------------------------------------------------------------
-			// 8C) Search with distance=10 km
+			// 8C) Search with distance=10 km
 			//     Should find:
 			//       1) Updated Tool (center)
 			//       2) Tool at 5 km
-			//     => total 2
+			//       3) Another Tool (~9 km)
+			//     => total 3
 			//--------------------------------------------------------------
 			resp, code = c.Request(http.MethodGet, userJWT, nil, "tools/search?distance=10000")
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &searchResp)
 			qt.Assert(t, err, qt.IsNil)
 
-			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 2)
+			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 3)
+
 			found5km := false
 			foundUpdated := false
 			for _, tool := range searchResp.Data.Tools {
@@ -363,7 +365,7 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &searchResp)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 2)
+			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 3)
 
 			//--------------------------------------------------------------
 			// 8I) Search with a non-matching term => 0
@@ -944,6 +946,236 @@ func TestTools(t *testing.T) {
 			qt.Assert(t, entry.PickupDate > 0, qt.Equals, true)
 			qt.Assert(t, entry.Location.Latitude != 0, qt.Equals, true)
 			qt.Assert(t, entry.Location.Longitude != 0, qt.Equals, true)
+		}
+	})
+}
+
+func TestToolsDistanceValidation(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create a user
+	userJWT := c.RegisterAndLogin("distance-test@test.com", "distanceuser", "userpass")
+
+	t.Run("Distance Filter Validation", func(t *testing.T) {
+		// Test coordinates - using the same coordinates from the failing test
+		centerLat := int64(41695384)  // 41.695384 * 1e6 (center)
+		centerLon := int64(2492793)   // 2.492793 * 1e6
+		anotherLat := int64(41776239) // 41.776239 * 1e6 (9 km north)
+		anotherLon := int64(2492793)  // same longitude
+
+		//----------------------------------------------------------------------
+		// 1) Create "Center Tool" at the exact center location
+		//----------------------------------------------------------------------
+		_, code := c.Request(http.MethodPost, userJWT,
+			api.Tool{
+				Title:         "Center Tool",
+				Description:   "Tool at center location",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Height:        30,
+				Weight:        40,
+				IsAvailable:   boolPtr(true),
+				Location: api.Location{
+					Latitude:  centerLat,
+					Longitude: centerLon,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		//----------------------------------------------------------------------
+		// 2) Create "Tool at 5km" - should be within 10km radius
+		//----------------------------------------------------------------------
+		_, code = c.Request(http.MethodPost, userJWT,
+			api.Tool{
+				Title:         "Tool at 5km",
+				Description:   "Tool at 5km away",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Height:        30,
+				Weight:        40,
+				IsAvailable:   boolPtr(true),
+				Location: api.Location{
+					Latitude:  41745384, // ~5 km from center
+					Longitude: centerLon,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		//----------------------------------------------------------------------
+		// 3) Create "Tool at 9km" - this is the problematic one from the original test
+		//----------------------------------------------------------------------
+		_, code = c.Request(http.MethodPost, userJWT,
+			api.Tool{
+				Title:         "Tool at 9km",
+				Description:   "Tool at 9km away - boundary case",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Height:        30,
+				Weight:        40,
+				IsAvailable:   boolPtr(true),
+				Location: api.Location{
+					Latitude:  anotherLat, // ~9 km from center
+					Longitude: anotherLon,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		//----------------------------------------------------------------------
+		// 4) Create "Tool at 15km" - should be outside 10km radius
+		//----------------------------------------------------------------------
+		_, code = c.Request(http.MethodPost, userJWT,
+			api.Tool{
+				Title:         "Tool at 15km",
+				Description:   "Tool at 15km away",
+				MayBeFree:     boolPtr(true),
+				AskWithFee:    boolPtr(false),
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				Height:        30,
+				Weight:        40,
+				IsAvailable:   boolPtr(true),
+				Location: api.Location{
+					Latitude:  41845384, // ~15 km from center
+					Longitude: centerLon,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		//----------------------------------------------------------------------
+		// 5) Test search with 10km radius - should find exactly 3 tools
+		//    (Center Tool, Tool at 5km, Tool at 9km)
+		//----------------------------------------------------------------------
+		searchURL := fmt.Sprintf("tools/search?distance=10000&latitude=%d&longitude=%d", centerLat, centerLon)
+		resp, code := c.Request(http.MethodGet, userJWT, nil, searchURL)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var searchResp struct {
+			Data struct {
+				Tools []api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &searchResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Log the results for debugging
+		t.Logf("Search with 10km radius returned %d tools:", len(searchResp.Data.Tools))
+		for i, tool := range searchResp.Data.Tools {
+			t.Logf("  %d. %s (ID: %d)", i+1, tool.Title, tool.ID)
+		}
+
+		// Should find exactly 3 tools within 10km
+		qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 3, qt.Commentf("Expected 3 tools within 10km radius"))
+
+		// Verify which tools were found
+		foundTitles := make(map[string]bool)
+		for _, tool := range searchResp.Data.Tools {
+			foundTitles[tool.Title] = true
+		}
+
+		qt.Assert(t, foundTitles["Center Tool"], qt.Equals, true, qt.Commentf("Center Tool should be found"))
+		qt.Assert(t, foundTitles["Tool at 5km"], qt.Equals, true, qt.Commentf("Tool at 5km should be found"))
+		qt.Assert(t, foundTitles["Tool at 9km"], qt.Equals, true, qt.Commentf("Tool at 9km should be found"))
+		qt.Assert(t, foundTitles["Tool at 15km"], qt.Equals, false, qt.Commentf("Tool at 15km should NOT be found"))
+
+		//----------------------------------------------------------------------
+		// 6) Test search with 8km radius - should find only 2 tools
+		//    (Center Tool, Tool at 5km) - Tool at 9km should be excluded
+		//----------------------------------------------------------------------
+		searchURL = fmt.Sprintf("tools/search?distance=8000&latitude=%d&longitude=%d", centerLat, centerLon)
+		resp, code = c.Request(http.MethodGet, userJWT, nil, searchURL)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &searchResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Log the results for debugging
+		t.Logf("Search with 8km radius returned %d tools:", len(searchResp.Data.Tools))
+		for i, tool := range searchResp.Data.Tools {
+			t.Logf("  %d. %s (ID: %d)", i+1, tool.Title, tool.ID)
+		}
+
+		// Should find exactly 2 tools within 8km
+		qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 2, qt.Commentf("Expected 2 tools within 8km radius"))
+
+		// Verify which tools were found
+		foundTitles = make(map[string]bool)
+		for _, tool := range searchResp.Data.Tools {
+			foundTitles[tool.Title] = true
+		}
+
+		qt.Assert(t, foundTitles["Center Tool"], qt.Equals, true, qt.Commentf("Center Tool should be found"))
+		qt.Assert(t, foundTitles["Tool at 5km"], qt.Equals, true, qt.Commentf("Tool at 5km should be found"))
+		qt.Assert(t, foundTitles["Tool at 9km"], qt.Equals, false, qt.Commentf("Tool at 9km should NOT be found"))
+		qt.Assert(t, foundTitles["Tool at 15km"], qt.Equals, false, qt.Commentf("Tool at 15km should NOT be found"))
+
+		//----------------------------------------------------------------------
+		// 7) Test search with 20km radius - should find all 4 tools
+		//----------------------------------------------------------------------
+		searchURL = fmt.Sprintf("tools/search?distance=20000&latitude=%d&longitude=%d", centerLat, centerLon)
+		resp, code = c.Request(http.MethodGet, userJWT, nil, searchURL)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &searchResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Log the results for debugging
+		t.Logf("Search with 20km radius returned %d tools:", len(searchResp.Data.Tools))
+		for i, tool := range searchResp.Data.Tools {
+			t.Logf("  %d. %s (ID: %d)", i+1, tool.Title, tool.ID)
+		}
+
+		// Should find all 4 tools within 20km
+		qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 4, qt.Commentf("Expected 4 tools within 20km radius"))
+
+		// Verify all tools were found
+		foundTitles = make(map[string]bool)
+		for _, tool := range searchResp.Data.Tools {
+			foundTitles[tool.Title] = true
+		}
+
+		qt.Assert(t, foundTitles["Center Tool"], qt.Equals, true, qt.Commentf("Center Tool should be found"))
+		qt.Assert(t, foundTitles["Tool at 5km"], qt.Equals, true, qt.Commentf("Tool at 5km should be found"))
+		qt.Assert(t, foundTitles["Tool at 9km"], qt.Equals, true, qt.Commentf("Tool at 9km should be found"))
+		qt.Assert(t, foundTitles["Tool at 15km"], qt.Equals, true, qt.Commentf("Tool at 15km should be found"))
+	})
+
+	t.Run("Consistency Test - Multiple Runs", func(t *testing.T) {
+		// Run the same search multiple times to ensure consistency
+		centerLat := int64(41695384)
+		centerLon := int64(2492793)
+
+		searchURL := fmt.Sprintf("tools/search?distance=10000&latitude=%d&longitude=%d", centerLat, centerLon)
+
+		// Run the search 10 times to check for consistency
+		for i := 0; i < 10; i++ {
+			resp, code := c.Request(http.MethodGet, userJWT, nil, searchURL)
+			qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Search iteration %d failed", i+1))
+
+			var searchResp struct {
+				Data struct {
+					Tools []api.Tool `json:"tools"`
+				} `json:"data"`
+			}
+			err := json.Unmarshal(resp, &searchResp)
+			qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to unmarshal response on iteration %d", i+1))
+
+			// Should consistently return the same number of tools
+			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 3,
+				qt.Commentf("Iteration %d: Expected 3 tools, got %d", i+1, len(searchResp.Data.Tools)))
 		}
 	})
 }

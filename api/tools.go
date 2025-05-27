@@ -119,7 +119,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 
 	dbTool := db.Tool{
 		ID:                 toolId,
-		UserID:             user.ObjectID(),
+		UserID:             user.ID,
 		Title:              db.SanitizeString(t.Title),
 		Description:        t.Description,
 		IsAvailable:        *t.IsAvailable,
@@ -135,7 +135,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		MaxDistance:        t.MaxDistance,
 		Images:             dbImages,
 		Location:           realLocation,
-		ObfuscatedLocation: db.ObfuscateLocation(realLocation, user.ObjectID()),
+		ObfuscatedLocation: db.ObfuscateLocation(realLocation, user.ID),
 		TransportOptions:   transportOptions,
 		ReservedDates:      []db.DateRange{}, // Initialize empty array
 		IsNomadic:          t.IsNomadic,
@@ -177,7 +177,7 @@ func (a *API) toolsByUserID(userID string) ([]*Tool, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ObjectID())
+	tools, err := a.database.ToolService.GetToolsByUserID(context.Background(), user.ID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -341,10 +341,7 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 	return id, nil
 }
 
-func (a *API) toolSearch(query *ToolSearch, userLocation *Location, userID string) ([]*Tool, error) {
-	// Convert user location to GeoJSON format for MongoDB
-	searchLocation := db.NewLocation(userLocation.Latitude, userLocation.Longitude)
-
+func (a *API) toolSearch(query *ToolSearch, searchLocation db.DBLocation, userID string) ([]*Tool, error) {
 	// Convert userID to ObjectID if provided
 	var userObjID *primitive.ObjectID
 	if userID != "" {
@@ -547,7 +544,7 @@ func (a *API) toolSearchHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	tools, err := a.toolSearch(&query, &user.Location, r.UserID)
+	tools, err := a.toolSearch(&query, user.Location, r.UserID)
 	if err != nil {
 		return nil, err
 	}
@@ -601,7 +598,7 @@ func (a *API) deleteToolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	if tool.UserID != user.ObjectID() {
+	if tool.UserID != user.ID {
 		return nil, ErrToolNotOwnedByUser.WithErr(fmt.Errorf("tool with id %d is not owned by user %s", id, user.ID))
 	}
 	if err := a.deleteTool(id); err != nil {
@@ -724,7 +721,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
-	if tool.UserID != user.ObjectID() {
+	if tool.UserID != user.ID {
 		return nil, ErrToolNotOwnedByUser.WithErr(fmt.Errorf("tool with id %d is not owned by user %s", id, user.ID))
 	}
 	t := Tool{}
@@ -735,7 +732,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	// Check if trying to change nomadic status
 	if tool.IsNomadic != t.IsNomadic {
 		// Only the owner can change nomadic status
-		if tool.UserID != user.ObjectID() {
+		if tool.UserID != user.ID {
 			return nil, ErrOnlyOwnerCanChangeNomadicStatus.WithErr(
 				fmt.Errorf("only the owner can change a tool from nomadic to non-nomadic"),
 			)
