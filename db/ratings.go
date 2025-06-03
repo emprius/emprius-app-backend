@@ -445,20 +445,8 @@ func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID pr
 	return unifiedRating, nil
 }
 
-// GetUnifiedRatings retrieves all ratings for a user (both submitted and received) and groups them by booking
-func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive.ObjectID) ([]*UnifiedRating, error) {
-	// First, get all bookings that need to be rated by the user (pending ratings)
-	pendingBookings, err := s.GetPendingRatings(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get pending ratings: %w", err)
-	}
-
-	// Create a map of pending booking IDs for efficient lookup
-	pendingBookingIDs := make(map[primitive.ObjectID]bool)
-	for _, booking := range pendingBookings {
-		pendingBookingIDs[booking.ID] = true
-	}
-
+// GetRatingsByUserId retrieves all ratings for a user (both submitted and received) and groups them by booking
+func (s *BookingService) GetRatingsByUserId(ctx context.Context, userID primitive.ObjectID) ([]*UnifiedRating, error) {
 	// Get all bookings where the user is involved
 	filter := bson.M{
 		"$or": []bson.M{
