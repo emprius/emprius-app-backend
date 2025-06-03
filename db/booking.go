@@ -187,7 +187,13 @@ const (
 // GetUserBookings returns paginated bookings where the given user is either the requester (fromUserId)
 // or the owner (toUserId), depending on the userField parameter.
 // Bookings are ordered with PENDING status first, then sorted by createdAt date (newest first).
-func (s *BookingService) GetUserBookings(ctx context.Context, userID primitive.ObjectID, userField BookingType, page int, pageSize int) ([]*Booking, int64, error) {
+func (s *BookingService) GetUserBookings(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	userField BookingType,
+	page int,
+	pageSize int,
+) ([]*Booking, int64, error) {
 	if page < 0 {
 		page = 0
 	}

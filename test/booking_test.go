@@ -110,9 +110,9 @@ func TestBookings(t *testing.T) {
 		var hasAccepted, hasPending bool
 		for _, booking := range requestsResp.Data.Bookings {
 			switch booking.BookingStatus {
-			case "ACCEPTED":
+			case api.BookingStatusAccepted:
 				hasAccepted = true
-			case "PENDING":
+			case api.BookingStatusPending:
 				hasPending = true
 			}
 		}

@@ -101,7 +101,12 @@ func newRatingCollection(db *mongo.Database) *mongo.Collection {
 }
 
 // GetPendingRatings retrieves paginated bookings that need to be rated by the user
-func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive.ObjectID, page int, pageSize int) ([]*Booking, int64, error) {
+func (s *BookingService) GetPendingRatings(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	page int,
+	pageSize int,
+) ([]*Booking, int64, error) {
 	// Ensure page is not negative
 	if page < 0 {
 		page = 0
