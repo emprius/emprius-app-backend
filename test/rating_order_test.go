@@ -311,17 +311,17 @@ func TestRatingOrder(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var pendingResp struct {
-			Data []api.BookingResponse `json:"data"`
+			Data api.PaginatedBookingsResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &pendingResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(pendingResp.Data), qt.Equals, 2)
+		qt.Assert(t, len(pendingResp.Data.Bookings), qt.Equals, 2)
 
 		// Verify order: newest first
 		// The second pending booking should be first (newest)
-		qt.Assert(t, pendingResp.Data[0].Comments, qt.Equals, "Second pending booking")
+		qt.Assert(t, pendingResp.Data.Bookings[0].Comments, qt.Equals, "Second pending booking")
 
 		// The first pending booking should be second (oldest)
-		qt.Assert(t, pendingResp.Data[1].Comments, qt.Equals, "First pending booking")
+		qt.Assert(t, pendingResp.Data.Bookings[1].Comments, qt.Equals, "First pending booking")
 	})
 }

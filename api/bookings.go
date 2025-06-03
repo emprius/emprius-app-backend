@@ -464,20 +464,24 @@ func (a *API) HandleGetPendingRatings(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	bookings, err := a.database.BookingService.GetPendingRatings(
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get paginated bookings
+	bookings, total, err := a.database.BookingService.GetPendingRatings(
 		r.Context.Request.Context(),
 		user.ID,
+		page,
+		pageSize,
 	)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	response := make([]*BookingResponse, len(bookings))
-	for i, booking := range bookings {
-		response[i] = a.convertBookingToResponse(booking, r.UserID)
-	}
-
-	return response, nil
+	return a.getBookingListPaginatedResponse(bookings, page, pageSize, total, r.UserID), nil
 }
 
 // HandleGetUserRatings handles GET /users/{id}/ratings
@@ -494,7 +498,7 @@ func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
 	}
 
 	// Get unified ratings
-	unifiedRatings, err := a.database.BookingService.GetUnifiedRatings(r.Context.Request.Context(), userID)
+	unifiedRatings, err := a.database.BookingService.GetRatingsByUserId(r.Context.Request.Context(), userID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
