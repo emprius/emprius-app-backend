@@ -77,7 +77,7 @@ func TestBookingOrder(t *testing.T) {
 	qt.Assert(t, code, qt.Equals, 200)
 
 	var bookingsResp struct {
-		Data []api.BookingResponse `json:"data"`
+		Data api.PaginatedBookingsResponse `json:"data"`
 	}
 	err = json.Unmarshal(resp, &bookingsResp)
 	qt.Assert(t, err, qt.IsNil)
@@ -85,7 +85,7 @@ func TestBookingOrder(t *testing.T) {
 	// We should have at least 2 pending bookings and 1 accepted booking
 	pendingCount := 0
 	acceptedCount := 0
-	for _, booking := range bookingsResp.Data {
+	for _, booking := range bookingsResp.Data.Bookings {
 		if booking.BookingStatus == string(db.BookingStatusPending) {
 			pendingCount++
 		} else if booking.BookingStatus == string(db.BookingStatusAccepted) {
@@ -100,9 +100,9 @@ func TestBookingOrder(t *testing.T) {
 
 	// The first bookings should all be PENDING
 	for i := 0; i < pendingCount; i++ {
-		qt.Assert(t, bookingsResp.Data[i].BookingStatus, qt.Equals, string(db.BookingStatusPending),
+		qt.Assert(t, bookingsResp.Data.Bookings[i].BookingStatus, qt.Equals, string(db.BookingStatusPending),
 			qt.Commentf("Expected booking at index %d to be PENDING, got %s",
-				i, bookingsResp.Data[i].BookingStatus))
+				i, bookingsResp.Data.Bookings[i].BookingStatus))
 	}
 
 	// Now check petitions (renter side) too
@@ -110,7 +110,7 @@ func TestBookingOrder(t *testing.T) {
 	qt.Assert(t, code, qt.Equals, 200)
 
 	var petitionsResp struct {
-		Data []api.BookingResponse `json:"data"`
+		Data api.PaginatedBookingsResponse `json:"data"`
 	}
 	err = json.Unmarshal(resp, &petitionsResp)
 	qt.Assert(t, err, qt.IsNil)
@@ -118,7 +118,7 @@ func TestBookingOrder(t *testing.T) {
 	// Reset counters
 	pendingCount = 0
 	acceptedCount = 0
-	for _, booking := range petitionsResp.Data {
+	for _, booking := range petitionsResp.Data.Bookings {
 		if booking.BookingStatus == string(db.BookingStatusPending) {
 			pendingCount++
 		} else if booking.BookingStatus == string(db.BookingStatusAccepted) {
@@ -131,16 +131,16 @@ func TestBookingOrder(t *testing.T) {
 
 	// The first bookings should all be PENDING
 	for i := 0; i < pendingCount; i++ {
-		qt.Assert(t, petitionsResp.Data[i].BookingStatus, qt.Equals, string(db.BookingStatusPending),
+		qt.Assert(t, petitionsResp.Data.Bookings[i].BookingStatus, qt.Equals, string(db.BookingStatusPending),
 			qt.Commentf("Expected booking at index %d to be PENDING, got %s",
-				i, petitionsResp.Data[i].BookingStatus))
+				i, petitionsResp.Data.Bookings[i].BookingStatus))
 	}
 
 	// Verify that accepted bookings come after pending bookings
 	if pendingCount > 0 && acceptedCount > 0 {
 		// Find the first accepted booking index
 		firstAcceptedIdx := -1
-		for i, booking := range petitionsResp.Data {
+		for i, booking := range petitionsResp.Data.Bookings {
 			if booking.BookingStatus == string(db.BookingStatusAccepted) {
 				firstAcceptedIdx = i
 				break

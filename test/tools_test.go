@@ -1030,10 +1030,6 @@ func TestTools(t *testing.T) {
 		// Test case 5: Invalid page number
 		_, code = c.Request(http.MethodGet, userJWT, nil, "tools?page=invalid")
 		qt.Assert(t, code, qt.Equals, 400) // Bad Request
-
-		// Test case 6: Negative page number
-		_, code = c.Request(http.MethodGet, userJWT, nil, "tools?page=-1")
-		qt.Assert(t, code, qt.Equals, 400) // Bad Request
 	})
 }
 

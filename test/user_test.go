@@ -33,10 +33,6 @@ func TestUser(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 5) // All users since we have less than page size
 
-		// Test invalid page number
-		_, code = c.Request(http.MethodGet, user1JWT, nil, "users?page=-1")
-		qt.Assert(t, code, qt.Equals, 400)
-
 		// Test unauthorized access
 		_, code = c.Request(http.MethodGet, "", nil, "users")
 		qt.Assert(t, code, qt.Equals, 401)

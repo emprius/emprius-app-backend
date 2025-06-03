@@ -196,10 +196,6 @@ func TestCommunities(t *testing.T) {
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(usersResp.Data), qt.Equals, 2) // Should return all users since we have less than page size
-
-		// Test invalid page number
-		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members?page=-1")
-		qt.Assert(t, code, qt.Equals, 400)
 	})
 
 	t.Run("Community Tools", func(t *testing.T) {
@@ -795,10 +791,6 @@ func TestCommunities(t *testing.T) {
 		err = json.Unmarshal(resp, &communitiesResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(communitiesResp.Data) > 0, qt.IsTrue)
-
-		// Test invalid page number
-		_, code = c.Request(http.MethodGet, ownerJWT, nil, "users", ownerID, "communities?page=-1")
-		qt.Assert(t, code, qt.Equals, 400)
 
 		// Test non-existent user
 		_, code = c.Request(http.MethodGet, ownerJWT, nil, "users", "507f1f77bcf86cd799439011", "communities")

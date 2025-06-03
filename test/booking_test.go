@@ -100,15 +100,15 @@ func TestBookings(t *testing.T) {
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
 		qt.Assert(t, code, qt.Equals, 200)
 		var requestsResp struct {
-			Data []api.BookingResponse `json:"data"`
+			Data api.PaginatedBookingsResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &requestsResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(requestsResp.Data), qt.Equals, 2)
+		qt.Assert(t, len(requestsResp.Data.Bookings), qt.Equals, 2)
 
 		// Verify one booking is accepted and one is pending
 		var hasAccepted, hasPending bool
-		for _, booking := range requestsResp.Data {
+		for _, booking := range requestsResp.Data.Bookings {
 			switch booking.BookingStatus {
 			case "ACCEPTED":
 				hasAccepted = true
@@ -123,16 +123,16 @@ func TestBookings(t *testing.T) {
 		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
 		qt.Assert(t, code, qt.Equals, 200)
 		var petitionsResp struct {
-			Data []api.BookingResponse `json:"data"`
+			Data api.PaginatedBookingsResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &petitionsResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(petitionsResp.Data), qt.Equals, 2)
+		qt.Assert(t, len(petitionsResp.Data.Bookings), qt.Equals, 2)
 
 		// Verify one booking is accepted and one is pending
 		hasAccepted = false
 		hasPending = false
-		for _, booking := range petitionsResp.Data {
+		for _, booking := range petitionsResp.Data.Bookings {
 			switch booking.BookingStatus {
 			case "ACCEPTED":
 				hasAccepted = true
@@ -452,10 +452,10 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &petitionsResp)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(petitionsResp.Data), qt.Equals, 1)
+			qt.Assert(t, len(petitionsResp.Data.Bookings), qt.Equals, 1)
 
 			// Accept the booking request
-			bookingID := petitionsResp.Data[0].ID
+			bookingID := petitionsResp.Data.Bookings[0].ID
 			_, code = c.Request(http.MethodPut, ownerJWT,
 				&api.BookingStatusUpdate{
 					Status: "ACCEPTED",
@@ -481,7 +481,7 @@ func TestBookings(t *testing.T) {
 			resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
 			qt.Assert(t, code, qt.Equals, 200)
 			var petitionsResp struct {
-				Data []api.BookingResponse `json:"data"`
+				Data api.PaginatedBookingsResponse `json:"data"`
 			}
 			err = json.Unmarshal(resp, &petitionsResp)
 			qt.Assert(t, err, qt.IsNil)
@@ -947,13 +947,13 @@ func TestBookings(t *testing.T) {
 		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
 		qt.Assert(t, code, qt.Equals, 200)
 		var outgoingResp struct {
-			Data []api.BookingResponse `json:"data"`
+			Data api.PaginatedBookingsResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &outgoingResp)
 		qt.Assert(t, err, qt.IsNil)
 
 		var foundBooking bool
-		for _, booking := range outgoingResp.Data {
+		for _, booking := range outgoingResp.Data.Bookings {
 			if booking.ID == bookingID {
 				foundBooking = true
 				qt.Assert(t, *booking.IsRated, qt.Equals, false, qt.Commentf("IsRated should be false in outgoing requests before rating"))
@@ -986,7 +986,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		foundBooking = false
-		for _, booking := range outgoingResp.Data {
+		for _, booking := range outgoingResp.Data.Bookings {
 			if booking.ID == bookingID {
 				foundBooking = true
 				qt.Assert(t, *booking.IsRated, qt.Equals, true, qt.Commentf("IsRated should be true in outgoing requests after rating"))
@@ -1006,13 +1006,13 @@ func TestBookings(t *testing.T) {
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming")
 		qt.Assert(t, code, qt.Equals, 200)
 		var incomingResp struct {
-			Data []api.BookingResponse `json:"data"`
+			Data api.PaginatedBookingsResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &incomingResp)
 		qt.Assert(t, err, qt.IsNil)
 
 		foundBooking = false
-		for _, booking := range incomingResp.Data {
+		for _, booking := range incomingResp.Data.Bookings {
 			if booking.ID == bookingID {
 				foundBooking = true
 				qt.Assert(t, *booking.IsRated, qt.Equals, false, qt.Commentf(
@@ -1047,7 +1047,7 @@ func TestBookings(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		foundBooking = false
-		for _, booking := range incomingResp.Data {
+		for _, booking := range incomingResp.Data.Bookings {
 			if booking.ID == bookingID {
 				foundBooking = true
 				qt.Assert(t, *booking.IsRated, qt.Equals, true, qt.Commentf(
@@ -1523,4 +1523,238 @@ func TestBookings(t *testing.T) {
 			"nomadic tool cannot be booked when there is a booking planned or in process",
 		)
 	})
+}
+
+func TestBookingPagination(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create two users: tool owner and renter
+	ownerJWT := c.RegisterAndLogin("pagination-owner@test.com", "pagination-owner", "ownerpass")
+	renterJWT := c.RegisterAndLogin("pagination-renter@test.com", "pagination-renter", "renterpass")
+
+	// Owner creates a tool
+	toolID := c.CreateTool(ownerJWT, "Pagination Test Tool")
+
+	// Create multiple bookings for testing pagination
+	var bookingIDs []string
+	for i := 0; i < 25; i++ {
+		resp, code := c.Request(http.MethodPost, renterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: time.Now().Add(time.Duration(24*(i+1)) * time.Hour).Unix(),
+				EndDate:   time.Now().Add(time.Duration(24*(i+2)) * time.Hour).Unix(),
+				Contact:   "test@example.com",
+				Comments:  fmt.Sprintf("Test booking %d", i+1),
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var response struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &response)
+		qt.Assert(t, err, qt.IsNil)
+		bookingIDs = append(bookingIDs, response.Data.ID)
+	}
+
+	// Test outgoing requests pagination (renter's perspective)
+	t.Run("Outgoing BookingRequests Pagination", func(t *testing.T) {
+		// Test first page with default page size
+		resp, code := c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var paginatedResp struct {
+			Data api.PaginatedBookingsResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should return default page size (16) bookings
+		qt.Assert(t, len(paginatedResp.Data.Bookings), qt.Equals, 16)
+		qt.Assert(t, paginatedResp.Data.Pagination.Total, qt.Equals, int64(25))
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 0)
+		qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 16)
+		qt.Assert(t, paginatedResp.Data.Pagination.Pages, qt.Equals, 2) // ceil(25/16) = 2
+
+		// Test second page
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing?page=1")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should return remaining 9 bookings
+		qt.Assert(t, len(paginatedResp.Data.Bookings), qt.Equals, 9)
+		qt.Assert(t, paginatedResp.Data.Pagination.Total, qt.Equals, int64(25))
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 1)
+
+		// Test custom page size
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing?page=0&pageSize=10")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, len(paginatedResp.Data.Bookings), qt.Equals, 10)
+		qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 10)
+		qt.Assert(t, paginatedResp.Data.Pagination.Pages, qt.Equals, 3) // ceil(25/10) = 3
+	})
+
+	// Test incoming requests pagination (owner's perspective)
+	t.Run("Incoming BookingRequests Pagination", func(t *testing.T) {
+		// Test first page
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming?page=0&pageSize=5")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var paginatedResp struct {
+			Data api.PaginatedBookingsResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, len(paginatedResp.Data.Bookings), qt.Equals, 5)
+		qt.Assert(t, paginatedResp.Data.Pagination.Total, qt.Equals, int64(25))
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 0)
+		qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 5)
+		qt.Assert(t, paginatedResp.Data.Pagination.Pages, qt.Equals, 5) // ceil(25/5) = 5
+
+		// Test last page
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming?page=4&pageSize=5")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, len(paginatedResp.Data.Bookings), qt.Equals, 5)
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 4)
+	})
+
+	// Test pending ratings pagination
+	//t.Run("Pending Ratings Pagination", func(t *testing.T) {
+	//	// First, accept and return some bookings to make them eligible for rating
+	//	for i := 0; i < 10; i++ {
+	//		// Accept booking
+	//		_, code := c.Request(http.MethodPut, ownerJWT,
+	//			&api.BookingStatusUpdate{
+	//				Status: "ACCEPTED",
+	//			}, "bookings", bookingIDs[i])
+	//		qt.Assert(t, code, qt.Equals, 200)
+	//
+	//		// Mark as returned
+	//		_, code = c.Request(http.MethodPut, ownerJWT,
+	//			&api.BookingStatusUpdate{
+	//				Status: "RETURNED",
+	//			}, "bookings", bookingIDs[i])
+	//		qt.Assert(t, code, qt.Equals, 200)
+	//	}
+	//
+	//	// Test pending ratings pagination
+	//	resp, code := c.Request(http.MethodGet, renterJWT, nil, "bookings", "ratings", "pending?page=0&pageSize=3")
+	//	qt.Assert(t, code, qt.Equals, 200)
+	//
+	//	var paginatedResp struct {
+	//		Data api.PaginatedBookingsResponse `json:"data"`
+	//	}
+	//	err := json.Unmarshal(resp, &paginatedResp)
+	//	qt.Assert(t, err, qt.IsNil)
+	//
+	//	qt.Assert(t, len(paginatedResp.Data.Bookings), qt.Equals, 3)
+	//	qt.Assert(t, paginatedResp.Data.Pagination.Total, qt.Equals, int64(10))
+	//	qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 0)
+	//	qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 3)
+	//	qt.Assert(t, paginatedResp.Data.Pagination.Pages, qt.Equals, 4) // ceil(10/3) = 4
+	//
+	//	// Test second page
+	//	resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "ratings", "pending?page=1&pageSize=3")
+	//	qt.Assert(t, code, qt.Equals, 200)
+	//
+	//	err = json.Unmarshal(resp, &paginatedResp)
+	//	qt.Assert(t, err, qt.IsNil)
+	//
+	//	qt.Assert(t, len(paginatedResp.Data.Bookings), qt.Equals, 3)
+	//	qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 1)
+	//})
+
+	// Test edge cases
+	t.Run("Edge Cases", func(t *testing.T) {
+		// Test negative page number (should default to 0)
+		resp, code := c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing?page=-1&pageSize=5")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var paginatedResp struct {
+			Data api.PaginatedBookingsResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, paginatedResp.Data.Pagination.Current, qt.Equals, 0) // Should default to 0
+
+		// Test zero page size (should use default)
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing?page=0&pageSize=0")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, paginatedResp.Data.Pagination.PageSize, qt.Equals, 16) // Should use default page size
+
+		// Test page beyond available data
+		resp, code = c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing?page=100&pageSize=5")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &paginatedResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, len(paginatedResp.Data.Bookings), qt.Equals, 0)            // Should return empty array
+		qt.Assert(t, paginatedResp.Data.Pagination.Total, qt.Equals, int64(25)) // Total should still be correct
+	})
+
+	// Test sorting (PENDING bookings should come first)
+	//t.Run("Sorting", func(t *testing.T) {
+	//	// Accept some bookings to create a mix of statuses
+	//	for i := 10; i < 15; i++ {
+	//		_, code := c.Request(http.MethodPut, ownerJWT,
+	//			&api.BookingStatusUpdate{
+	//				Status: "ACCEPTED",
+	//			}, "bookings", bookingIDs[i])
+	//		qt.Assert(t, code, qt.Equals, 200)
+	//	}
+	//
+	//	// Get first page of incoming requests
+	//	resp, code := c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming?page=0&pageSize=20")
+	//	qt.Assert(t, code, qt.Equals, 200)
+	//
+	//	var paginatedResp struct {
+	//		Data api.PaginatedBookingsResponse `json:"data"`
+	//	}
+	//	err := json.Unmarshal(resp, &paginatedResp)
+	//	qt.Assert(t, err, qt.IsNil)
+	//
+	//	// Verify that PENDING bookings come first
+	//	pendingCount := 0
+	//	acceptedCount := 0
+	//	returnedCount := 0
+	//	foundNonPending := false
+	//
+	//	for _, booking := range paginatedResp.Data.Bookings {
+	//		switch booking.BookingStatus {
+	//		case "PENDING":
+	//			// Once we've seen a non-pending booking, we shouldn't see any more pending ones
+	//			qt.Assert(t, foundNonPending, qt.Equals, false, qt.Commentf("PENDING bookings should come first"))
+	//			pendingCount++
+	//		case "ACCEPTED":
+	//			foundNonPending = true
+	//			acceptedCount++
+	//		case "RETURNED":
+	//			foundNonPending = true
+	//			returnedCount++
+	//		}
+	//	}
+	//
+	//	// We should have some pending bookings (the ones not yet accepted)
+	//	qt.Assert(t, pendingCount > 0, qt.IsTrue, qt.Commentf("Should have some pending bookings"))
+	//	qt.Assert(t, acceptedCount > 0, qt.IsTrue, qt.Commentf("Should have some accepted bookings"))
+	//	qt.Assert(t, returnedCount > 0, qt.IsTrue, qt.Commentf("Should have some returned bookings"))
+	//})
 }
