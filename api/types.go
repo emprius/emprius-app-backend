@@ -325,6 +325,12 @@ type PaginatedToolsResponse struct {
 	Pagination PaginationInfo `json:"pagination"`
 }
 
+// PaginatedBookingsResponse wraps bookings with pagination info
+type PaginatedBookingsResponse struct {
+	Bookings   []*BookingResponse `json:"bookings"`
+	Pagination PaginationInfo     `json:"pagination"`
+}
+
 // ToolSearch is the type of the tool search
 type ToolSearch struct {
 	SearchTerm       string  `json:"searchTerm"`

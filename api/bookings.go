@@ -119,17 +119,25 @@ func (a *API) HandleGetOutgoingRequests(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	bookings, err := a.database.BookingService.GetUserPetitions(r.Context.Request.Context(), user.ID)
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get paginated bookings
+	bookings, total, err := a.database.BookingService.GetUserBookings(
+		r.Context.Request.Context(),
+		user.ID,
+		db.BookingPetitions,
+		page,
+		pageSize,
+	)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	response := make([]*BookingResponse, len(bookings))
-	for i, booking := range bookings {
-		response[i] = a.convertBookingToResponse(booking, r.UserID)
-	}
-
-	return response, nil
+	return a.getBookingListPaginatedResponse(bookings, page, pageSize, total, r.UserID), nil
 }
 
 // HandleGetIncomingRequests handles GET /bookings/requests/incoming
@@ -144,17 +152,25 @@ func (a *API) HandleGetIncomingRequests(r *Request) (interface{}, error) {
 		return nil, ErrUserNotFound.WithErr(err)
 	}
 
-	bookings, err := a.database.BookingService.GetUserRequests(r.Context.Request.Context(), user.ID)
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get paginated bookings
+	bookings, total, err := a.database.BookingService.GetUserBookings(
+		r.Context.Request.Context(),
+		user.ID,
+		db.BookingRequests,
+		page,
+		pageSize,
+	)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	response := make([]*BookingResponse, len(bookings))
-	for i, booking := range bookings {
-		response[i] = a.convertBookingToResponse(booking, r.UserID)
-	}
-
-	return response, nil
+	return a.getBookingListPaginatedResponse(bookings, page, pageSize, total, r.UserID), nil
 }
 
 // HandleGetBooking handles GET /bookings/{bookingId}

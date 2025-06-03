@@ -93,7 +93,9 @@ func TestGetPendingRatingsWithPickedStatus(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert pending booking"))
 
 	// Test GetPendingRatings for userID1
-	pendingRatings, err := bookingService.GetPendingRatings(context.Background(), userID1)
+	page := 0
+	pageSize := DefaultPageSize
+	pendingRatings, _, err := bookingService.GetPendingRatings(context.Background(), userID1, page, pageSize)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
 
 	// Should return both returned and picked bookings
@@ -130,7 +132,7 @@ func TestGetPendingRatingsWithPickedStatus(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert rating"))
 
 	// Test GetPendingRatings again
-	pendingRatings, err = bookingService.GetPendingRatings(context.Background(), userID1)
+	pendingRatings, _, err = bookingService.GetPendingRatings(context.Background(), userID1, page, pageSize)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get pending ratings after adding rating"))
 
 	// Should only return the picked booking now

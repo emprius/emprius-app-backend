@@ -61,3 +61,21 @@ func (a *API) getToolListPaginatedResponse(tools []*db.Tool, page int, pageSize 
 		Pagination: pagination,
 	}
 }
+
+// getBookingListPaginatedResponse converts DB bookings to API bookings and creates a paginated response
+func (a *API) getBookingListPaginatedResponse(bookings []*db.Booking, page int, pageSize int, total int64, authenticatedUserID string) *PaginatedBookingsResponse {
+	// Convert DB bookings to API bookings
+	apiBookings := make([]*BookingResponse, len(bookings))
+	for i, b := range bookings {
+		apiBookings[i] = a.convertBookingToResponse(b, authenticatedUserID)
+	}
+
+	// Calculate pagination info
+	pagination := CalculatePagination(page, pageSize, total)
+
+	// Create response with pagination info
+	return &PaginatedBookingsResponse{
+		Bookings:   apiBookings,
+		Pagination: pagination,
+	}
+}

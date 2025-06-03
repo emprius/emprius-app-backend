@@ -177,13 +177,28 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 	return &results[0], nil
 }
 
-// GetUserRequests returns all bookings where the given user is the owner (toUserId)
-// along with their associated ratings.
+type BookingType string
+
+const (
+	BookingPetitions BookingType = "fromUserId"
+	BookingRequests  BookingType = "toUserId"
+)
+
+// GetUserBookings returns paginated bookings where the given user is either the requester (fromUserId)
+// or the owner (toUserId), depending on the userField parameter.
 // Bookings are ordered with PENDING status first, then sorted by createdAt date (newest first).
-func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
+func (s *BookingService) GetUserBookings(ctx context.Context, userID primitive.ObjectID, userField BookingType, page int, pageSize int) ([]*Booking, int64, error) {
+	if page < 0 {
+		page = 0
+	}
+	if pageSize <= 0 {
+		pageSize = DefaultPageSize
+	}
+	skip := page * pageSize
+
+	// Build the aggregation pipeline
 	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{"toUserId": userID}}},
-		// Add a field to use for sorting (1 for PENDING status, 0 for others)
+		{{Key: "$match", Value: bson.M{string(userField): userID}}},
 		{{Key: "$addFields", Value: bson.M{
 			"isPending": bson.M{
 				"$cond": bson.M{
@@ -193,21 +208,30 @@ func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.O
 				},
 			},
 		}}},
-		// Sort by isPending (descending to put PENDING first), then by createdAt (newest first)
 		{{Key: "$sort", Value: bson.D{
 			{Key: "isPending", Value: -1},
 			{Key: "createdAt", Value: -1},
 		}}},
-		{{Key: "$lookup", Value: bson.M{
-			"from":         s.ratingsCollection.Name(),
-			"localField":   "_id",
-			"foreignField": "bookingId",
-			"as":           "ratings",
+		{{Key: "$facet", Value: bson.D{
+			{Key: "data", Value: bson.A{
+				bson.D{{Key: "$skip", Value: skip}},
+				bson.D{{Key: "$limit", Value: pageSize}},
+				bson.D{{Key: "$lookup", Value: bson.M{
+					"from":         s.ratingsCollection.Name(),
+					"localField":   "_id",
+					"foreignField": "bookingId",
+					"as":           "ratings",
+				}}},
+			}},
+			{Key: "count", Value: bson.A{
+				bson.D{{Key: "$count", Value: "total"}},
+			}},
 		}}},
 	}
+
 	cursor, err := s.collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
@@ -215,64 +239,27 @@ func (s *BookingService) GetUserRequests(ctx context.Context, userID primitive.O
 		}
 	}()
 
-	var results []Booking
-	if err = cursor.All(ctx, &results); err != nil {
-		return nil, err
+	var result []struct {
+		Data  []*Booking `bson:"data"`
+		Count []struct {
+			Total int64 `bson:"total"`
+		} `bson:"count"`
 	}
-	bookings := make([]*Booking, len(results))
-	for i := range results {
-		bookings[i] = &results[i]
-	}
-	return bookings, nil
-}
 
-// GetUserPetitions returns all bookings where the given user is the requester (fromUserId)
-// along with their associated ratings.
-// Bookings are ordered with PENDING status first, then sorted by createdAt date (newest first).
-func (s *BookingService) GetUserPetitions(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
-	pipeline := mongo.Pipeline{
-		{{Key: "$match", Value: bson.M{"fromUserId": userID}}},
-		// Add a field to use for sorting (1 for PENDING status, 0 for others)
-		{{Key: "$addFields", Value: bson.M{
-			"isPending": bson.M{
-				"$cond": bson.M{
-					"if":   bson.M{"$eq": []interface{}{"$bookingStatus", BookingStatusPending}},
-					"then": 1,
-					"else": 0,
-				},
-			},
-		}}},
-		// Sort by isPending (descending to put PENDING first), then by createdAt (newest first)
-		{{Key: "$sort", Value: bson.D{
-			{Key: "isPending", Value: -1},
-			{Key: "createdAt", Value: -1},
-		}}},
-		{{Key: "$lookup", Value: bson.M{
-			"from":         s.ratingsCollection.Name(),
-			"localField":   "_id",
-			"foreignField": "bookingId",
-			"as":           "ratings",
-		}}},
+	if err := cursor.All(ctx, &result); err != nil {
+		return nil, 0, err
 	}
-	cursor, err := s.collection.Aggregate(ctx, pipeline)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := cursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing cursor")
+
+	var bookings []*Booking
+	var total int64
+	if len(result) > 0 {
+		bookings = result[0].Data
+		if len(result[0].Count) > 0 {
+			total = result[0].Count[0].Total
 		}
-	}()
+	}
 
-	var results []Booking
-	if err = cursor.All(ctx, &results); err != nil {
-		return nil, err
-	}
-	bookings := make([]*Booking, len(results))
-	for i := range results {
-		bookings[i] = &results[i]
-	}
-	return bookings, nil
+	return bookings, total, nil
 }
 
 // GetPendingBookingsForTool returns all pending bookings for a specific tool.
