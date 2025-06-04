@@ -473,3 +473,30 @@ func (a *API) HandleCountPendingActions(r *Request) (interface{}, error) {
 
 	return response, nil
 }
+
+// HandleGetUserRatings handles GET /users/{id}/ratings
+// Returns a unified list of all ratings (both submitted and received) for a user
+func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	// Get user ID from URL
+	userID, err := primitive.ObjectIDFromHex(chi.URLParam(r.Context.Request, "id"))
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get unified ratings
+	unifiedRatings, err := a.database.BookingService.GetRatingsByUserId(r.Context.Request.Context(), userID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	if unifiedRatings == nil {
+		// Return empty array instead of nil
+		unifiedRatings = make([]*db.UnifiedRating, 0)
+	}
+
+	return unifiedRatings, nil
+}
