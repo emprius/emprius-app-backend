@@ -248,11 +248,13 @@ func TestBookingService_GetPendingRatings(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Test 1: Initially both users should see the pending rating
-	fromUserPending, err := bookingService.GetPendingRatings(ctx, fromUser.ID)
+	page := 0
+	pageSize := DefaultPageSize
+	fromUserPending, _, err := bookingService.GetPendingRatings(ctx, fromUser.ID, page, pageSize)
 	assert.NoError(t, err)
 	assert.Len(t, fromUserPending, 1, "Renter should see pending rating initially")
 
-	toUserPending, err := bookingService.GetPendingRatings(ctx, toUser.ID)
+	toUserPending, _, err := bookingService.GetPendingRatings(ctx, toUser.ID, page, pageSize)
 	assert.NoError(t, err)
 	assert.Len(t, toUserPending, 1, "Owner should see pending rating initially")
 
@@ -260,11 +262,11 @@ func TestBookingService_GetPendingRatings(t *testing.T) {
 	err = bookingService.RateBooking(ctx, booking.ID, fromUser.ID, 5, "Great tool!", []Image{})
 	assert.NoError(t, err)
 
-	fromUserPending, err = bookingService.GetPendingRatings(ctx, fromUser.ID)
+	fromUserPending, _, err = bookingService.GetPendingRatings(ctx, fromUser.ID, page, pageSize)
 	assert.NoError(t, err)
 	assert.Len(t, fromUserPending, 0, "Renter should not see pending rating after rating")
 
-	toUserPending, err = bookingService.GetPendingRatings(ctx, toUser.ID)
+	toUserPending, _, err = bookingService.GetPendingRatings(ctx, toUser.ID, page, pageSize)
 	assert.NoError(t, err)
 	assert.Len(t, toUserPending, 1, "Owner should still see pending rating")
 
@@ -272,11 +274,11 @@ func TestBookingService_GetPendingRatings(t *testing.T) {
 	err = bookingService.RateBooking(ctx, booking.ID, toUser.ID, 5, "Great renter!", []Image{})
 	assert.NoError(t, err)
 
-	fromUserPending, err = bookingService.GetPendingRatings(ctx, fromUser.ID)
+	fromUserPending, _, err = bookingService.GetPendingRatings(ctx, fromUser.ID, page, pageSize)
 	assert.NoError(t, err)
 	assert.Len(t, fromUserPending, 0, "Renter should not see pending rating after both rated")
 
-	toUserPending, err = bookingService.GetPendingRatings(ctx, toUser.ID)
+	toUserPending, _, err = bookingService.GetPendingRatings(ctx, toUser.ID, page, pageSize)
 	assert.NoError(t, err)
 	assert.Len(t, toUserPending, 0, "Owner should not see pending rating after both rated")
 }
@@ -377,14 +379,16 @@ func TestBookingService_GetUnifiedRatings(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert rating"))
 
 	// Test 1: Verify that GetPendingRatings returns the pending rating booking
-	pendingRatings, err := bookingService.GetPendingRatings(ctx, fromUser.ID)
+	page := 0
+	pageSize := DefaultPageSize
+	pendingRatings, _, err := bookingService.GetPendingRatings(ctx, fromUser.ID, page, pageSize)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get pending ratings"))
 	qt.Assert(t, len(pendingRatings), qt.Equals, 1, qt.Commentf("Expected 1 pending rating"))
 	qt.Assert(t, pendingRatings[0].ID, qt.Equals, pendingRatingBooking.ID,
 		qt.Commentf("Expected pending rating booking ID to match"))
 
-	// Test 2: Verify that GetUnifiedRatings excludes the pending rating booking
-	unifiedRatings, err := bookingService.GetUnifiedRatings(ctx, fromUser.ID)
+	// Test 2: Verify that GetRatingsByUserId excludes the pending rating booking
+	unifiedRatings, err := bookingService.GetRatingsByUserId(ctx, fromUser.ID)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get unified ratings"))
 
 	// We should only see the accepted booking, not the pending rating booking

@@ -32,6 +32,23 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination
+      required: false
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+    SearchTermParam:
+      name: search
+      in: query
+      description: Search term to filter results
+      required: false
+      schema:
+        type: string
 
   schemas:
     Location:
@@ -670,13 +687,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - name: page
-          in: query
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-            description: Page number for pagination (0-based, 16 items per page)
+        - $ref: '#/components/parameters/PageParam'
         - name: username
           in: query
           schema:
@@ -822,6 +833,8 @@ paths:
             type: string
             format: objectid
             description: MongoDB ObjectID of the user
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SearchTermParam'
       responses:
         '200':
           description: List of tools
@@ -905,6 +918,9 @@ paths:
       summary: Get user's own tools
       security:
         - bearerAuth: [ ]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SearchTermParam'
       responses:
         '200':
           description: List of tools
@@ -942,6 +958,7 @@ paths:
       security:
         - bearerAuth: [ ]
       parameters:
+        - $ref: '#/components/parameters/PageParam'
         - name: term
           in: query
           schema:
@@ -1181,6 +1198,9 @@ paths:
       summary: Get outgoing loans (bookings initiated by the user)
       security:
         - bearerAuth: [ ]
+
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
       responses:
         '200':
           description: List of outgoing loans
@@ -1202,6 +1222,8 @@ paths:
       summary: Get incoming requests (bookings for user's tools)
       security:
         - bearerAuth: [ ]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
       responses:
         '200':
           description: List of incoming requests
@@ -1303,6 +1325,8 @@ paths:
       summary: Get bookings pending rating by the user
       security:
         - bearerAuth: [ ]
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
       responses:
         '200':
           description: List of bookings pending rating
@@ -1561,6 +1585,8 @@ paths:
             type: string
             format: objectid
             description: MongoDB ObjectID of the community
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SearchTermParam'
       responses:
         '200':
           description: List of tools in the community

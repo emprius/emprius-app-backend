@@ -96,13 +96,13 @@ func TestBookingPickupPlace(t *testing.T) {
 	qt.Assert(t, code, qt.Equals, 200)
 
 	var outgoingResp struct {
-		Data []api.BookingResponse `json:"data"`
+		Data api.PaginatedBookingsResponse `json:"data"`
 	}
 	err = json.Unmarshal(resp, &outgoingResp)
 	qt.Assert(t, err, qt.IsNil)
 
 	var foundBooking bool
-	for _, booking := range outgoingResp.Data {
+	for _, booking := range outgoingResp.Data.Bookings {
 		if booking.ID == bookingID {
 			foundBooking = true
 			// Pickup place should be included in outgoing requests for involved user
@@ -118,13 +118,13 @@ func TestBookingPickupPlace(t *testing.T) {
 	qt.Assert(t, code, qt.Equals, 200)
 
 	var incomingResp struct {
-		Data []api.BookingResponse `json:"data"`
+		Data api.PaginatedBookingsResponse `json:"data"`
 	}
 	err = json.Unmarshal(resp, &incomingResp)
 	qt.Assert(t, err, qt.IsNil)
 
 	foundBooking = false
-	for _, booking := range incomingResp.Data {
+	for _, booking := range incomingResp.Data.Bookings {
 		if booking.ID == bookingID {
 			foundBooking = true
 			// Pickup place should be included in incoming requests for involved user
@@ -289,13 +289,13 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	qt.Assert(t, code, qt.Equals, 200)
 
 	var outgoingResp struct {
-		Data []api.BookingResponse `json:"data"`
+		Data api.PaginatedBookingsResponse `json:"data"`
 	}
 	err = json.Unmarshal(resp, &outgoingResp)
 	qt.Assert(t, err, qt.IsNil)
 
 	var foundBooking bool
-	for _, booking := range outgoingResp.Data {
+	for _, booking := range outgoingResp.Data.Bookings {
 		if booking.ID == bookingID {
 			foundBooking = true
 			// Pickup place should be included in outgoing requests for involved user when PICKED
@@ -311,13 +311,13 @@ func TestNomadicToolPickupPlace(t *testing.T) {
 	qt.Assert(t, code, qt.Equals, 200)
 
 	var incomingResp struct {
-		Data []api.BookingResponse `json:"data"`
+		Data api.PaginatedBookingsResponse `json:"data"`
 	}
 	err = json.Unmarshal(resp, &incomingResp)
 	qt.Assert(t, err, qt.IsNil)
 
 	foundBooking = false
-	for _, booking := range incomingResp.Data {
+	for _, booking := range incomingResp.Data.Bookings {
 		if booking.ID == bookingID {
 			foundBooking = true
 			// Pickup place should be included in incoming requests for involved user when PICKED

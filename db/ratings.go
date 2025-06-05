@@ -100,8 +100,23 @@ func newRatingCollection(db *mongo.Database) *mongo.Collection {
 	return collection
 }
 
-// GetPendingRatings retrieves bookings that need to be rated by the user
-func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive.ObjectID) ([]*Booking, error) {
+// GetPendingRatings retrieves paginated bookings that need to be rated by the user
+func (s *BookingService) GetPendingRatings(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	page int,
+	pageSize int,
+) ([]*Booking, int64, error) {
+	// Ensure page is not negative
+	if page < 0 {
+		page = 0
+	}
+	if pageSize <= 0 {
+		pageSize = DefaultPageSize
+	}
+
+	skip := page * pageSize
+
 	// Use an aggregation pipeline to efficiently find bookings that need to be rated
 	pipeline := mongo.Pipeline{
 		// Stage 1: Match returned or picked bookings where the user is involved
@@ -112,8 +127,6 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 				{"toUserId": userID},
 			},
 		}}},
-		// Sort by createdAt in descending order (newest first)
-		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
 		// Stage 2: Add fields to determine the counterparty ID
 		{{Key: "$addFields", Value: bson.M{
 			"counterpartyId": bson.M{
@@ -147,10 +160,21 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 		{{Key: "$match", Value: bson.M{
 			"userRatings": bson.M{"$size": 0},
 		}}},
-		// Stage 5: Project to remove the added fields
-		{{Key: "$project", Value: bson.M{
-			"counterpartyId": 0,
-			"userRatings":    0,
+		// Sort by createdAt in descending order (newest first)
+		{{Key: "$sort", Value: bson.D{{Key: "createdAt", Value: -1}}}},
+		// Stage 5: Use $facet to get both data and count
+		{{Key: "$facet", Value: bson.D{
+			{Key: "data", Value: bson.A{
+				bson.D{{Key: "$skip", Value: skip}},
+				bson.D{{Key: "$limit", Value: pageSize}},
+				bson.D{{Key: "$project", Value: bson.M{
+					"counterpartyId": 0,
+					"userRatings":    0,
+				}}},
+			}},
+			{Key: "count", Value: bson.A{
+				bson.D{{Key: "$count", Value: "total"}},
+			}},
 		}}},
 	}
 
@@ -159,7 +183,7 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 		log.Error().Err(err).
 			Str("userId", userID.Hex()).
 			Msg("Failed to aggregate pending ratings")
-		return nil, fmt.Errorf("failed to find pending ratings: %w", err)
+		return nil, 0, fmt.Errorf("failed to find pending ratings: %w", err)
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
@@ -167,15 +191,31 @@ func (s *BookingService) GetPendingRatings(ctx context.Context, userID primitive
 		}
 	}()
 
-	var bookings []*Booking
-	if err = cursor.All(ctx, &bookings); err != nil {
+	var result []struct {
+		Data  []*Booking `bson:"data"`
+		Count []struct {
+			Total int64 `bson:"total"`
+		} `bson:"count"`
+	}
+
+	if err = cursor.All(ctx, &result); err != nil {
 		log.Error().Err(err).
 			Str("userId", userID.Hex()).
 			Msg("Failed to decode pending ratings")
-		return nil, fmt.Errorf("failed to decode pending ratings: %w", err)
+		return nil, 0, fmt.Errorf("failed to decode pending ratings: %w", err)
 	}
 
-	return bookings, nil
+	var bookings []*Booking
+	var total int64
+
+	if len(result) > 0 {
+		bookings = result[0].Data
+		if len(result[0].Count) > 0 {
+			total = result[0].Count[0].Total
+		}
+	}
+
+	return bookings, total, nil
 }
 
 // GetSubmittedRatings retrieves ratings submitted by the user
@@ -445,20 +485,8 @@ func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID pr
 	return unifiedRating, nil
 }
 
-// GetUnifiedRatings retrieves all ratings for a user (both submitted and received) and groups them by booking
-func (s *BookingService) GetUnifiedRatings(ctx context.Context, userID primitive.ObjectID) ([]*UnifiedRating, error) {
-	// First, get all bookings that need to be rated by the user (pending ratings)
-	pendingBookings, err := s.GetPendingRatings(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get pending ratings: %w", err)
-	}
-
-	// Create a map of pending booking IDs for efficient lookup
-	pendingBookingIDs := make(map[primitive.ObjectID]bool)
-	for _, booking := range pendingBookings {
-		pendingBookingIDs[booking.ID] = true
-	}
-
+// GetRatingsByUserId retrieves all ratings for a user (both submitted and received) and groups them by booking
+func (s *BookingService) GetRatingsByUserId(ctx context.Context, userID primitive.ObjectID) ([]*UnifiedRating, error) {
 	// Get all bookings where the user is involved
 	filter := bson.M{
 		"$or": []bson.M{

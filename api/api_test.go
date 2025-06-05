@@ -191,12 +191,14 @@ func TestBookingStatusTransitions(t *testing.T) {
 	qt.Assert(t, createdBooking.ToolID, qt.Equals, toolIDStr)
 
 	// Get bookings through API endpoints to verify toolId in responses
-	bookings, err := a.database.BookingService.GetUserRequests(context.Background(), user1.ID)
+	page := 0
+	pageSize := db.DefaultPageSize
+	bookings, _, err := a.database.BookingService.GetUserBookings(context.Background(), user1.ID, db.BookingRequests, page, pageSize)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, len(bookings), qt.Equals, 1)
 	qt.Assert(t, bookings[0].ToolID, qt.Equals, toolIDStr)
 
-	bookings, err = a.database.BookingService.GetUserPetitions(context.Background(), user2.ID)
+	bookings, _, err = a.database.BookingService.GetUserBookings(context.Background(), user2.ID, db.BookingPetitions, page, pageSize)
 	qt.Assert(t, err, qt.IsNil)
 	qt.Assert(t, len(bookings), qt.Equals, 1)
 	qt.Assert(t, bookings[0].ToolID, qt.Equals, toolIDStr)

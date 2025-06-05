@@ -33,7 +33,8 @@ type HTTPContext struct {
 
 // GetPage returns the page number from the query parameters.
 // If the page parameter is not present, it returns 0 (first page).
-// If the page parameter is invalid or less than 0, it returns an error.
+// If the page parameter is invalid, it returns an error.
+// If the page parameter is less than 0, it returns 0 (defaults to first page).
 func (h *HTTPContext) GetPage() (int, error) {
 	if pageParam := h.URLParam("page"); pageParam != nil {
 		page, err := strconv.Atoi(pageParam[0])
@@ -41,7 +42,7 @@ func (h *HTTPContext) GetPage() (int, error) {
 			return 0, fmt.Errorf("invalid page number")
 		}
 		if page < 0 {
-			return 0, fmt.Errorf("page number cannot be negative")
+			return 0, nil // Default to first page for negative values
 		}
 		return page, nil
 	}
