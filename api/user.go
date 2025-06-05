@@ -212,7 +212,6 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 	var total int64
 
 	users, total, err = a.database.UserService.GetUsers(r.Context.Request.Context(), searchTerm, page)
-
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
