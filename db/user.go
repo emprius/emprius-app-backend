@@ -11,7 +11,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // User represents the schema for the "users" collection.
@@ -97,40 +96,6 @@ func (s *UserService) UpdateUser(ctx context.Context, id primitive.ObjectID, upd
 	return s.Collection.UpdateOne(ctx, filter, bson.M{"$set": update})
 }
 
-// GetAllUsers retrieves paginated User documents.
-func (s *UserService) GetAllUsers(ctx context.Context, page int) ([]*User, error) {
-	if page < 0 {
-		page = 0
-	}
-
-	skip := page * DefaultPageSize
-
-	opts := options.Find().
-		SetSort(bson.D{{Key: "_id", Value: 1}}). // Sort by ID for consistent pagination
-		SetSkip(int64(skip)).
-		SetLimit(int64(DefaultPageSize))
-
-	cursor, err := s.Collection.Find(ctx, bson.M{}, opts)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := cursor.Close(ctx); err != nil {
-			log.Error().Err(err).Msg("Error closing cursor")
-		}
-	}()
-
-	var users []*User
-	for cursor.Next(ctx) {
-		var user User
-		if err := cursor.Decode(&user); err != nil {
-			return nil, err
-		}
-		users = append(users, &user)
-	}
-	return users, nil
-}
-
 // DeleteUser deletes a User document by their ID.
 func (s *UserService) DeleteUser(ctx context.Context, id primitive.ObjectID) (*mongo.DeleteResult, error) {
 	filter := bson.M{"_id": id}
@@ -153,8 +118,9 @@ func (s *UserService) GetUserByID(ctx context.Context, id primitive.ObjectID) (*
 	return &user, nil
 }
 
-// GetUsersByPartialName retrieves users whose names partially match the given string using aggregation pipeline
-func (s *UserService) GetUsersByPartialName(ctx context.Context, partialName string, page int) ([]*User, error) {
+// GetUsers retrieves users whose names partially match the given string using aggregation pipeline
+// Returns users and total count for pagination. Only searches if partialName is not empty.
+func (s *UserService) GetUsers(ctx context.Context, partialName string, page int) ([]*User, int64, error) {
 	if page < 0 {
 		page = 0
 	}
@@ -165,22 +131,28 @@ func (s *UserService) GetUsersByPartialName(ctx context.Context, partialName str
 	pattern := "(?i).*" + regexp.QuoteMeta(SanitizeString(partialName)) + ".*"
 	regex := primitive.Regex{Pattern: pattern, Options: "i"}
 
-	// Create the aggregation pipeline
+	// Create the aggregation pipeline with $facet to get both data and count
 	pipeline := mongo.Pipeline{
 		// Stage 1: Match users by name
 		bson.D{{Key: "$match", Value: bson.M{"name": regex}}},
 		// Stage 2: Sort by name
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "name", Value: 1}}}},
-		// Stage 3: Skip for pagination
-		bson.D{{Key: "$skip", Value: int64(skip)}},
-		// Stage 4: Limit results
-		bson.D{{Key: "$limit", Value: int64(DefaultPageSize)}},
+		// Stage 3: Use $facet to get both data and count
+		bson.D{{Key: "$facet", Value: bson.D{
+			{Key: "data", Value: bson.A{
+				bson.D{{Key: "$skip", Value: int64(skip)}},
+				bson.D{{Key: "$limit", Value: int64(DefaultPageSize)}},
+			}},
+			{Key: "count", Value: bson.A{
+				bson.D{{Key: "$count", Value: "total"}},
+			}},
+		}}},
 	}
 
 	// Execute the aggregation pipeline
 	cursor, err := s.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
@@ -188,11 +160,27 @@ func (s *UserService) GetUsersByPartialName(ctx context.Context, partialName str
 		}
 	}()
 
-	var users []*User
-	if err := cursor.All(ctx, &users); err != nil {
-		return nil, err
+	var result []struct {
+		Data  []*User `bson:"data"`
+		Count []struct {
+			Total int64 `bson:"total"`
+		} `bson:"count"`
 	}
-	return users, nil
+
+	if err := cursor.All(ctx, &result); err != nil {
+		return nil, 0, err
+	}
+
+	var users []*User
+	var total int64
+	if len(result) > 0 {
+		users = result[0].Data
+		if len(result[0].Count) > 0 {
+			total = result[0].Count[0].Total
+		}
+	}
+
+	return users, total, nil
 }
 
 // AddUserToCommunity adds a community to a user's communities list

@@ -220,7 +220,8 @@ func (u *User) ObjectID() primitive.ObjectID {
 }
 
 type UsersWrapper struct {
-	Users []*User `json:"users"`
+	Users      []*User        `json:"users"`
+	Pagination PaginationInfo `json:"pagination"`
 }
 
 // ToolHistoryEntry represents an entry in a nomadic tool's history
