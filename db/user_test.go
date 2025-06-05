@@ -141,14 +141,9 @@ func TestUserService(t *testing.T) {
 		}
 
 		// Retrieve first page of users
-		allUsers, err := userService.GetAllUsers(ctx, 0)
+		allUsers, _, err := userService.GetUsers(ctx, "", 0)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to retrieve users"))
 		c.Assert(len(allUsers) >= 3, qt.Equals, true, qt.Commentf("Expected at least 3 users in first page"))
-
-		// Test invalid page number
-		invalidUsers, err := userService.GetAllUsers(ctx, -1)
-		c.Assert(err, qt.IsNil, qt.Commentf("Expected success with invalid page number"))
-		c.Assert(len(invalidUsers) >= 3, qt.Equals, true, qt.Commentf("Expected first page results for invalid page number"))
 	})
 
 	c.Run("Delete User", func(c *qt.C) {
@@ -211,7 +206,7 @@ func TestUserService(t *testing.T) {
 		}
 
 		// Test partial name search with "doe" - should match "John Doe" and "Jane Doe"
-		doeUsers, err := userService.GetUsersByPartialName(ctx, "doe", 0)
+		doeUsers, doeTotal, err := userService.GetUsers(ctx, "doe", 0)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by partial name"))
 
 		// Verify we got at least 2 users with "Doe" in their name
@@ -222,9 +217,10 @@ func TestUserService(t *testing.T) {
 			}
 		}
 		c.Assert(doeCount >= 2, qt.Equals, true, qt.Commentf("Expected at least 2 users with 'Doe' in their name"))
+		c.Assert(doeTotal >= 2, qt.Equals, true, qt.Commentf("Expected total count to be at least 2"))
 
 		// Test partial name search with "smith" - should match "Alice Smith"
-		smithUsers, err := userService.GetUsersByPartialName(ctx, "smith", 0)
+		smithUsers, smithTotal, err := userService.GetUsers(ctx, "smith", 0)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by partial name"))
 
 		// Verify we got at least 1 user with "Smith" in their name
@@ -236,16 +232,30 @@ func TestUserService(t *testing.T) {
 			}
 		}
 		c.Assert(smithFound, qt.Equals, true, qt.Commentf("Expected to find user with 'Smith' in their name"))
+		c.Assert(smithTotal >= 1, qt.Equals, true, qt.Commentf("Expected total count to be at least 1"))
 
 		// Test pagination by getting first page with limit 1
 		// This is a bit tricky to test directly since we're using a constant for page size
 		// Instead, we'll just verify that calling with different page numbers returns different results
-		page0Users, err := userService.GetUsersByPartialName(ctx, "doe", 0)
+		page0Users, page0Total, err := userService.GetUsers(ctx, "doe", 0)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by partial name (page 0)"))
 
 		// Test with invalid page number (should default to page 0)
-		invalidPageUsers, err := userService.GetUsersByPartialName(ctx, "doe", -1)
+		invalidPageUsers, invalidPageTotal, err := userService.GetUsers(ctx, "doe", -1)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by partial name (invalid page)"))
 		c.Assert(len(invalidPageUsers), qt.Equals, len(page0Users), qt.Commentf("Expected same results for invalid page and page 0"))
+		c.Assert(invalidPageTotal, qt.Equals, page0Total, qt.Commentf("Expected same total count for invalid page and page 0"))
+
+		// Test empty string search - should return normal results
+		emptyUsers, emptyTotal, err := userService.GetUsers(ctx, "", 0)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by empty partial name"))
+		c.Assert(len(emptyUsers), qt.Equals, 8, qt.Commentf("Expected 8 users for empty search"))
+		c.Assert(emptyTotal, qt.Equals, int64(8), qt.Commentf("Expected total count to be 8 for empty search"))
+
+		// Test whitespace-only string search - should return empty results
+		whitespaceUsers, whitespaceTotal, err := userService.GetUsers(ctx, "   ", 0)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get users by whitespace partial name"))
+		c.Assert(len(whitespaceUsers), qt.Equals, 0, qt.Commentf("Expected no users for whitespace search"))
+		c.Assert(whitespaceTotal, qt.Equals, int64(0), qt.Commentf("Expected total count to be 0 for whitespace search"))
 	})
 }

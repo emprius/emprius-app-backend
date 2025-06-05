@@ -200,22 +200,18 @@ func (a *API) refreshHandler(r *Request) (interface{}, error) {
 // usersHandler list the existing users with pagination.
 // If username query parameter is provided, it will search for users with partial name match.
 func (a *API) usersHandler(r *Request) (interface{}, error) {
-	page, err := r.Context.GetPage()
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Check if username parameter exists
-	usernameParam := r.Context.URLParam("username")
+	searchTerm := *r.Context.GetSearchTerm()
 
 	var users []*db.User
-	if len(usernameParam) > 0 {
-		// Search by partial name
-		users, err = a.database.UserService.GetUsersByPartialName(r.Context.Request.Context(), usernameParam[0], page)
-	} else {
-		// Get all users (existing behavior)
-		users, err = a.database.UserService.GetAllUsers(r.Context.Request.Context(), page)
-	}
+	var total int64
+
+	users, total, err = a.database.UserService.GetUsers(r.Context.Request.Context(), searchTerm, page)
 
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
@@ -225,7 +221,13 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 	for _, u := range users {
 		userList = append(userList, new(User).FromDBUser(u, a.database))
 	}
-	return &UsersWrapper{Users: userList}, nil
+
+	// Return users with pagination info
+	response := &UsersWrapper{
+		Users:      userList,
+		Pagination: CalculatePagination(page, pageSize, total),
+	}
+	return response, nil
 }
 
 // getUserHandler handles GET /users/{id}
