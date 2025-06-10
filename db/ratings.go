@@ -441,6 +441,9 @@ func (s *BookingService) GetRatingsByToolID(
 	}
 
 	total, err := s.ratingsCollection.CountDocuments(ctx, ratingFilter)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	return s.createUnifiedRatings(bookings, ratings), total, nil
 }
@@ -580,6 +583,9 @@ func (s *BookingService) GetRatingsByUserId(
 	}
 
 	total, err := s.ratingsCollection.CountDocuments(ctx, ratingFilter)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	return s.createUnifiedRatings(bookings, ratings), total, nil
 }
