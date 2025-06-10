@@ -645,8 +645,19 @@ func (a *API) HandleGetToolRatings(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
 	}
 
+	// Get pagination parameters
+	page, pageSize, err := r.Context.GetPaginationParams()
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
 	// Get unified ratings for the tool
-	unifiedRatings, err := a.database.BookingService.GetRatingsByToolID(r.Context.Request.Context(), idParam[0])
+	unifiedRatings, total, err := a.database.BookingService.GetRatingsByToolID(
+		r.Context.Request.Context(),
+		idParam[0],
+		page,
+		pageSize,
+	)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -656,7 +667,7 @@ func (a *API) HandleGetToolRatings(r *Request) (interface{}, error) {
 		unifiedRatings = make([]*db.UnifiedRating, 0)
 	}
 
-	return unifiedRatings, nil
+	return a.getUnifiedRatingsPaginatedResponse(unifiedRatings, page, pageSize, total), nil
 }
 
 // getToolHistory retrieves the history of a nomadic tool
