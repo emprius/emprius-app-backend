@@ -332,6 +332,11 @@ type PaginatedBookingsResponse struct {
 	Pagination PaginationInfo     `json:"pagination"`
 }
 
+type PaginatedUnifiedRatingsResponse struct {
+	Ratings    []*db.UnifiedRating `json:"ratings"`
+	Pagination PaginationInfo      `json:"pagination"`
+}
+
 // ToolSearch is the type of the tool search
 type ToolSearch struct {
 	SearchTerm       string  `json:"searchTerm"`
