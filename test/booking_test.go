@@ -234,24 +234,24 @@ func TestBookings(t *testing.T) {
 			resp, code = c.Request(http.MethodGet, renterJWT, nil, "users", renterID, "ratings")
 			qt.Assert(t, code, qt.Equals, 200)
 			var submittedResp struct {
-				Data []*db.UnifiedRating `json:"data"`
+				Data *api.PaginatedUnifiedRatingsResponse `json:"data"`
 			}
 			err = json.Unmarshal(resp, &submittedResp)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(submittedResp.Data), qt.Equals, 1)
-			qt.Assert(t, *submittedResp.Data[0].Requester.Rating, qt.Equals, 5)
-			qt.Assert(t, *submittedResp.Data[0].Requester.RatingComment, qt.Equals, "Great experience!")
+			qt.Assert(t, len(submittedResp.Data.Ratings), qt.Equals, 1)
+			qt.Assert(t, *submittedResp.Data.Ratings[0].Requester.Rating, qt.Equals, 5)
+			qt.Assert(t, *submittedResp.Data.Ratings[0].Requester.RatingComment, qt.Equals, "Great experience!")
 
 			// Get received ratings (owner)
 			resp, code = c.Request(http.MethodGet, ownerJWT, nil, "users", ownerID, "ratings")
 			qt.Assert(t, code, qt.Equals, 200)
 			var receivedResp struct {
-				Data []*db.UnifiedRating `json:"data"`
+				Data *api.PaginatedUnifiedRatingsResponse `json:"data"`
 			}
 			err = json.Unmarshal(resp, &receivedResp)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(receivedResp.Data), qt.Equals, 1)
-			qt.Assert(t, *receivedResp.Data[0].Requester.Rating, qt.Equals, 5)
+			qt.Assert(t, len(receivedResp.Data.Ratings), qt.Equals, 1)
+			qt.Assert(t, *receivedResp.Data.Ratings[0].Requester.Rating, qt.Equals, 5)
 
 			// Second test: Owner rating their own booking
 			// Create a new booking where owner will rate it
@@ -268,8 +268,8 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 200)
 			err = json.Unmarshal(resp, &submittedResp)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, len(submittedResp.Data), qt.Equals, 1)
-			qt.Assert(t, *submittedResp.Data[0].Owner.Rating, qt.Equals, 4)
+			qt.Assert(t, len(submittedResp.Data.Ratings), qt.Equals, 1)
+			qt.Assert(t, *submittedResp.Data.Ratings[0].Owner.Rating, qt.Equals, 4)
 
 			// Test the new GET /bookings/{bookingId}/rate endpoint
 			// Get ratings for the booking
@@ -677,17 +677,17 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, code, qt.Equals, 200)
 
 			var unifiedResp struct {
-				Data []*db.UnifiedRating `json:"data"`
+				Data *api.PaginatedUnifiedRatingsResponse `json:"data"`
 			}
 			err = json.Unmarshal(resp, &unifiedResp)
 			qt.Assert(t, err, qt.IsNil)
 
 			// Verify we have at least one unified rating
-			qt.Assert(t, len(unifiedResp.Data) > 0, qt.IsTrue)
+			qt.Assert(t, len(unifiedResp.Data.Ratings) > 0, qt.IsTrue)
 
 			// Find the rating for our test booking
 			var testBookingRating *db.UnifiedRating
-			for _, rating := range unifiedResp.Data {
+			for _, rating := range unifiedResp.Data.Ratings {
 				if rating.BookingID.Hex() == bookingID {
 					testBookingRating = rating
 					break
@@ -720,11 +720,11 @@ func TestBookings(t *testing.T) {
 			qt.Assert(t, err, qt.IsNil)
 
 			// Verify we have at least one unified rating
-			qt.Assert(t, len(unifiedResp.Data) > 0, qt.IsTrue)
+			qt.Assert(t, len(unifiedResp.Data.Ratings) > 0, qt.IsTrue)
 
 			// Find the rating for our test booking
 			testBookingRating = nil
-			for _, rating := range unifiedResp.Data {
+			for _, rating := range unifiedResp.Data.Ratings {
 				if rating.BookingID.Hex() == bookingID {
 					testBookingRating = rating
 					break

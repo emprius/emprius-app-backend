@@ -388,7 +388,7 @@ func TestBookingService_GetUnifiedRatings(t *testing.T) {
 		qt.Commentf("Expected pending rating booking ID to match"))
 
 	// Test 2: Verify that GetRatingsByUserId excludes the pending rating booking
-	unifiedRatings, err := bookingService.GetRatingsByUserId(ctx, fromUser.ID)
+	unifiedRatings, _, err := bookingService.GetRatingsByUserId(ctx, fromUser.ID, page, pageSize)
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get unified ratings"))
 
 	// We should only see the accepted booking, not the pending rating booking
