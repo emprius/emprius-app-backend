@@ -735,6 +735,7 @@ paths:
       security:
         - bearerAuth: [ ]
       parameters:
+        - $ref: '#/components/parameters/PageParam'
         - name: id
           in: path
           required: true
@@ -1073,6 +1074,7 @@ paths:
       security:
         - bearerAuth: [ ]
       parameters:
+        - $ref: '#/components/parameters/PageParam'
         - name: id
           in: path
           required: true
