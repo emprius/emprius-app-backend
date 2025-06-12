@@ -85,3 +85,20 @@ func (a *API) getBookingListPaginatedResponse(
 		Pagination: pagination,
 	}
 }
+
+// getBookingListPaginatedResponse converts DB bookings to API bookings and creates a paginated response
+func (a *API) getUnifiedRatingsPaginatedResponse(
+	ratings []*db.UnifiedRating,
+	page int,
+	pageSize int,
+	total int64,
+) *PaginatedUnifiedRatingsResponse {
+	// Calculate pagination info
+	pagination := CalculatePagination(page, pageSize, total)
+
+	// Create response with pagination info
+	return &PaginatedUnifiedRatingsResponse{
+		Ratings:    ratings,
+		Pagination: pagination,
+	}
+}

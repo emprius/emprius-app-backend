@@ -156,24 +156,24 @@ func TestRatingOrder(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var ratesResp struct {
-			Data []*db.UnifiedRating `json:"data"`
+			Data *api.PaginatedUnifiedRatingsResponse `json:"data"`
 		}
 		err := json.Unmarshal(resp, &ratesResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(ratesResp.Data), qt.Equals, 3)
+		qt.Assert(t, len(ratesResp.Data.Ratings), qt.Equals, 3)
 
 		// Verify order: newest first
 		// The third booking should be first (newest)
-		qt.Assert(t, *ratesResp.Data[0].Requester.Rating, qt.Equals, 3)
-		qt.Assert(t, *ratesResp.Data[0].Requester.RatingComment, qt.Equals, "Third rating")
+		qt.Assert(t, *ratesResp.Data.Ratings[0].Requester.Rating, qt.Equals, 3)
+		qt.Assert(t, *ratesResp.Data.Ratings[0].Requester.RatingComment, qt.Equals, "Third rating")
 
 		// The second booking should be second
-		qt.Assert(t, *ratesResp.Data[1].Requester.Rating, qt.Equals, 4)
-		qt.Assert(t, *ratesResp.Data[1].Requester.RatingComment, qt.Equals, "Second rating")
+		qt.Assert(t, *ratesResp.Data.Ratings[1].Requester.Rating, qt.Equals, 4)
+		qt.Assert(t, *ratesResp.Data.Ratings[1].Requester.RatingComment, qt.Equals, "Second rating")
 
 		// The first booking should be last (oldest)
-		qt.Assert(t, *ratesResp.Data[2].Requester.Rating, qt.Equals, 5)
-		qt.Assert(t, *ratesResp.Data[2].Requester.RatingComment, qt.Equals, "First rating")
+		qt.Assert(t, *ratesResp.Data.Ratings[2].Requester.Rating, qt.Equals, 5)
+		qt.Assert(t, *ratesResp.Data.Ratings[2].Requester.RatingComment, qt.Equals, "First rating")
 	})
 
 	// Test 2: GET /users/{id}/rates - should return ratings ordered by newest first
@@ -182,24 +182,24 @@ func TestRatingOrder(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var ratesResp struct {
-			Data []*db.UnifiedRating `json:"data"`
+			Data *api.PaginatedUnifiedRatingsResponse `json:"data"`
 		}
 		err := json.Unmarshal(resp, &ratesResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(ratesResp.Data), qt.Equals, 3)
+		qt.Assert(t, len(ratesResp.Data.Ratings), qt.Equals, 3)
 
 		// Verify order: newest first
 		// The third booking should be first (newest)
-		qt.Assert(t, *ratesResp.Data[0].Requester.Rating, qt.Equals, 3)
-		qt.Assert(t, *ratesResp.Data[0].Requester.RatingComment, qt.Equals, "Third rating")
+		qt.Assert(t, *ratesResp.Data.Ratings[0].Requester.Rating, qt.Equals, 3)
+		qt.Assert(t, *ratesResp.Data.Ratings[0].Requester.RatingComment, qt.Equals, "Third rating")
 
 		// The second booking should be second
-		qt.Assert(t, *ratesResp.Data[1].Requester.Rating, qt.Equals, 4)
-		qt.Assert(t, *ratesResp.Data[1].Requester.RatingComment, qt.Equals, "Second rating")
+		qt.Assert(t, *ratesResp.Data.Ratings[1].Requester.Rating, qt.Equals, 4)
+		qt.Assert(t, *ratesResp.Data.Ratings[1].Requester.RatingComment, qt.Equals, "Second rating")
 
 		// The first booking should be last (oldest)
-		qt.Assert(t, *ratesResp.Data[2].Requester.Rating, qt.Equals, 5)
-		qt.Assert(t, *ratesResp.Data[2].Requester.RatingComment, qt.Equals, "First rating")
+		qt.Assert(t, *ratesResp.Data.Ratings[2].Requester.Rating, qt.Equals, 5)
+		qt.Assert(t, *ratesResp.Data.Ratings[2].Requester.RatingComment, qt.Equals, "First rating")
 	})
 
 	// Test 3: GET /bookings/{bookingId}/rate - should return unified ratings

@@ -10,7 +10,6 @@ import (
 	"github.com/emprius/emprius-app-backend/types"
 
 	"github.com/emprius/emprius-app-backend/api"
-	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/test/utils"
 	qt "github.com/frankban/quicktest"
 )
@@ -526,14 +525,14 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var ratesResp struct {
-			Data []*db.UnifiedRating `json:"data"`
+			Data *api.PaginatedUnifiedRatingsResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &ratesResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(ratesResp.Data), qt.Equals, 1)
+		qt.Assert(t, len(ratesResp.Data.Ratings), qt.Equals, 1)
 
 		// Verify rating values
-		rating := ratesResp.Data[0]
+		rating := ratesResp.Data.Ratings[0]
 		qt.Assert(t, *rating.Owner.Rating, qt.Equals, 4)
 		qt.Assert(t, *rating.Owner.RatingComment, qt.Equals, "Good renter")
 		qt.Assert(t, *rating.Requester.Rating, qt.Equals, 5)

@@ -372,12 +372,25 @@ func (s *BookingService) createUnifiedRatings(bookings []*Booking, ratings []*Ra
 }
 
 // GetRatingsByToolID retrieves all ratings associated with a specific tool ID
-func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) ([]*UnifiedRating, error) {
+func (s *BookingService) GetRatingsByToolID(
+	ctx context.Context,
+	toolID string,
+	page int,
+	pageSize int,
+) ([]*UnifiedRating, int64, error) {
+	if page < 0 {
+		page = 0
+	}
+	if pageSize <= 0 {
+		pageSize = DefaultPageSize
+	}
+	skip := page * pageSize
+
 	// Get all bookings for this tool
 	filter := bson.M{"toolId": toolID}
 	cursor, err := s.collection.Find(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
@@ -387,12 +400,12 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 
 	var bookings []*Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// If no bookings found, return empty array
 	if len(bookings) == 0 {
-		return []*UnifiedRating{}, nil
+		return []*UnifiedRating{}, 0, nil
 	}
 
 	// Get all ratings for these bookings
@@ -405,12 +418,16 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 		"bookingId": bson.M{"$in": bookingIDs},
 	}
 
+	// Set up options for pagination
+	findOptions := options.Find()
+	findOptions.SetSkip(int64(skip))
+	findOptions.SetLimit(int64(pageSize))
 	// Use options to sort by createdAt in descending order (newest first)
-	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	findOptions.SetSort(bson.D{{Key: "createdAt", Value: -1}})
 
 	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter, findOptions)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := ratingCursor.Close(ctx); err != nil {
@@ -420,10 +437,15 @@ func (s *BookingService) GetRatingsByToolID(ctx context.Context, toolID string) 
 
 	var ratings []*Rating
 	if err = ratingCursor.All(ctx, &ratings); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return s.createUnifiedRatings(bookings, ratings), nil
+	total, err := s.ratingsCollection.CountDocuments(ctx, ratingFilter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return s.createUnifiedRatings(bookings, ratings), total, nil
 }
 
 // GetRatingsByBookingID retrieves all ratings associated with a specific booking ID
@@ -486,7 +508,20 @@ func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID pr
 }
 
 // GetRatingsByUserId retrieves all ratings for a user (both submitted and received) and groups them by booking
-func (s *BookingService) GetRatingsByUserId(ctx context.Context, userID primitive.ObjectID) ([]*UnifiedRating, error) {
+func (s *BookingService) GetRatingsByUserId(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	page int,
+	pageSize int,
+) ([]*UnifiedRating, int64, error) {
+	if page < 0 {
+		page = 0
+	}
+	if pageSize <= 0 {
+		pageSize = DefaultPageSize
+	}
+	skip := page * pageSize
+
 	// Get all bookings where the user is involved
 	filter := bson.M{
 		"$or": []bson.M{
@@ -497,7 +532,7 @@ func (s *BookingService) GetRatingsByUserId(ctx context.Context, userID primitiv
 
 	cursor, err := s.collection.Find(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
@@ -507,12 +542,12 @@ func (s *BookingService) GetRatingsByUserId(ctx context.Context, userID primitiv
 
 	var bookings []*Booking
 	if err = cursor.All(ctx, &bookings); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	// If no bookings found, return empty array
 	if len(bookings) == 0 {
-		return []*UnifiedRating{}, nil
+		return []*UnifiedRating{}, 0, nil
 	}
 
 	// Get all ratings for these bookings
@@ -525,12 +560,16 @@ func (s *BookingService) GetRatingsByUserId(ctx context.Context, userID primitiv
 		"bookingId": bson.M{"$in": bookingIDs},
 	}
 
+	// Set up options for pagination
+	findOptions := options.Find()
+	findOptions.SetSkip(int64(skip))
+	findOptions.SetLimit(int64(pageSize))
 	// Use options to sort by createdAt in descending order (newest first)
-	findOptions := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
+	findOptions.SetSort(bson.D{{Key: "createdAt", Value: -1}})
 
 	ratingCursor, err := s.ratingsCollection.Find(ctx, ratingFilter, findOptions)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := ratingCursor.Close(ctx); err != nil {
@@ -540,10 +579,15 @@ func (s *BookingService) GetRatingsByUserId(ctx context.Context, userID primitiv
 
 	var ratings []*Rating
 	if err = ratingCursor.All(ctx, &ratings); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return s.createUnifiedRatings(bookings, ratings), nil
+	total, err := s.ratingsCollection.CountDocuments(ctx, ratingFilter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return s.createUnifiedRatings(bookings, ratings), total, nil
 }
 
 // RateBooking creates a new rating for a booking
