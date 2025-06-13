@@ -604,13 +604,15 @@ func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	term := *r.Context.GetSearchTerm()
+
 	// Get communities for the user with member counts and tool counts
 	ctx := r.Context.Request.Context()
 	communities,
 		memberCounts,
 		toolCounts,
 		totalCommunities,
-		err := a.database.CommunityService.GetUserCommunitiesWithMemberCount(ctx, userID, page)
+		err := a.database.CommunityService.GetUserCommunitiesWithMemberCount(ctx, userID, page, term)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}

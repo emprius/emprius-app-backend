@@ -682,12 +682,30 @@ func (s *CommunityService) GetUserCommunities(
 	ctx context.Context,
 	userID primitive.ObjectID,
 	page int,
+	searchTerm string,
 ) ([]*Community, int64, error) {
 	if page < 0 {
 		page = 0
 	}
 
 	skip := page * DefaultPageSize
+
+	// Build the match filter for user membership
+	matchFilter := bson.M{
+		"members": bson.M{
+			"$elemMatch": bson.M{
+				"_id": userID,
+			},
+		},
+	}
+
+	// Add search filter if search term is provided
+	if searchTerm != "" {
+		// Create a case-insensitive regex pattern for partial name matching
+		pattern := "(?i).*" + regexp.QuoteMeta(SanitizeString(searchTerm)) + ".*"
+		regex := primitive.Regex{Pattern: pattern, Options: "i"}
+		matchFilter["name"] = regex
+	}
 
 	// Use aggregation pipeline with $facet to get both data and count
 	pipeline := mongo.Pipeline{
@@ -698,14 +716,8 @@ func (s *CommunityService) GetUserCommunities(
 			"foreignField": "communities.id",
 			"as":           "members",
 		}}},
-		// Stage 2: Match communities where the user is a member
-		bson.D{{Key: "$match", Value: bson.M{
-			"members": bson.M{
-				"$elemMatch": bson.M{
-					"_id": userID,
-				},
-			},
-		}}},
+		// Stage 2: Match communities where the user is a member and optionally filter by name
+		bson.D{{Key: "$match", Value: matchFilter}},
 		// Stage 3: Sort by name
 		bson.D{{Key: "$sort", Value: bson.M{
 			"name": 1, // Sort by name ascending
@@ -786,9 +798,10 @@ func (s *CommunityService) GetUserCommunitiesWithMemberCount(
 	ctx context.Context,
 	userID primitive.ObjectID,
 	page int,
+	searchTerm string,
 ) ([]*Community, map[primitive.ObjectID]int64, map[primitive.ObjectID]int64, int64, error) {
 	// Get the communities
-	communities, totalCommunities, err := s.GetUserCommunities(ctx, userID, page)
+	communities, totalCommunities, err := s.GetUserCommunities(ctx, userID, page, searchTerm)
 	if err != nil {
 		return nil, nil, nil, 0, err
 	}

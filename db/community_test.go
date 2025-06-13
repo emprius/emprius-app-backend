@@ -291,7 +291,7 @@ func TestGetUserCommunitiesWithMemberCount(t *testing.T) {
 	}
 
 	// Get user communities with member count and tool count
-	communities, memberCounts, toolCounts, _, err := db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0)
+	communities, memberCounts, toolCounts, _, err := db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0, "")
 	if err != nil {
 		t.Fatalf("Failed to get user communities with member count: %v", err)
 	}
@@ -336,7 +336,7 @@ func TestGetUserCommunitiesWithMemberCount(t *testing.T) {
 	}
 
 	// Get user communities with member count and tool count again
-	_, _, toolCounts, _, err = db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0)
+	_, _, toolCounts, _, err = db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0, "")
 	if err != nil {
 		t.Fatalf("Failed to get user communities with member count: %v", err)
 	}
@@ -439,7 +439,7 @@ func TestGetUserCommunities(t *testing.T) {
 	qt.Assert(t, err, qt.IsNil)
 
 	t.Run("GetUserCommunities returns correct communities and count for user1", func(t *testing.T) {
-		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, 0)
+		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, 0, "")
 		qt.Assert(t, err, qt.IsNil)
 
 		// User1 should be in 3 communities (owner of 2, member of 1)
@@ -458,7 +458,7 @@ func TestGetUserCommunities(t *testing.T) {
 	})
 
 	t.Run("GetUserCommunities returns correct communities and count for user2", func(t *testing.T) {
-		communities, total, err := communityService.GetUserCommunities(ctx, user2.ID, 0)
+		communities, total, err := communityService.GetUserCommunities(ctx, user2.ID, 0, "")
 		qt.Assert(t, err, qt.IsNil)
 
 		// User2 should be in 1 community (owner of 1)
@@ -469,7 +469,7 @@ func TestGetUserCommunities(t *testing.T) {
 
 	t.Run("GetUserCommunities with pagination", func(t *testing.T) {
 		// Test pagination with page size 2
-		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, 0)
+		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, 0, "")
 		qt.Assert(t, err, qt.IsNil)
 
 		// Total should still be 3, but we should get at most DefaultPageSize communities
@@ -478,7 +478,7 @@ func TestGetUserCommunities(t *testing.T) {
 
 		// Test second page (should be empty if DefaultPageSize >= 3)
 		if DefaultPageSize < 3 {
-			communities2, total2, err := communityService.GetUserCommunities(ctx, user1.ID, 1)
+			communities2, total2, err := communityService.GetUserCommunities(ctx, user1.ID, 1, "")
 			qt.Assert(t, err, qt.IsNil)
 			qt.Assert(t, total2, qt.Equals, int64(3)) // Total should remain the same
 			qt.Assert(t, len(communities2) <= 3-DefaultPageSize, qt.IsTrue)
@@ -487,7 +487,7 @@ func TestGetUserCommunities(t *testing.T) {
 
 	t.Run("GetUserCommunities for non-existent user", func(t *testing.T) {
 		nonExistentUserID := primitive.NewObjectID()
-		communities, total, err := communityService.GetUserCommunities(ctx, nonExistentUserID, 0)
+		communities, total, err := communityService.GetUserCommunities(ctx, nonExistentUserID, 0, "")
 		qt.Assert(t, err, qt.IsNil)
 
 		qt.Assert(t, total, qt.Equals, int64(0))
@@ -495,7 +495,7 @@ func TestGetUserCommunities(t *testing.T) {
 	})
 
 	t.Run("GetUserCommunities with negative page", func(t *testing.T) {
-		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, -1)
+		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, -1, "")
 		qt.Assert(t, err, qt.IsNil)
 
 		// Should treat negative page as page 0
@@ -504,7 +504,7 @@ func TestGetUserCommunities(t *testing.T) {
 	})
 
 	t.Run("Communities are sorted by name", func(t *testing.T) {
-		communities, _, err := communityService.GetUserCommunities(ctx, user1.ID, 0)
+		communities, _, err := communityService.GetUserCommunities(ctx, user1.ID, 0, "")
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, len(communities), qt.Equals, 3)
 
@@ -512,6 +512,273 @@ func TestGetUserCommunities(t *testing.T) {
 		for i := 1; i < len(communities); i++ {
 			qt.Assert(t, communities[i-1].Name <= communities[i].Name, qt.IsTrue)
 		}
+	})
+}
+
+func TestGetUserCommunitiesWithSearch(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+	db.UserService = NewUserService(db)
+	db.ToolService = NewToolService(db)
+	db.CommunityService = NewCommunityService(db)
+
+	communityService := db.CommunityService
+	userService := db.UserService
+
+	// Create test user
+	user := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "search@test.com",
+		Name:     "Search User",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Location: NewLocation(40000000, 3000000),
+	}
+
+	_, err = userService.InsertUser(ctx, user)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create test communities with different names
+	_, err = communityService.CreateCommunity(
+		ctx,
+		"Tech Community",
+		types.HexBytes{0x01, 0x02, 0x03},
+		user.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	_, err = communityService.CreateCommunity(
+		ctx,
+		"Sports Club",
+		types.HexBytes{0x04, 0x05, 0x06},
+		user.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	_, err = communityService.CreateCommunity(
+		ctx,
+		"Technology Enthusiasts",
+		types.HexBytes{0x07, 0x08, 0x09},
+		user.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	_, err = communityService.CreateCommunity(
+		ctx,
+		"Book Reading Group",
+		types.HexBytes{0x0A, 0x0B, 0x0C},
+		user.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	t.Run("Search with partial match 'tech'", func(t *testing.T) {
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "tech")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find "Tech Community" and "Technology Enthusiasts"
+		qt.Assert(t, total, qt.Equals, int64(2))
+		qt.Assert(t, len(communities), qt.Equals, 2)
+
+		// Check that the correct communities are returned
+		foundNames := make(map[string]bool)
+		for _, community := range communities {
+			foundNames[community.Name] = true
+		}
+
+		qt.Assert(t, foundNames["Tech Community"], qt.IsTrue)
+		qt.Assert(t, foundNames["Technology Enthusiasts"], qt.IsTrue)
+	})
+
+	t.Run("Search with case insensitive match 'SPORTS'", func(t *testing.T) {
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "SPORTS")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find "Sports Club"
+		qt.Assert(t, total, qt.Equals, int64(1))
+		qt.Assert(t, len(communities), qt.Equals, 1)
+		qt.Assert(t, communities[0].Name, qt.Equals, "Sports Club")
+	})
+
+	t.Run("Search with exact match 'Book Reading Group'", func(t *testing.T) {
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "Book Reading Group")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find "Book Reading Group"
+		qt.Assert(t, total, qt.Equals, int64(1))
+		qt.Assert(t, len(communities), qt.Equals, 1)
+		qt.Assert(t, communities[0].Name, qt.Equals, "Book Reading Group")
+	})
+
+	t.Run("Search with no matches", func(t *testing.T) {
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "nonexistent")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find no communities
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(communities), qt.Equals, 0)
+	})
+
+	t.Run("Search with empty string returns all", func(t *testing.T) {
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find all 4 communities
+		qt.Assert(t, total, qt.Equals, int64(4))
+		qt.Assert(t, len(communities), qt.Equals, 4)
+	})
+
+	t.Run("Search with special characters", func(t *testing.T) {
+		// Create a community with special characters
+		specialCommunity, err := communityService.CreateCommunity(
+			ctx,
+			"C++ Developers",
+			types.HexBytes{0x0D, 0x0E, 0x0F},
+			user.ID,
+		)
+		qt.Assert(t, err, qt.IsNil)
+
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "C++")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find the special community (note: there might be other communities from previous tests)
+		qt.Assert(t, total >= int64(1), qt.IsTrue)
+		qt.Assert(t, len(communities) >= 1, qt.IsTrue)
+
+		// Check that the special community is in the results
+		found := false
+		for _, community := range communities {
+			if community.ID == specialCommunity.ID {
+				found = true
+				break
+			}
+		}
+		qt.Assert(t, found, qt.IsTrue)
+	})
+
+	t.Run("Search results are sorted by name", func(t *testing.T) {
+		communities, _, err := communityService.GetUserCommunities(ctx, user.ID, 0, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Check that communities are sorted by name
+		for i := 1; i < len(communities); i++ {
+			qt.Assert(t, communities[i-1].Name <= communities[i].Name, qt.IsTrue)
+		}
+	})
+}
+
+func TestGetUserCommunitiesWithMemberCountAndSearch(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+	db.UserService = NewUserService(db)
+	db.ToolService = NewToolService(db)
+	db.CommunityService = NewCommunityService(db)
+
+	communityService := db.CommunityService
+	userService := db.UserService
+
+	// Create test user
+	user := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "searchcount@test.com",
+		Name:     "Search Count User",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Location: NewLocation(40000000, 3000000),
+	}
+
+	_, err = userService.InsertUser(ctx, user)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create test communities
+	community1, err := communityService.CreateCommunity(
+		ctx,
+		"Development Team",
+		types.HexBytes{0x01, 0x02, 0x03},
+		user.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	_, err = communityService.CreateCommunity(
+		ctx,
+		"Marketing Group",
+		types.HexBytes{0x04, 0x05, 0x06},
+		user.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	t.Run("Search with member count returns correct data", func(t *testing.T) {
+		communities, memberCounts, toolCounts, total, err := communityService.GetUserCommunitiesWithMemberCount(ctx, user.ID, 0, "dev")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find "Development Team"
+		qt.Assert(t, total, qt.Equals, int64(1))
+		qt.Assert(t, len(communities), qt.Equals, 1)
+		qt.Assert(t, communities[0].Name, qt.Equals, "Development Team")
+
+		// Check member and tool counts
+		qt.Assert(t, memberCounts[community1.ID], qt.Equals, int64(1)) // Just the owner
+		qt.Assert(t, toolCounts[community1.ID], qt.Equals, int64(0))   // No tools initially
+	})
+
+	t.Run("Search with no matches returns empty with counts", func(t *testing.T) {
+		communities, memberCounts, toolCounts, total, err := communityService.GetUserCommunitiesWithMemberCount(ctx, user.ID, 0, "nonexistent")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find no communities
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(communities), qt.Equals, 0)
+		qt.Assert(t, len(memberCounts), qt.Equals, 0)
+		qt.Assert(t, len(toolCounts), qt.Equals, 0)
 	})
 }
 
@@ -563,7 +830,7 @@ func TestGetUserCommunitiesEdgeCases(t *testing.T) {
 		_, err := userService.InsertUser(ctx, user)
 		qt.Assert(t, err, qt.IsNil)
 
-		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0)
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "")
 		qt.Assert(t, err, qt.IsNil)
 
 		qt.Assert(t, total, qt.Equals, int64(0))
@@ -595,7 +862,7 @@ func TestGetUserCommunitiesEdgeCases(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify user is in community
-		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0)
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "")
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, total, qt.Equals, int64(1))
 		qt.Assert(t, len(communities), qt.Equals, 1)
@@ -605,7 +872,7 @@ func TestGetUserCommunitiesEdgeCases(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Check communities again - user should have no communities after removal
-		communities, total, err = communityService.GetUserCommunities(ctx, user.ID, 0)
+		communities, total, err = communityService.GetUserCommunities(ctx, user.ID, 0, "")
 		qt.Assert(t, err, qt.IsNil)
 		// The count should reflect the actual state - user should have no communities after removal
 		qt.Assert(t, total, qt.Equals, int64(0))
@@ -675,7 +942,7 @@ func TestGetUserCommunitiesPerformance(t *testing.T) {
 
 	t.Run("Performance test with many communities", func(t *testing.T) {
 		start := time.Now()
-		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0)
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0, "")
 		duration := time.Since(start)
 
 		qt.Assert(t, err, qt.IsNil)
@@ -701,7 +968,7 @@ func TestGetUserCommunitiesPerformance(t *testing.T) {
 		var totalFromFirstPage int64
 
 		for {
-			communities, total, err := communityService.GetUserCommunities(ctx, user.ID, page)
+			communities, total, err := communityService.GetUserCommunities(ctx, user.ID, page, "")
 			qt.Assert(t, err, qt.IsNil)
 
 			if page == 0 {
