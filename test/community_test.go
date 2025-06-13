@@ -121,11 +121,11 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 404)
 	})
 
-	t.Run("Community Users", func(t *testing.T) {
+	t.Run("Community Communities", func(t *testing.T) {
 		// Create a community for testing
 		resp, code := c.Request(http.MethodPost, ownerJWT,
 			api.CreateCommunityRequest{
-				Name: "Users Test Community",
+				Name: "Communities Test Community",
 			},
 			"communities",
 		)
@@ -147,16 +147,16 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var usersResp struct {
-			Data []api.CommunityUserResponse `json:"data"`
+			Data api.PaginatedCommunityUserResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(usersResp.Data), qt.Equals, 1) // Only the owner should be in the community initially
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 1) // Only the owner should be in the community initially
 
 		// Verify the owner is in the community with the correct role
-		data := usersResp.Data[0]
+		data := usersResp.Data.Users[0]
 		qt.Assert(t, data.ID, qt.Equals, ownerID)
-		qt.Assert(t, string(usersResp.Data[0].Role), qt.Equals, "owner")
+		qt.Assert(t, string(usersResp.Data.Users[0].Role), qt.Equals, "owner")
 
 		// Test pagination by creating a community with multiple users
 		// First invite and accept a user to the community
@@ -188,14 +188,14 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(usersResp.Data), qt.Equals, 2) // Owner and member
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 2) // Owner and member
 
 		// Test pagination with page parameter
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members?page=0")
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(usersResp.Data), qt.Equals, 2) // Should return all users since we have less than page size
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 2) // Should return all users since we have less than page size
 	})
 
 	t.Run("Community Tools", func(t *testing.T) {
@@ -404,14 +404,14 @@ func TestCommunities(t *testing.T) {
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		var usersResp struct {
-			Data []api.CommunityUserResponse `json:"data"`
+			Data api.PaginatedCommunityUserResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
 
 		// Find the non-member in the users list
 		var found bool
-		for _, user := range usersResp.Data {
+		for _, user := range usersResp.Data.Users {
 			if user.ID == nonMemberID {
 				found = true
 				qt.Assert(t, string(user.Role), qt.Equals, "user")
@@ -471,7 +471,7 @@ func TestCommunities(t *testing.T) {
 
 		// Ensure the member is not in the community
 		found = false
-		for _, user := range usersResp.Data {
+		for _, user := range usersResp.Data.Users {
 			if user.ID == memberID {
 				found = true
 				break
@@ -530,7 +530,7 @@ func TestCommunities(t *testing.T) {
 
 		// Ensure the member is not in the community
 		found = false
-		for _, user := range usersResp.Data {
+		for _, user := range usersResp.Data.Users {
 			if user.ID == memberID {
 				found = true
 				break
@@ -631,14 +631,14 @@ func TestCommunities(t *testing.T) {
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members")
 		qt.Assert(t, code, qt.Equals, 200)
 		var usersResp struct {
-			Data []api.CommunityUserResponse `json:"data"`
+			Data api.PaginatedCommunityUserResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
 
 		// Ensure the member is not in the community
 		found := false
-		for _, user := range usersResp.Data {
+		for _, user := range usersResp.Data.Users {
 			if user.ID == memberID {
 				found = true
 				break
@@ -739,16 +739,16 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var communitiesResp struct {
-			Data []api.CommunityResponse `json:"data"`
+			Data api.PaginatedCommunityResponse `json:"data"`
 		}
 		err = json.Unmarshal(resp, &communitiesResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(communitiesResp.Data) >= 2, qt.IsTrue) // Owner should be in at least the two test communities
+		qt.Assert(t, len(communitiesResp.Data.Communities) >= 2, qt.IsTrue) // Owner should be in at least the two test communities
 
 		// Verify the communities include the test communities
 		foundCommunity1 := false
 		foundCommunity2 := false
-		for _, community := range communitiesResp.Data {
+		for _, community := range communitiesResp.Data.Communities {
 			if community.ID == community1ID {
 				foundCommunity1 = true
 				// Verify the member count is at least 2 (owner and member)
@@ -769,12 +769,12 @@ func TestCommunities(t *testing.T) {
 
 		err = json.Unmarshal(resp, &communitiesResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(communitiesResp.Data) >= 1, qt.IsTrue) // Member should be in at least the first test community
+		qt.Assert(t, len(communitiesResp.Data.Communities) >= 1, qt.IsTrue) // Member should be in at least the first test community
 
 		// Verify the member is in the first community but not the second
 		foundCommunity1 = false
 		foundCommunity2 = false
-		for _, community := range communitiesResp.Data {
+		for _, community := range communitiesResp.Data.Communities {
 			if community.ID == community1ID {
 				foundCommunity1 = true
 			}
@@ -790,7 +790,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &communitiesResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(communitiesResp.Data) > 0, qt.IsTrue)
+		qt.Assert(t, len(communitiesResp.Data.Communities) > 0, qt.IsTrue)
 
 		// Test non-existent user
 		_, code = c.Request(http.MethodGet, ownerJWT, nil, "users", "507f1f77bcf86cd799439011", "communities")

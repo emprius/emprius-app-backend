@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/emprius/emprius-app-backend/types"
@@ -149,7 +150,7 @@ func (s *CommunityService) UpdateCommunity(ctx context.Context, id primitive.Obj
 // DeleteCommunity deletes a community
 func (s *CommunityService) DeleteCommunity(ctx context.Context, id primitive.ObjectID) error {
 	// Get all users in the community
-	users, err := s.GetCommunityUsers(ctx, id, 0)
+	users, _, err := s.GetCommunityUsers(ctx, id, 0, "")
 	if err != nil {
 		return err
 	}
@@ -174,15 +175,28 @@ func (s *CommunityService) DeleteCommunity(ctx context.Context, id primitive.Obj
 }
 
 // GetCommunityUsers retrieves all users in a community
-func (s *CommunityService) GetCommunityUsers(ctx context.Context, communityID primitive.ObjectID, page int) ([]*User, error) {
+func (s *CommunityService) GetCommunityUsers(
+	ctx context.Context,
+	communityID primitive.ObjectID,
+	page int,
+	term string,
+) ([]*User, int64, error) {
 	if page < 0 {
 		page = 0
 	}
 
 	skip := page * DefaultPageSize
 
-	// Find users with this community in their communities array
-	filter := bson.M{"communities.id": communityID}
+	// Create a case-insensitive regex pattern for partial name matching
+	pattern := "(?i).*" + regexp.QuoteMeta(SanitizeString(term)) + ".*"
+	regex := primitive.Regex{Pattern: pattern, Options: "i"}
+
+	// Find users who belong to the specified community and have a name match
+	filter := bson.M{
+		"communities.id": communityID,
+		"name":           regex,
+	}
+
 	opts := options.Find().
 		SetSort(bson.D{{Key: "name", Value: 1}}). // Sort by name
 		SetSkip(int64(skip)).
@@ -190,7 +204,7 @@ func (s *CommunityService) GetCommunityUsers(ctx context.Context, communityID pr
 
 	cursor, err := s.UserService.Collection.Find(ctx, filter, opts)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
@@ -200,9 +214,16 @@ func (s *CommunityService) GetCommunityUsers(ctx context.Context, communityID pr
 
 	var users []*User
 	if err := cursor.All(ctx, &users); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return users, nil
+
+	// Get total count (without pagination)
+	total, err := s.UserService.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
 }
 
 // InviteUserToCommunity creates an invitation for a user to join a community
@@ -657,48 +678,65 @@ func (s *CommunityService) CommunityExists(ctx context.Context, communityID prim
 }
 
 // GetUserCommunities retrieves all communities for a specific user
-func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primitive.ObjectID, page int) ([]*Community, error) {
+func (s *CommunityService) GetUserCommunities(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	page int,
+	searchTerm string,
+) ([]*Community, int64, error) {
 	if page < 0 {
 		page = 0
 	}
 
 	skip := page * DefaultPageSize
 
-	// Use aggregation pipeline to get communities for the user
-	pipeline := []bson.M{
-		{
-			"$lookup": bson.M{
-				"from":         "users",
-				"localField":   "_id",
-				"foreignField": "communities.id",
-				"as":           "members",
+	// Build the match filter for user membership
+	matchFilter := bson.M{
+		"members": bson.M{
+			"$elemMatch": bson.M{
+				"_id": userID,
 			},
 		},
-		{
-			"$match": bson.M{
-				"members": bson.M{
-					"$elemMatch": bson.M{
-						"_id": userID,
-					},
-				},
-			},
-		},
-		{
-			"$sort": bson.M{
-				"name": 1, // Sort by name ascending
-			},
-		},
-		{
-			"$skip": int64(skip),
-		},
-		{
-			"$limit": int64(DefaultPageSize),
-		},
+	}
+
+	// Add search filter if search term is provided
+	if searchTerm != "" {
+		// Create a case-insensitive regex pattern for partial name matching
+		pattern := "(?i).*" + regexp.QuoteMeta(SanitizeString(searchTerm)) + ".*"
+		regex := primitive.Regex{Pattern: pattern, Options: "i"}
+		matchFilter["name"] = regex
+	}
+
+	// Use aggregation pipeline with $facet to get both data and count
+	pipeline := mongo.Pipeline{
+		// Stage 1: Lookup users to find communities where the user is a member
+		bson.D{{Key: "$lookup", Value: bson.M{
+			"from":         "users",
+			"localField":   "_id",
+			"foreignField": "communities.id",
+			"as":           "members",
+		}}},
+		// Stage 2: Match communities where the user is a member and optionally filter by name
+		bson.D{{Key: "$match", Value: matchFilter}},
+		// Stage 3: Sort by name
+		bson.D{{Key: "$sort", Value: bson.M{
+			"name": 1, // Sort by name ascending
+		}}},
+		// Stage 4: Use $facet to get both data and count
+		bson.D{{Key: "$facet", Value: bson.D{
+			{Key: "data", Value: bson.A{
+				bson.D{{Key: "$skip", Value: int64(skip)}},
+				bson.D{{Key: "$limit", Value: int64(DefaultPageSize)}},
+			}},
+			{Key: "count", Value: bson.A{
+				bson.D{{Key: "$count", Value: "total"}},
+			}},
+		}}},
 	}
 
 	cursor, err := s.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
@@ -706,12 +744,27 @@ func (s *CommunityService) GetUserCommunities(ctx context.Context, userID primit
 		}
 	}()
 
-	var communities []*Community
-	if err := cursor.All(ctx, &communities); err != nil {
-		return nil, err
+	var result []struct {
+		Data  []*Community `bson:"data"`
+		Count []struct {
+			Total int64 `bson:"total"`
+		} `bson:"count"`
 	}
 
-	return communities, nil
+	if err := cursor.All(ctx, &result); err != nil {
+		return nil, 0, err
+	}
+
+	var communities []*Community
+	var total int64
+	if len(result) > 0 {
+		communities = result[0].Data
+		if len(result[0].Count) > 0 {
+			total = result[0].Count[0].Total
+		}
+	}
+
+	return communities, total, nil
 }
 
 // GetCommunityWithMemberCount retrieves a community by ID with member count and tool count
@@ -745,11 +798,12 @@ func (s *CommunityService) GetUserCommunitiesWithMemberCount(
 	ctx context.Context,
 	userID primitive.ObjectID,
 	page int,
-) ([]*Community, map[primitive.ObjectID]int64, map[primitive.ObjectID]int64, error) {
+	searchTerm string,
+) ([]*Community, map[primitive.ObjectID]int64, map[primitive.ObjectID]int64, int64, error) {
 	// Get the communities
-	communities, err := s.GetUserCommunities(ctx, userID, page)
+	communities, totalCommunities, err := s.GetUserCommunities(ctx, userID, page, searchTerm)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, 0, err
 	}
 
 	// Count members and tools for each community
@@ -776,7 +830,7 @@ func (s *CommunityService) GetUserCommunitiesWithMemberCount(
 		}
 	}
 
-	return communities, memberCounts, toolCounts, nil
+	return communities, memberCounts, toolCounts, totalCommunities, nil
 }
 
 // CountCommunityMembers counts the number of users in a community

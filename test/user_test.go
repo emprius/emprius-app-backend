@@ -20,7 +20,7 @@ func TestUser(t *testing.T) {
 	c.RegisterAndLogin("user4@test.com", "user4", "user4pass")
 	c.RegisterAndLogin("user5@test.com", "user5", "user5pass")
 
-	t.Run("Paginated Users List", func(t *testing.T) {
+	t.Run("Paginated Communities List", func(t *testing.T) {
 		// Test first page
 		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users")
 		qt.Assert(t, code, qt.Equals, 200)
@@ -38,7 +38,7 @@ func TestUser(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 401)
 	})
 
-	t.Run("Search Users by Partial Name", func(t *testing.T) {
+	t.Run("Search Communities by Partial Name", func(t *testing.T) {
 		// Test search for "user" - should return all users
 		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users?term=user")
 		qt.Assert(t, code, qt.Equals, 200)
