@@ -203,7 +203,6 @@ func (s *CommunityService) GetCommunityUsers(
 		SetLimit(int64(DefaultPageSize))
 
 	cursor, err := s.UserService.Collection.Find(ctx, filter, opts)
-
 	if err != nil {
 		return nil, 0, err
 	}

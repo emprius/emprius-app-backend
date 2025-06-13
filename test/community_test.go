@@ -3,11 +3,12 @@ package test
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"testing"
+
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/test/utils"
 	qt "github.com/frankban/quicktest"
-	"net/http"
-	"testing"
 )
 
 func TestCommunities(t *testing.T) {
