@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/emprius/emprius-app-backend/types"
 	qt "github.com/frankban/quicktest"
@@ -290,7 +291,7 @@ func TestGetUserCommunitiesWithMemberCount(t *testing.T) {
 	}
 
 	// Get user communities with member count and tool count
-	communities, memberCounts, toolCounts, err := db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0)
+	communities, memberCounts, toolCounts, _, err := db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0)
 	if err != nil {
 		t.Fatalf("Failed to get user communities with member count: %v", err)
 	}
@@ -335,7 +336,7 @@ func TestGetUserCommunitiesWithMemberCount(t *testing.T) {
 	}
 
 	// Get user communities with member count and tool count again
-	_, _, toolCounts, err = db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0)
+	_, _, toolCounts, _, err = db.CommunityService.GetUserCommunitiesWithMemberCount(ctx, owner3.ID, 0)
 	if err != nil {
 		t.Fatalf("Failed to get user communities with member count: %v", err)
 	}
@@ -344,4 +345,387 @@ func TestGetUserCommunitiesWithMemberCount(t *testing.T) {
 	if toolCounts[community.ID] != 1 {
 		t.Errorf("Expected 1 tool, got %d", toolCounts[community.ID])
 	}
+}
+
+func TestGetUserCommunities(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+	db.UserService = NewUserService(db)
+	db.ToolService = NewToolService(db)
+	db.CommunityService = NewCommunityService(db)
+
+	communityService := db.CommunityService
+	userService := db.UserService
+
+	// Create test users
+	user1 := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "user1@test.com",
+		Name:     "User One",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Location: NewLocation(40000000, 3000000), // Madrid coordinates in microdegrees
+	}
+
+	user2 := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "user2@test.com",
+		Name:     "User Two",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Location: NewLocation(41000000, 2000000), // Barcelona coordinates in microdegrees
+	}
+
+	// Insert users
+	_, err = userService.InsertUser(ctx, user1)
+	qt.Assert(t, err, qt.IsNil)
+	_, err = userService.InsertUser(ctx, user2)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create test communities
+	community1, err := communityService.CreateCommunity(
+		ctx,
+		"Community One",
+		types.HexBytes{0x01, 0x02, 0x03},
+		user1.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	community2, err := communityService.CreateCommunity(
+		ctx,
+		"Community Two",
+		types.HexBytes{0x04, 0x05, 0x06},
+		user1.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	community3, err := communityService.CreateCommunity(
+		ctx,
+		"Community Three",
+		types.HexBytes{0x07, 0x08, 0x09},
+		user2.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Add user1 to community3 as a regular user
+	err = userService.AddUserToCommunity(ctx, user1.ID, community3.ID, CommunityRoleUser)
+	qt.Assert(t, err, qt.IsNil)
+
+	t.Run("GetUserCommunities returns correct communities and count for user1", func(t *testing.T) {
+		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, 0)
+		qt.Assert(t, err, qt.IsNil)
+
+		// User1 should be in 3 communities (owner of 2, member of 1)
+		qt.Assert(t, total, qt.Equals, int64(3))
+		qt.Assert(t, len(communities), qt.Equals, 3)
+
+		// Check that all expected communities are returned
+		communityIDs := make(map[primitive.ObjectID]bool)
+		for _, community := range communities {
+			communityIDs[community.ID] = true
+		}
+
+		qt.Assert(t, communityIDs[community1.ID], qt.IsTrue)
+		qt.Assert(t, communityIDs[community2.ID], qt.IsTrue)
+		qt.Assert(t, communityIDs[community3.ID], qt.IsTrue)
+	})
+
+	t.Run("GetUserCommunities returns correct communities and count for user2", func(t *testing.T) {
+		communities, total, err := communityService.GetUserCommunities(ctx, user2.ID, 0)
+		qt.Assert(t, err, qt.IsNil)
+
+		// User2 should be in 1 community (owner of 1)
+		qt.Assert(t, total, qt.Equals, int64(1))
+		qt.Assert(t, len(communities), qt.Equals, 1)
+		qt.Assert(t, communities[0].ID, qt.Equals, community3.ID)
+	})
+
+	t.Run("GetUserCommunities with pagination", func(t *testing.T) {
+		// Test pagination with page size 2
+		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, 0)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Total should still be 3, but we should get at most DefaultPageSize communities
+		qt.Assert(t, total, qt.Equals, int64(3))
+		qt.Assert(t, len(communities) <= DefaultPageSize, qt.IsTrue)
+
+		// Test second page (should be empty if DefaultPageSize >= 3)
+		if DefaultPageSize < 3 {
+			communities2, total2, err := communityService.GetUserCommunities(ctx, user1.ID, 1)
+			qt.Assert(t, err, qt.IsNil)
+			qt.Assert(t, total2, qt.Equals, int64(3)) // Total should remain the same
+			qt.Assert(t, len(communities2) <= 3-DefaultPageSize, qt.IsTrue)
+		}
+	})
+
+	t.Run("GetUserCommunities for non-existent user", func(t *testing.T) {
+		nonExistentUserID := primitive.NewObjectID()
+		communities, total, err := communityService.GetUserCommunities(ctx, nonExistentUserID, 0)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(communities), qt.Equals, 0)
+	})
+
+	t.Run("GetUserCommunities with negative page", func(t *testing.T) {
+		communities, total, err := communityService.GetUserCommunities(ctx, user1.ID, -1)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should treat negative page as page 0
+		qt.Assert(t, total, qt.Equals, int64(3))
+		qt.Assert(t, len(communities), qt.Equals, 3)
+	})
+
+	t.Run("Communities are sorted by name", func(t *testing.T) {
+		communities, _, err := communityService.GetUserCommunities(ctx, user1.ID, 0)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(communities), qt.Equals, 3)
+
+		// Check that communities are sorted by name
+		for i := 1; i < len(communities); i++ {
+			qt.Assert(t, communities[i-1].Name <= communities[i].Name, qt.IsTrue)
+		}
+	})
+}
+
+func TestGetUserCommunitiesEdgeCases(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+	db.UserService = NewUserService(db)
+	db.ToolService = NewToolService(db)
+	db.CommunityService = NewCommunityService(db)
+
+	communityService := db.CommunityService
+	userService := db.UserService
+
+	t.Run("User with no communities", func(t *testing.T) {
+		user := &User{
+			ID:       primitive.NewObjectID(),
+			Email:    "lonely@test.com",
+			Name:     "Lonely User",
+			Password: []byte("password"),
+			Tokens:   1000,
+			Active:   true,
+			Rating:   50,
+			Location: NewLocation(40000000, 3000000),
+		}
+
+		_, err := userService.InsertUser(ctx, user)
+		qt.Assert(t, err, qt.IsNil)
+
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(communities), qt.Equals, 0)
+	})
+
+	t.Run("User removed from community", func(t *testing.T) {
+		// Create user and community
+		user := &User{
+			ID:       primitive.NewObjectID(),
+			Email:    "removed@test.com",
+			Name:     "Removed User",
+			Password: []byte("password"),
+			Tokens:   1000,
+			Active:   true,
+			Rating:   50,
+			Location: NewLocation(40000000, 3000000),
+		}
+
+		_, err := userService.InsertUser(ctx, user)
+		qt.Assert(t, err, qt.IsNil)
+
+		community, err := communityService.CreateCommunity(
+			ctx,
+			"Test Community",
+			types.HexBytes{0x01, 0x02, 0x03},
+			user.ID,
+		)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Verify user is in community
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, total, qt.Equals, int64(1))
+		qt.Assert(t, len(communities), qt.Equals, 1)
+
+		// Remove user from community (this should succeed even though user is owner)
+		err = userService.RemoveUserFromCommunity(ctx, user.ID, community.ID)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Check communities again - user should have no communities after removal
+		communities, total, err = communityService.GetUserCommunities(ctx, user.ID, 0)
+		qt.Assert(t, err, qt.IsNil)
+		// The count should reflect the actual state - user should have no communities after removal
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(communities), qt.Equals, 0)
+	})
+}
+
+func TestGetUserCommunitiesPerformance(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+	db.UserService = NewUserService(db)
+	db.ToolService = NewToolService(db)
+	db.CommunityService = NewCommunityService(db)
+
+	communityService := db.CommunityService
+	userService := db.UserService
+
+	// Create a user
+	user := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "perf@test.com",
+		Name:     "Performance User",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Location: NewLocation(40000000, 3000000),
+	}
+
+	_, err = userService.InsertUser(ctx, user)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create multiple communities for the user
+	numCommunities := 25
+	for i := 0; i < numCommunities; i++ {
+		_, err := communityService.CreateCommunity(
+			ctx,
+			"Community "+string(rune('A'+i)),
+			types.HexBytes{byte(i), byte(i + 1), byte(i + 2)},
+			user.ID,
+		)
+		qt.Assert(t, err, qt.IsNil)
+	}
+
+	t.Run("Performance test with many communities", func(t *testing.T) {
+		start := time.Now()
+		communities, total, err := communityService.GetUserCommunities(ctx, user.ID, 0)
+		duration := time.Since(start)
+
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, total, qt.Equals, int64(numCommunities))
+
+		// Should return at most DefaultPageSize communities
+		expectedLen := numCommunities
+		if DefaultPageSize < numCommunities {
+			expectedLen = DefaultPageSize
+		}
+		qt.Assert(t, len(communities), qt.Equals, expectedLen)
+
+		// Performance should be reasonable (less than 1 second for this test)
+		qt.Assert(t, duration < time.Second, qt.IsTrue, qt.Commentf("Query took too long: %v", duration))
+
+		t.Logf("Query took %v for %d communities", duration, numCommunities)
+	})
+
+	t.Run("Pagination consistency", func(t *testing.T) {
+		// Get all communities across multiple pages
+		var allCommunities []*Community
+		page := 0
+		var totalFromFirstPage int64
+
+		for {
+			communities, total, err := communityService.GetUserCommunities(ctx, user.ID, page)
+			qt.Assert(t, err, qt.IsNil)
+
+			if page == 0 {
+				totalFromFirstPage = total
+			} else {
+				// Total should be consistent across pages
+				qt.Assert(t, total, qt.Equals, totalFromFirstPage)
+			}
+
+			if len(communities) == 0 {
+				break
+			}
+
+			allCommunities = append(allCommunities, communities...)
+			page++
+
+			// Safety check to avoid infinite loop
+			if page > 10 {
+				break
+			}
+		}
+
+		// Should have collected all communities
+		qt.Assert(t, len(allCommunities), qt.Equals, numCommunities)
+		qt.Assert(t, totalFromFirstPage, qt.Equals, int64(numCommunities))
+	})
 }

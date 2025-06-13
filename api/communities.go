@@ -73,10 +73,22 @@ type CommunityResponse struct {
 	ToolsCount   int64          `json:"toolsCount"`
 }
 
+// PaginatedCommunityResponse wraps community with pagination info
+type PaginatedCommunityResponse struct {
+	Communities []*CommunityResponse `json:"communities"`
+	Pagination  PaginationInfo       `json:"pagination"`
+}
+
 // CommunityUserResponse represents a user in a community
 type CommunityUserResponse struct {
 	UserPreview
 	Role db.CommunityRole `json:"role"`
+}
+
+// PaginatedCommunityUserResponse wraps community users with pagination info
+type PaginatedCommunityUserResponse struct {
+	Users      []*CommunityUserResponse `json:"users"`
+	Pagination PaginationInfo           `json:"pagination"`
 }
 
 // CommunityInviteResponse represents a community invitation
@@ -290,19 +302,21 @@ func (a *API) getCommunityUsersHandler(r *Request) (interface{}, error) {
 	}
 
 	// Get page from query parameters
-	page, err := r.Context.GetPage()
+	page, pageSize, err := r.Context.GetPaginationParams()
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	term := *r.Context.GetSearchTerm()
+
 	// Get community users
-	users, err := a.database.CommunityService.GetCommunityUsers(r.Context.Request.Context(), communityID, page)
+	users, total, err := a.database.CommunityService.GetCommunityUsers(r.Context.Request.Context(), communityID, page, term)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	// Convert to response format
-	response := make([]CommunityUserResponse, len(users))
+	userList := make([]*CommunityUserResponse, len(users))
 	for i, user := range users {
 		// Find user's role in this community
 		var role db.CommunityRole
@@ -313,12 +327,16 @@ func (a *API) getCommunityUsersHandler(r *Request) (interface{}, error) {
 			}
 		}
 
-		response[i] = CommunityUserResponse{
+		userList[i] = &CommunityUserResponse{
 			UserPreview: *new(UserPreview).FromDBUserPreview(user),
 			Role:        role,
 		}
 	}
 
+	response := &PaginatedCommunityUserResponse{
+		Users:      userList,
+		Pagination: CalculatePagination(page, pageSize, total),
+	}
 	return response, nil
 }
 
@@ -581,22 +599,22 @@ func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
 	}
 
 	// Get page from query parameters
-	page, err := r.Context.GetPage()
+	page, pageSize, err := r.Context.GetPaginationParams()
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
 	// Get communities for the user with member counts and tool counts
 	ctx := r.Context.Request.Context()
-	communities, memberCounts, toolCounts, err := a.database.CommunityService.GetUserCommunitiesWithMemberCount(ctx, userID, page)
+	communities, memberCounts, toolCounts, totalCommunities, err := a.database.CommunityService.GetUserCommunitiesWithMemberCount(ctx, userID, page)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	// Convert to response format
-	response := make([]CommunityResponse, len(communities))
+	communitiesResponse := make([]*CommunityResponse, len(communities))
 	for i, community := range communities {
-		response[i] = CommunityResponse{
+		communitiesResponse[i] = &CommunityResponse{
 			ID:           community.ID.Hex(),
 			Name:         community.Name,
 			Image:        community.Image,
@@ -606,6 +624,10 @@ func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
 		}
 	}
 
+	response := &PaginatedCommunityResponse{
+		Communities: communitiesResponse,
+		Pagination:  CalculatePagination(page, pageSize, totalCommunities),
+	}
 	return response, nil
 }
 

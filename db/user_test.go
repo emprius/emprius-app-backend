@@ -118,7 +118,7 @@ func TestUserService(t *testing.T) {
 		c.Assert(updatedUser.Rating, qt.Equals, int32(85), qt.Commentf("Rating was not updated"))
 	})
 
-	c.Run("Get All Users", func(c *qt.C) {
+	c.Run("Get All Communities", func(c *qt.C) {
 		// Insert additional users
 		users := []*User{
 			{
@@ -171,7 +171,7 @@ func TestUserService(t *testing.T) {
 		c.Assert(err, qt.Equals, mongo.ErrNoDocuments, qt.Commentf("Expected no documents error"))
 	})
 
-	c.Run("Get Users By Partial Name", func(c *qt.C) {
+	c.Run("Get Communities By Partial Name", func(c *qt.C) {
 		// Insert users with different names for testing partial name search
 		usersToInsert := []*User{
 			{
