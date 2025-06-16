@@ -771,7 +771,11 @@ func TestGetUserCommunitiesWithMemberCountAndSearch(t *testing.T) {
 	})
 
 	t.Run("Search with no matches returns empty with counts", func(t *testing.T) {
-		communities, memberCounts, toolCounts, total, err := communityService.GetUserCommunitiesWithMemberCount(ctx, user.ID, 0, "nonexistent")
+		communities, memberCounts, toolCounts, total, err := communityService.GetUserCommunitiesWithMemberCount(
+			ctx,
+			user.ID,
+			0, "nonexistent",
+		)
 		qt.Assert(t, err, qt.IsNil)
 
 		// Should find no communities
