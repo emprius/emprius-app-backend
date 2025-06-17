@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/notifications"
 	"os"
 
 	"github.com/emprius/emprius-app-backend/api"
@@ -10,6 +11,16 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+type APIConfig struct {
+	DB                 *db.Database
+	JwtSecret          string
+	RegisterToken      string
+	MaxInviteCodes     int
+	InviteCodeCooldown int
+	Debug              bool
+	MailService        notifications.NotificationService
+}
 
 // Service is the main service struct for the API backend.
 type Service struct {
@@ -36,29 +47,25 @@ func (s *Service) Close() {
 }
 
 // New creates a new API service. It creates the database and tables if they don't exist.
-// It also sets the global log level to InfoLevel or DebugLevel if debug is true.
+// It also sets the global log level to InfoLevel or DebugLevel if Debug is true.
 // The service must be started with Service.Start().
 // The database must be closed with Service.Close().
-func New(dbPath, jwtSecret, registerToken string, maxInviteCodes, inviteCodeCooldown int, debug bool) (*Service, error) {
+func New(conf *APIConfig) (*Service, error) {
+	if conf == nil {
+		return nil, fmt.Errorf("configuration cannot be nil")
+	}
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout}).With().Caller().Logger()
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if debug {
+	if conf.Debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 	log.Info().Msg("starting app backend")
 
-	database, err := db.New(dbPath, jwtSecret)
-	if err != nil {
-		return nil, err
-	}
-	if err := database.CreateTables(); err != nil {
-		return nil, fmt.Errorf("failed to create tables: %w", err)
-	}
 	return &Service{
-		Database:           database,
-		jwtSecret:          jwtSecret,
-		registerToken:      registerToken,
-		maxInviteCodes:     maxInviteCodes,
-		inviteCodeCooldown: inviteCodeCooldown,
+		Database:           conf.DB,
+		jwtSecret:          conf.JwtSecret,
+		registerToken:      conf.RegisterToken,
+		maxInviteCodes:     conf.MaxInviteCodes,
+		inviteCodeCooldown: conf.InviteCodeCooldown,
 	}, nil
 }

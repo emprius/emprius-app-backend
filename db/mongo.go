@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
@@ -60,6 +61,11 @@ func New(uri string, secret ...string) (*Database, error) {
 	database.BookingService = NewBookingService(database.Database)
 	database.InviteCodeService = NewInviteCodeService(database)
 	database.CommunityService = NewCommunityService(database)
+
+	if err := database.CreateTables(); err != nil {
+		return nil, fmt.Errorf("failed to create tables: %w", err)
+	}
+
 	return database, nil
 }
 
