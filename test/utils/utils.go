@@ -16,7 +16,6 @@ import (
 
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/db"
-	"github.com/emprius/emprius-app-backend/service"
 	qt "github.com/frankban/quicktest"
 )
 
@@ -28,7 +27,7 @@ const (
 
 // TestService is a test service for the API.
 type TestService struct {
-	s   *service.Service
+	a   *api.API
 	t   *testing.T
 	url string
 	c   *http.Client
@@ -50,7 +49,7 @@ func NewTestService(t *testing.T) *TestService {
 	database, err := db.New(mongoURI, jwtSecret)
 	qt.Assert(t, err, qt.IsNil)
 
-	s, err := service.New(&service.APIConfig{
+	a, err := api.New(&api.APIConfig{
 		DB:                 database,
 		JwtSecret:          jwtSecret,
 		RegisterToken:      RegisterToken,
@@ -62,10 +61,10 @@ func NewTestService(t *testing.T) *TestService {
 	qt.Assert(t, err, qt.IsNil)
 	rand.NewSource(time.Now().UnixNano())
 	port := 20000 + rand.New(rand.NewSource(time.Now().UnixNano())).Intn(8192)
-	s.Start("127.0.0.1", port)
+	a.Start("127.0.0.1", port)
 	time.Sleep(time.Second * 1) // Wait for HTTP server to start
 	return &TestService{
-		s:   s,
+		a:   a,
 		t:   t,
 		url: fmt.Sprintf("http://localhost:%d", port),
 		c:   http.DefaultClient,

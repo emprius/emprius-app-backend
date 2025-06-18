@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 	"github.com/emprius/emprius-app-backend/notifications/smtp"
@@ -13,8 +14,6 @@ import (
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-
-	"github.com/emprius/emprius-app-backend/service"
 
 	"github.com/rs/zerolog/log"
 )
@@ -89,7 +88,7 @@ func main() {
 	}
 
 	// init the API configuration
-	apiConf := &service.APIConfig{
+	apiConf := &api.APIConfig{
 		DB:                 database,
 		JwtSecret:          secret,
 		RegisterToken:      registerAuthToken,
@@ -125,12 +124,12 @@ func main() {
 
 	// create service
 	log.Info().Msgf("connecting to database at %s", mongoURI)
-	s, err := service.New(apiConf)
+	a, err := api.New(apiConf)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create service")
 	}
-	defer s.Close()
-	s.Start(host, port)
+	defer a.Close()
+	a.Start(host, port)
 
 	log.Info().Msg("startup complete")
 

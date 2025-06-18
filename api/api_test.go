@@ -85,7 +85,17 @@ func testAPI(t *testing.T) *API {
 	err = database.CreateTables()
 	qt.Assert(t, err, qt.IsNil)
 
-	return New("secret", "authtoken", database, 5, 30)
+	a, err := New(&APIConfig{
+		DB:                 database,
+		JwtSecret:          "secret",
+		RegisterToken:      "authtoken",
+		MaxInviteCodes:     5,
+		InviteCodeCooldown: 30,
+	})
+
+	qt.Assert(t, err, qt.IsNil)
+
+	return a
 }
 
 func TestBookingDateConflicts(t *testing.T) {
