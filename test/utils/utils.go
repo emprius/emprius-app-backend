@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
+	"github.com/emprius/emprius-app-backend/notifications/smtp"
+	"github.com/emprius/emprius-app-backend/test/mail"
 	"io"
 	"math/rand"
 	"net/http"
@@ -23,6 +26,9 @@ const (
 	jwtSecret = "secret"
 	// RegisterToken is the test register token for authentication.
 	RegisterToken = "comunals"
+	adminEmail    = "admin@test.com"
+	adminUser     = "admin"
+	adminPass     = "admin123"
 )
 
 // TestService is a test service for the API.
@@ -31,6 +37,7 @@ type TestService struct {
 	t   *testing.T
 	url string
 	c   *http.Client
+	m   *smtp.Email
 }
 
 // NewTestService creates a new test service.
@@ -49,6 +56,42 @@ func NewTestService(t *testing.T) *TestService {
 	database, err := db.New(mongoURI, jwtSecret)
 	qt.Assert(t, err, qt.IsNil)
 
+	// start test mail server
+	testMailServer, err := mail.StartMailService(ctx)
+	if err != nil {
+		panic(err)
+	}
+	// get the host, the SMTP port and the API port
+	mailHost, err := testMailServer.Host(ctx)
+	if err != nil {
+		panic(err)
+	}
+	smtpPort, err := testMailServer.MappedPort(ctx, mail.MailSMTPPort)
+	if err != nil {
+		panic(err)
+	}
+	apiPort, err := testMailServer.MappedPort(ctx, mail.MailAPIPort)
+	if err != nil {
+		panic(err)
+	}
+	// create test mail service
+	testMailService := new(smtp.Email)
+	if err := testMailService.New(&smtp.Config{
+		FromAddress:  adminEmail,
+		SMTPUsername: adminUser,
+		SMTPPassword: adminPass,
+		SMTPServer:   mailHost,
+		SMTPPort:     smtpPort.Int(),
+		TestAPIPort:  apiPort.Int(),
+	}); err != nil {
+		panic(err)
+	}
+
+	// load the email templates
+	if err := mailtemplates.Load(); err != nil {
+		panic(err)
+	}
+
 	a, err := api.New(&api.APIConfig{
 		DB:                 database,
 		JwtSecret:          jwtSecret,
@@ -56,6 +99,7 @@ func NewTestService(t *testing.T) *TestService {
 		MaxInviteCodes:     5,
 		InviteCodeCooldown: 30,
 		Debug:              true,
+		MailService:        testMailService,
 	})
 
 	qt.Assert(t, err, qt.IsNil)
@@ -68,6 +112,7 @@ func NewTestService(t *testing.T) *TestService {
 		t:   t,
 		url: fmt.Sprintf("http://localhost:%d", port),
 		c:   http.DefaultClient,
+		m:   testMailService,
 	}
 }
 
@@ -200,4 +245,8 @@ func (s *TestService) CreateTool(jwt string, title string) int64 {
 	err := json.Unmarshal(resp, &response)
 	qt.Assert(s.t, err, qt.IsNil)
 	return response.Data.ID
+}
+
+func (s *TestService) MailService() *smtp.Email {
+	return s.m
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
@@ -139,6 +140,18 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	token, err := a.makeToken(id.Hex())
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// send the welcome email
+	if err := a.sendMail(r.Context.Request.Context(), user.Email, mailtemplates.WelcomeMailNotification,
+		struct {
+			AppName string
+			AppUrl  string
+			LogoURL string
+		}{mailtemplates.AppName, mailtemplates.AppUrl, mailtemplates.LogoURL},
+	); err != nil {
+		log.Warn().Err(err).Msg("could not send welcome email")
+		// Continue even if email cannot be sent
 	}
 
 	return &token, nil

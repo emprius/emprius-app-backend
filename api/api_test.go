@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/notifications/smtp"
+	"github.com/emprius/emprius-app-backend/test/mail"
 	"testing"
 	"time"
 
@@ -67,6 +69,16 @@ var testTool1 = Tool{
 	TransportOptions: []int{1, 2},
 }
 
+const (
+	adminEmail = "admin@test.com"
+	adminUser  = "admin"
+	adminPass  = "admin123"
+)
+
+// testMailService is the test mail service for the tests. Make it global so it
+// can be accessed by the tests directly.
+var testMailService *smtp.Email
+
 func testAPI(t *testing.T) *API {
 	ctx := context.Background()
 
@@ -85,12 +97,44 @@ func testAPI(t *testing.T) *API {
 	err = database.CreateTables()
 	qt.Assert(t, err, qt.IsNil)
 
+	// start test mail server
+	testMailServer, err := mail.StartMailService(ctx)
+	if err != nil {
+		panic(err)
+	}
+	// get the host, the SMTP port and the API port
+	mailHost, err := testMailServer.Host(ctx)
+	if err != nil {
+		panic(err)
+	}
+	smtpPort, err := testMailServer.MappedPort(ctx, mail.MailSMTPPort)
+	if err != nil {
+		panic(err)
+	}
+	apiPort, err := testMailServer.MappedPort(ctx, mail.MailAPIPort)
+	if err != nil {
+		panic(err)
+	}
+	// create test mail service
+	testMailService = new(smtp.Email)
+	if err := testMailService.New(&smtp.Config{
+		FromAddress:  adminEmail,
+		SMTPUsername: adminUser,
+		SMTPPassword: adminPass,
+		SMTPServer:   mailHost,
+		SMTPPort:     smtpPort.Int(),
+		TestAPIPort:  apiPort.Int(),
+	}); err != nil {
+		panic(err)
+	}
+
 	a, err := New(&APIConfig{
 		DB:                 database,
 		JwtSecret:          "secret",
 		RegisterToken:      "authtoken",
 		MaxInviteCodes:     5,
 		InviteCodeCooldown: 30,
+		MailService:        testMailService,
 	})
 
 	qt.Assert(t, err, qt.IsNil)
