@@ -29,3 +29,18 @@ Please check the request details and respond accordingly on {{.ButtonUrl}}.
 	},
 	WebAppURI: "/bookings/requests",
 }
+
+// BookingAcceptedMailNotification notification used to notify a user when a booking
+// request is accepted.
+var BookingAcceptedMailNotification = MailTemplate{
+	File: "outgoing",
+	Placeholder: notifications.Notification{
+		Subject: "Your tool request has been accepted",
+		PlainBody: `Your request for tool {{.ToolName}} from 
+{{.FromDate}} to {{.ToDate}} has been accepted by {{.UserName}}.
+
+Check your booking on {{.ButtonUrl}}.
+`,
+	},
+	WebAppURI: "/bookings/requests",
+}

@@ -225,6 +225,12 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	// Get the renter user to update the tool obfuscatedLocation
+	renter, err := a.getUserByID(booking.FromUserID.Hex())
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
 	// Validate the requested status
 	var newStatus db.BookingStatus
 	switch statusUpdate.Status {
@@ -276,6 +282,36 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		err = a.database.BookingService.SetPickupPlace(r.Context.Request.Context(), bookingID, tool.Location)
 		if err != nil {
 			return nil, ErrInternalServerError.WithErr(err)
+		}
+
+		// Send the accepted notification to the requester
+		if err := a.sendMail(r.Context.Request.Context(), renter.Email, mailtemplates.BookingAcceptedMailNotification,
+			struct {
+				AppName    string
+				AppUrl     string
+				LogoURL    string
+				ToolName   string
+				FromDate   string
+				ToDate     string
+				ButtonUrl  string
+				UserName   string
+				UserUrl    string
+				UserRating string
+			}{
+				mailtemplates.AppName,
+				mailtemplates.AppUrl,
+				mailtemplates.LogoURL,
+				tool.Title,
+				booking.StartDate.Format("02 Jan 2006"),
+				booking.EndDate.Format("02 Jan 2006"),
+				mailtemplates.BookingUrl,
+				user.Name,
+				fmt.Sprintf(mailtemplates.UserUrl, user.ID.Hex()),
+				notifications.Stars(user.Rating),
+			},
+		); err != nil {
+			log.Warn().Err(err).Msg("could not send booking accepted notification")
+			// Continue even if email cannot be sent
 		}
 	case BookingStatusRejected:
 		newStatus = db.BookingStatusRejected
@@ -402,12 +438,6 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		// Verify booking is in ACCEPTED state
 		if booking.BookingStatus != db.BookingStatusAccepted {
 			return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking status is %s, must be ACCEPTED", booking.BookingStatus))
-		}
-
-		// Get the renter user to update the tool obfuscatedLocation
-		renter, err := a.getUserByID(booking.FromUserID.Hex())
-		if err != nil {
-			return nil, ErrUserNotFound.WithErr(err)
 		}
 
 		// Update the tool's obfuscatedLocation and actualUserId

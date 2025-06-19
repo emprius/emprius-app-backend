@@ -104,6 +104,19 @@ func TestBookings(t *testing.T) {
 			}, "bookings", bookingID)
 		qt.Assert(t, code, qt.Equals, 200)
 
+		// Check mail notification is sent to tool owner with all required information
+		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		mailBody, err = c.MailService().FindEmail(ctx, "renter@test.com")
+		qt.Assert(t, err, qt.IsNil)
+
+		// - To UserName
+		qt.Assert(t, mailBody, qt.Contains, "owner")
+		// - Tool title
+		qt.Assert(t, mailBody, qt.Contains, "Test Tool")
+		// - App name (general verification)
+		qt.Assert(t, mailBody, qt.Contains, mailtemplates.AppName)
+
 		// Try to create another overlapping booking (should fail since there's an accepted booking)
 		data, code := c.Request(http.MethodPost, renterJWT,
 			api.CreateBookingRequest{
