@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/notifications"
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 	"strconv"
 	"time"
 
@@ -668,6 +670,40 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 			return nil, ErrBookingDatesConflict.WithErr(err)
 		}
 		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// send the new request notification to the recipient
+	if err := a.sendMail(r.Context.Request.Context(), toUser.Email, mailtemplates.NewIncomingRequestMailNotification,
+		struct {
+			AppName      string
+			AppUrl       string
+			LogoURL      string
+			UserName     string
+			UserUrl      string
+			UserRating   string
+			ToolName     string
+			FromDate     string
+			ToDate       string
+			Comment      string
+			WayOfContact string
+			ButtonUrl    string
+		}{
+			mailtemplates.AppName,
+			mailtemplates.AppUrl,
+			mailtemplates.LogoURL,
+			fromUser.Name,
+			fmt.Sprintf(mailtemplates.UserUrl, fromUser.ID.Hex()),
+			notifications.Stars(fromUser.Rating),
+			tool.Title,
+			startDate.Format("02 Jan 2006"),
+			endDate.Format("02 Jan 2006"),
+			req.Comments,
+			req.Contact,
+			mailtemplates.IncomingUrl,
+		},
+	); err != nil {
+		log.Warn().Err(err).Msg("could not send new request notification")
+		// Continue even if email cannot be sent
 	}
 
 	return a.convertBookingToResponse(booking, r.UserID), nil

@@ -14,3 +14,18 @@ Start using the app on {{.AppUrl}}`,
 	},
 	WebAppURI: "/profile",
 }
+
+// NewIncomingRequestMailNotification notification used to notify a user when a new
+// incoming request is received.
+var NewIncomingRequestMailNotification = MailTemplate{
+	File: "incoming",
+	Placeholder: notifications.Notification{
+		Subject: "New Tool request received",
+		PlainBody: `{{.UserName}} is interested in borrowing your tool {{.ToolName}} from 
+{{.FromDate}} to {{.ToDate}}.
+
+Please check the request details and respond accordingly on {{.ButtonUrl}}.
+`,
+	},
+	WebAppURI: "/bookings/requests",
+}
