@@ -18,7 +18,7 @@ Start using the app on {{.AppUrl}}`,
 // NewIncomingRequestMailNotification notification used to notify a user when a new
 // incoming request is received.
 var NewIncomingRequestMailNotification = MailTemplate{
-	File: "incoming",
+	File: "new_incoming_request",
 	Placeholder: notifications.Notification{
 		Subject: "New Tool request received",
 		PlainBody: `{{.UserName}} is interested in borrowing your tool {{.ToolName}} from 
@@ -33,7 +33,7 @@ Please check the request details and respond accordingly on {{.ButtonUrl}}.
 // BookingAcceptedMailNotification notification used to notify a user when a booking
 // request is accepted.
 var BookingAcceptedMailNotification = MailTemplate{
-	File: "outgoing",
+	File: "booking_accepted",
 	Placeholder: notifications.Notification{
 		Subject: "Your tool request has been accepted",
 		PlainBody: `Your request for tool {{.ToolName}} from 
