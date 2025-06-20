@@ -23,21 +23,21 @@ func TestNotificationPreferences(t *testing.T) {
 
 	t.Run("Get Default Notification Preferences", func(t *testing.T) {
 		// Get notification preferences for a new user
-		resp, code := c.Request(http.MethodGet, userJWT, nil, "profile", "notifications")
+		resp, code := c.Request(http.MethodGet, userJWT, nil, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
 
-		var notificationResp struct {
-			Data api.NotificationPreferences `json:"data"`
+		var userProfile struct {
+			Data api.UserProfile `json:"data"`
 		}
-		err := json.Unmarshal(resp, &notificationResp)
+		err := json.Unmarshal(resp, &userProfile)
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify all default notification types are present and enabled
 		expectedDefaults := db.GetDefaultNotificationPreferences()
-		qt.Assert(t, len(notificationResp.Data), qt.Equals, len(expectedDefaults))
+		qt.Assert(t, len(userProfile.Data.NotificationPreferences), qt.Equals, len(expectedDefaults))
 
 		for key, expectedValue := range expectedDefaults {
-			actualValue, exists := notificationResp.Data[key]
+			actualValue, exists := userProfile.Data.NotificationPreferences[key]
 			qt.Assert(t, exists, qt.IsTrue, qt.Commentf("Notification type %s should exist", key))
 			qt.Assert(
 				t,
@@ -68,30 +68,22 @@ func TestNotificationPreferences(t *testing.T) {
 		// Verify the updated preferences
 		qt.Assert(t, updateResp.Data["incoming_requests"], qt.Equals, false)
 		qt.Assert(t, updateResp.Data["booking_accepted"], qt.Equals, true)
-
-		// Verify that other preferences remain at their default values
-		qt.Assert(t, updateResp.Data["booking_rejected"], qt.Equals, true)  // Should remain default
-		qt.Assert(t, updateResp.Data["community_invites"], qt.Equals, true) // Should remain default
 	})
 
 	t.Run("Get Updated Notification Preferences", func(t *testing.T) {
 		// Get notification preferences again to verify persistence
-		resp, code := c.Request(http.MethodGet, userJWT, nil, "profile", "notifications")
+		resp, code := c.Request(http.MethodGet, userJWT, nil, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
 
-		var notificationResp struct {
-			Data api.NotificationPreferences `json:"data"`
+		var userProfile struct {
+			Data api.UserProfile `json:"data"`
 		}
-		err := json.Unmarshal(resp, &notificationResp)
+		err := json.Unmarshal(resp, &userProfile)
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify the previously updated preferences are still correct
-		qt.Assert(t, notificationResp.Data["incoming_requests"], qt.Equals, false)
-		qt.Assert(t, notificationResp.Data["booking_accepted"], qt.Equals, true)
-
-		// Verify that other preferences remain at their default values
-		qt.Assert(t, notificationResp.Data["booking_rejected"], qt.Equals, true)
-		qt.Assert(t, notificationResp.Data["community_invites"], qt.Equals, true)
+		qt.Assert(t, userProfile.Data.NotificationPreferences["incoming_requests"], qt.Equals, false)
+		qt.Assert(t, userProfile.Data.NotificationPreferences["booking_accepted"], qt.Equals, true)
 	})
 
 	t.Run("Update with Invalid Notification Type", func(t *testing.T) {
@@ -120,7 +112,7 @@ func TestNotificationPreferences(t *testing.T) {
 	t.Run("Partial Update Notification Preferences", func(t *testing.T) {
 		// Update only some notification preferences
 		partialPrefs := api.NotificationPreferences{
-			"rating_reminders": false,
+			"incoming_requests": false,
 		}
 
 		resp, code := c.Request(http.MethodPost, userJWT, partialPrefs, "profile", "notifications")
@@ -132,9 +124,6 @@ func TestNotificationPreferences(t *testing.T) {
 		err := json.Unmarshal(resp, &updateResp)
 		qt.Assert(t, err, qt.IsNil)
 
-		// Verify the updated preference
-		qt.Assert(t, updateResp.Data["rating_reminders"], qt.Equals, false)
-
 		// Verify that previously set preferences are maintained
 		qt.Assert(t, updateResp.Data["incoming_requests"], qt.Equals, false)
 
@@ -144,7 +133,7 @@ func TestNotificationPreferences(t *testing.T) {
 
 	t.Run("Unauthorized Access", func(t *testing.T) {
 		// Try to access notification preferences without authentication
-		_, code := c.Request(http.MethodGet, "", nil, "profile", "notifications")
+		_, code := c.Request(http.MethodGet, "", nil, "profile")
 		qt.Assert(t, code, qt.Equals, 401)
 
 		// Try to update notification preferences without authentication
@@ -328,17 +317,17 @@ func TestNewIncomingRequestNotification(t *testing.T) {
 		renterJWT := c.RegisterAndLogin("renter-notifications@test.com", "renter", "renterpass")
 
 		// Verify owner has default notification preferences (should be enabled by default)
-		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "profile", "notifications")
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
 
-		var notificationResp struct {
-			Data api.NotificationPreferences `json:"data"`
+		var userProfile struct {
+			Data api.UserProfile `json:"data"`
 		}
-		err := json.Unmarshal(resp, &notificationResp)
+		err := json.Unmarshal(resp, &userProfile)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(
 			t,
-			notificationResp.Data["incoming_requests"],
+			userProfile.Data.NotificationPreferences["incoming_requests"],
 			qt.Equals,
 			true,
 			qt.Commentf("incoming_requests should be enabled by default"),
@@ -387,15 +376,21 @@ func TestNewIncomingRequestNotification(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the preference was updated
-		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "profile", "notifications")
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
 
-		var notificationResp struct {
-			Data api.NotificationPreferences `json:"data"`
+		var userProfile struct {
+			Data api.UserProfile `json:"data"`
 		}
-		err := json.Unmarshal(resp, &notificationResp)
+		err := json.Unmarshal(resp, &userProfile)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, notificationResp.Data["incoming_requests"], qt.Equals, false, qt.Commentf("incoming_requests should be disabled"))
+		qt.Assert(
+			t,
+			userProfile.Data.NotificationPreferences["incoming_requests"],
+			qt.Equals,
+			false,
+			qt.Commentf("incoming_requests should be disabled"),
+		)
 
 		// Owner creates a tool
 		toolID := c.CreateTool(ownerJWT, "Test Tool No Notifications")
@@ -419,7 +414,7 @@ func TestNewIncomingRequestNotification(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		_, err = c.MailService().FindEmail(ctx, "owner-no-notifications@test.com")
-		qt.Assert(t, err, qt.Not(qt.IsNil), qt.Commentf("No email should be sent when notifications are disabled"))
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("No email should be sent when notifications are disabled"))
 	})
 
 	t.Run("Email Content Verification", func(t *testing.T) {

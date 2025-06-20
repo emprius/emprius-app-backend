@@ -86,6 +86,7 @@ type UserProfile struct {
 	ActualPassword          string                  `json:"actualPassword,omitempty"`
 	Bio                     string                  `json:"bio,omitempty"`
 	NotificationPreferences NotificationPreferences `json:"notificationPreferences,omitempty"`
+	InviteCodes             []*SimpleInviteCode     `json:"inviteCodes,omitempty"`
 }
 
 // UserCommunityInfo represents a user's role in a community
