@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/emprius/emprius-app-backend/notifications"
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
+
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
 	"github.com/go-chi/chi/v5"
@@ -223,6 +226,12 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	// Get the renter user to update the tool obfuscatedLocation
+	renter, err := a.getUserByID(booking.FromUserID.Hex())
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
 	// Validate the requested status
 	var newStatus db.BookingStatus
 	switch statusUpdate.Status {
@@ -274,6 +283,38 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		err = a.database.BookingService.SetPickupPlace(r.Context.Request.Context(), bookingID, tool.Location)
 		if err != nil {
 			return nil, ErrInternalServerError.WithErr(err)
+		}
+
+		// Send the accepted notification to the requester
+		if renter.NotificationPreferences[string(types.NotificationBookingAccepted)] {
+			if err := a.sendMail(r.Context.Request.Context(), renter.Email, mailtemplates.BookingAcceptedMailNotification,
+				struct {
+					AppName    string
+					AppUrl     string
+					LogoURL    string
+					ToolName   string
+					FromDate   string
+					ToDate     string
+					ButtonUrl  string
+					UserName   string
+					UserUrl    string
+					UserRating string
+				}{
+					mailtemplates.AppName,
+					mailtemplates.AppUrl,
+					mailtemplates.LogoURL,
+					tool.Title,
+					booking.StartDate.Format("02 Jan 2006"),
+					booking.EndDate.Format("02 Jan 2006"),
+					mailtemplates.BookingUrl,
+					user.Name,
+					fmt.Sprintf(mailtemplates.UserUrl, user.ID.Hex()),
+					notifications.Stars(user.Rating),
+				},
+			); err != nil {
+				log.Warn().Err(err).Msg("could not send booking accepted notification")
+				// Continue even if email cannot be sent
+			}
 		}
 	case BookingStatusRejected:
 		newStatus = db.BookingStatusRejected
@@ -400,12 +441,6 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		// Verify booking is in ACCEPTED state
 		if booking.BookingStatus != db.BookingStatusAccepted {
 			return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("booking status is %s, must be ACCEPTED", booking.BookingStatus))
-		}
-
-		// Get the renter user to update the tool obfuscatedLocation
-		renter, err := a.getUserByID(booking.FromUserID.Hex())
-		if err != nil {
-			return nil, ErrUserNotFound.WithErr(err)
 		}
 
 		// Update the tool's obfuscatedLocation and actualUserId
@@ -670,6 +705,41 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
+	if toUser.NotificationPreferences[string(types.NotificationNewIncomingRequest)] {
+		// send the new request notification to the recipient
+		if err := a.sendMail(r.Context.Request.Context(), toUser.Email, mailtemplates.NewIncomingRequestMailNotification,
+			struct {
+				AppName      string
+				AppUrl       string
+				LogoURL      string
+				UserName     string
+				UserUrl      string
+				UserRating   string
+				ToolName     string
+				FromDate     string
+				ToDate       string
+				Comment      string
+				WayOfContact string
+				ButtonUrl    string
+			}{
+				mailtemplates.AppName,
+				mailtemplates.AppUrl,
+				mailtemplates.LogoURL,
+				fromUser.Name,
+				fmt.Sprintf(mailtemplates.UserUrl, fromUser.ID.Hex()),
+				notifications.Stars(fromUser.Rating),
+				tool.Title,
+				startDate.Format("02 Jan 2006"),
+				endDate.Format("02 Jan 2006"),
+				req.Comments,
+				req.Contact,
+				mailtemplates.IncomingUrl,
+			},
+		); err != nil {
+			log.Warn().Err(err).Msg("could not send new request notification")
+			// Continue even if email cannot be sent
+		}
+	}
 	return a.convertBookingToResponse(booking, r.UserID), nil
 }
 

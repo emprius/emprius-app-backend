@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN go build -o=empriusbackend -ldflags="-s -w"
+RUN go build -o=empriusbackend -ldflags="-s -w" cmd/main.go
 
 # Final minimal image
 FROM alpine:latest

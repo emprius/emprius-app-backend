@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
+
 	"github.com/emprius/emprius-app-backend/db"
+	"github.com/emprius/emprius-app-backend/types"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"go.mongodb.org/mongo-driver/bson"
@@ -25,6 +28,9 @@ func (a *API) RegisterUserRoutes(r chi.Router) {
 	// GET /profile/pendings
 	log.Info().Msg("register route GET /profile/pendings")
 	r.Get("/profile/pendings", a.routerHandler(a.HandleCountPendingActions))
+	// POST /profile/notifications
+	log.Info().Msg("register route POST /profile/notifications")
+	r.Post("/profile/notifications", a.routerHandler(a.userNotificationPreferencesUpdateHandler))
 	// GET /refresh
 	log.Info().Msg("register route GET /refresh")
 	r.Get("/refresh", a.routerHandler(a.refreshHandler))
@@ -83,12 +89,13 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	}
 
 	user := db.User{
-		Email:    userInfo.UserEmail,
-		Password: hashPassword(userInfo.Password),
-		Name:     userInfo.Name,
-		Active:   true,
-		Rating:   50,
-		Tokens:   1000,
+		Email:                   userInfo.UserEmail,
+		Password:                hashPassword(userInfo.Password),
+		Name:                    userInfo.Name,
+		Active:                  true,
+		Rating:                  50,
+		Tokens:                  1000,
+		NotificationPreferences: db.GetDefaultNotificationPreferences(),
 	}
 	if userInfo.Avatar != nil {
 		image, err := a.addImage(userInfo.Name+"_avatar", userInfo.Avatar)
@@ -139,6 +146,18 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	token, err := a.makeToken(id.Hex())
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// send the welcome email
+	if err := a.sendMail(r.Context.Request.Context(), user.Email, mailtemplates.WelcomeMailNotification,
+		struct {
+			AppName string
+			AppUrl  string
+			LogoURL string
+		}{mailtemplates.AppName, mailtemplates.AppUrl, mailtemplates.LogoURL},
+	); err != nil {
+		log.Warn().Err(err).Msg("could not send welcome email")
+		// Continue even if email cannot be sent
 	}
 
 	return &token, nil
@@ -218,7 +237,7 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 
 	userList := []*User{}
 	for _, u := range users {
-		userList = append(userList, new(User).FromDBUser(u, a.database))
+		userList = append(userList, new(User).FromDBUser(u, a.database, false))
 	}
 
 	// Return users with pagination info
@@ -241,7 +260,7 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 	}
 	// Get user by ID
 	u, _ := a.getUserByID(userID.Hex())
-	return new(User).FromDBUser(u, a.database), nil
+	return new(User).FromDBUser(u, a.database, false), nil
 }
 
 // validateObjectID checks if a string is a valid MongoDB ObjectID
@@ -283,7 +302,7 @@ func (a *API) userProfileHandler(r *Request) (interface{}, error) {
 		return nil, err
 	}
 
-	// Create API user from DB user with real location (true parameter)
+	// Create API user from DB user with real location and private data (true parameters)
 	user := new(User).FromDBUser(dbUser, a.database, true)
 
 	// Get user's unused invite codes
@@ -511,4 +530,41 @@ func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
 	}
 
 	return a.getUnifiedRatingsPaginatedResponse(unifiedRatings, page, pageSize, total), nil
+}
+
+// userNotificationPreferencesUpdateHandler handles POST /profile/notifications
+func (a *API) userNotificationPreferencesUpdateHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
+	var preferences NotificationPreferences
+	if err := json.Unmarshal(r.Data, &preferences); err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	objID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	// Validate that only known notification types are being set
+	for key := range preferences {
+		if !types.IsValidNotificationType(key) {
+			return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("unknown notification type: %s", key))
+		}
+	}
+
+	err = a.database.UserService.UpdateNotificationPreferences(context.Background(), objID, map[string]bool(preferences))
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	// Return the updated preferences
+	updatedPreferences, err := a.database.UserService.GetNotificationPreferences(context.Background(), objID)
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+
+	return NotificationPreferences(updatedPreferences), nil
 }

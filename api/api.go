@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/emprius/emprius-app-backend/notifications"
+	"github.com/rs/zerolog"
+
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,8 +25,20 @@ const (
 	passwordSalt  = "emprius"       // salt for password hashing
 )
 
+type APIConfig struct {
+	DB                 *db.Database
+	MailService        notifications.NotificationService
+	JwtSecret          string
+	RegisterToken      string
+	MaxInviteCodes     int
+	InviteCodeCooldown int
+	Debug              bool
+}
+
 // API type represents the API HTTP server with JWT authentication capabilities.
 type API struct {
+	db                 *db.Database
+	mail               notifications.NotificationService
 	Router             *chi.Mux
 	auth               *jwtauth.JWTAuth
 	registerAuthToken  string
@@ -34,19 +49,31 @@ type API struct {
 }
 
 // New creates a new API HTTP server. It does not start the server. Use Start() for that.
-func New(secret, registerAuthToken string, database *db.Database, maxInviteCodes, inviteCodeCooldown int) *API {
+func New(conf *APIConfig) (*API, error) {
+	if conf == nil {
+		return nil, fmt.Errorf("configuration cannot be nil")
+	}
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout}).With().Caller().Logger()
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if conf.Debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
+	log.Info().Msg("starting app backend")
+
 	webappdir := os.Getenv("WEBAPPDIR")
 	if webappdir == "" {
 		log.Warn().Msg("WEBAPPDIR not set, static files will not be served")
 	}
+
 	return &API{
-		auth:               jwtauth.New("HS256", []byte(secret), nil),
-		database:           database,
-		registerAuthToken:  registerAuthToken,
+		auth:               jwtauth.New("HS256", []byte(conf.JwtSecret), nil),
+		database:           conf.DB,
+		registerAuthToken:  conf.RegisterToken,
 		webappdir:          webappdir,
-		maxInviteCodes:     maxInviteCodes,
-		inviteCodeCooldown: inviteCodeCooldown,
-	}
+		maxInviteCodes:     conf.MaxInviteCodes,
+		inviteCodeCooldown: conf.InviteCodeCooldown,
+		mail:               conf.MailService,
+	}, nil
 }
 
 // Start starts the API HTTP server (non blocking).
@@ -55,7 +82,15 @@ func (a *API) Start(host string, port int) {
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port), a.router()); err != nil {
 			log.Fatal().Err(err).Msg("failed to start api router")
 		}
+		log.Info().Msgf("api service started at %s:%d", host, port)
 	}()
+}
+
+// Close closes the API service database.
+func (a *API) Close() {
+	if err := a.db.Close(context.Background()); err != nil {
+		log.Warn().Err(err).Msg("failed to close database")
+	}
 }
 
 // router creates the router with all the routes and middleware.

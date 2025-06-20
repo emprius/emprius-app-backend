@@ -48,6 +48,9 @@ type LoginResponse struct {
 	Expirity time.Time `json:"expirity"`
 }
 
+// NotificationPreferences represents user notification settings
+type NotificationPreferences map[string]bool
+
 // Location represents a geographical location
 type Location struct {
 	Latitude  int64 `json:"latitude"`  // Latitude in microdegrees
@@ -74,14 +77,16 @@ func (l *Location) FromDBLocation(dbloc db.DBLocation) *Location {
 }
 
 type UserProfile struct {
-	Name           string    `json:"name"`
-	Community      string    `json:"community"`
-	Location       *Location `json:"location,omitempty"`
-	Active         *bool     `json:"active,omitempty"`
-	Avatar         []byte    `json:"avatar,omitempty"`
-	Password       string    `json:"password,omitempty"`
-	ActualPassword string    `json:"actualPassword,omitempty"`
-	Bio            string    `json:"bio,omitempty"`
+	Name                    string                  `json:"name"`
+	Community               string                  `json:"community"`
+	Location                *Location               `json:"location,omitempty"`
+	Active                  *bool                   `json:"active,omitempty"`
+	Avatar                  []byte                  `json:"avatar,omitempty"`
+	Password                string                  `json:"password,omitempty"`
+	ActualPassword          string                  `json:"actualPassword,omitempty"`
+	Bio                     string                  `json:"bio,omitempty"`
+	NotificationPreferences NotificationPreferences `json:"notificationPreferences,omitempty"`
+	InviteCodes             []*SimpleInviteCode     `json:"inviteCodes,omitempty"`
 }
 
 // UserCommunityInfo represents a user's role in a community
@@ -103,16 +108,17 @@ type UserPreview struct {
 // User represents the user type
 type User struct {
 	UserPreview
-	Email       string              `json:"email"`
-	Community   string              `json:"community"`
-	Tokens      uint64              `json:"tokens"`
-	Location    Location            `json:"location"`
-	Verified    bool                `json:"verified"`
-	CreatedAt   time.Time           `json:"createdAt"`
-	LastSeen    time.Time           `json:"lastSeen"`
-	Bio         string              `json:"bio"`
-	InviteCodes []*SimpleInviteCode `json:"inviteCodes,omitempty"`
-	Communities []UserCommunityInfo `json:"communities,omitempty"`
+	Email                   string                  `json:"email"`
+	Community               string                  `json:"community"`
+	Tokens                  uint64                  `json:"tokens"`
+	Location                Location                `json:"location"`
+	Verified                bool                    `json:"verified"`
+	CreatedAt               time.Time               `json:"createdAt"`
+	LastSeen                time.Time               `json:"lastSeen"`
+	Bio                     string                  `json:"bio"`
+	InviteCodes             []*SimpleInviteCode     `json:"inviteCodes,omitempty"`
+	Communities             []UserCommunityInfo     `json:"communities,omitempty"`
+	NotificationPreferences NotificationPreferences `json:"notificationPreferences,omitempty"`
 }
 
 // SimpleInviteCode represents a simplified invitation code with only essential fields
@@ -158,8 +164,8 @@ func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
 }
 
 // FromDBUser converts a DB User to an API User (full version)
-// If useRealLocation is true, the real location is used instead of the obfuscated one
-func (u *User) FromDBUser(dbu *db.User, dbc *db.Database, useRealLocation ...bool) *User {
+// If includePrivateData is true, private data like notification preferences and useRealLocation will be included
+func (u *User) FromDBUser(dbu *db.User, dbc *db.Database, includePrivateData bool) *User {
 	// First fill UserPreview fields
 	u.FromDBUserPreview(dbu)
 
@@ -169,8 +175,9 @@ func (u *User) FromDBUser(dbu *db.User, dbc *db.Database, useRealLocation ...boo
 	u.Tokens = dbu.Tokens
 
 	// Use real location if explicitly requested, otherwise use obfuscated location
-	if len(useRealLocation) > 0 && useRealLocation[0] {
+	if includePrivateData {
 		u.Location.FromDBLocation(dbu.Location)
+		u.NotificationPreferences = NotificationPreferences(dbu.NotificationPreferences)
 	} else {
 		u.Location.FromDBLocation(dbu.ObfuscatedLocation)
 	}

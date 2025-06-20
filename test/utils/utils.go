@@ -14,9 +14,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
+	"github.com/emprius/emprius-app-backend/notifications/smtp"
+	"github.com/emprius/emprius-app-backend/test/mail"
+
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/db"
-	"github.com/emprius/emprius-app-backend/service"
 	qt "github.com/frankban/quicktest"
 )
 
@@ -24,14 +27,18 @@ const (
 	jwtSecret = "secret"
 	// RegisterToken is the test register token for authentication.
 	RegisterToken = "comunals"
+	adminEmail    = "admin@test.com"
+	adminUser     = "admin"
+	adminPass     = "admin123"
 )
 
 // TestService is a test service for the API.
 type TestService struct {
-	s   *service.Service
+	a   *api.API
 	t   *testing.T
 	url string
 	c   *http.Client
+	m   *smtp.Email
 }
 
 // NewTestService creates a new test service.
@@ -46,18 +53,67 @@ func NewTestService(t *testing.T) *TestService {
 	// Get MongoDB connection string
 	mongoURI, err := container.Endpoint(ctx, "mongodb")
 	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+	// initialize the MongoDB database
+	database, err := db.New(mongoURI, jwtSecret)
+	qt.Assert(t, err, qt.IsNil)
 
-	s, err := service.New(mongoURI, jwtSecret, RegisterToken, 5, 30, true)
+	// start test mail server
+	testMailServer, err := mail.StartMailService(ctx)
+	if err != nil {
+		panic(err)
+	}
+	// get the host, the SMTP port and the API port
+	mailHost, err := testMailServer.Host(ctx)
+	if err != nil {
+		panic(err)
+	}
+	smtpPort, err := testMailServer.MappedPort(ctx, mail.MailSMTPPort)
+	if err != nil {
+		panic(err)
+	}
+	apiPort, err := testMailServer.MappedPort(ctx, mail.MailAPIPort)
+	if err != nil {
+		panic(err)
+	}
+	// create test mail service
+	testMailService := new(smtp.Email)
+	if err := testMailService.New(&smtp.Config{
+		FromAddress:  adminEmail,
+		SMTPUsername: adminUser,
+		SMTPPassword: adminPass,
+		SMTPServer:   mailHost,
+		SMTPPort:     smtpPort.Int(),
+		TestAPIPort:  apiPort.Int(),
+	}); err != nil {
+		panic(err)
+	}
+
+	// load the email templates
+	if err := mailtemplates.Load(); err != nil {
+		panic(err)
+	}
+
+	a, err := api.New(&api.APIConfig{
+		DB:                 database,
+		JwtSecret:          jwtSecret,
+		RegisterToken:      RegisterToken,
+		MaxInviteCodes:     5,
+		InviteCodeCooldown: 30,
+		Debug:              true,
+		MailService:        testMailService,
+	})
+
 	qt.Assert(t, err, qt.IsNil)
 	rand.NewSource(time.Now().UnixNano())
 	port := 20000 + rand.New(rand.NewSource(time.Now().UnixNano())).Intn(8192)
-	s.Start("127.0.0.1", port)
+	a.Start("127.0.0.1", port)
 	time.Sleep(time.Second * 1) // Wait for HTTP server to start
 	return &TestService{
-		s:   s,
+		a:   a,
 		t:   t,
 		url: fmt.Sprintf("http://localhost:%d", port),
 		c:   http.DefaultClient,
+		m:   testMailService,
 	}
 }
 
@@ -190,4 +246,8 @@ func (s *TestService) CreateTool(jwt string, title string) int64 {
 	err := json.Unmarshal(resp, &response)
 	qt.Assert(s.t, err, qt.IsNil)
 	return response.Data.ID
+}
+
+func (s *TestService) MailService() *smtp.Email {
+	return s.m
 }

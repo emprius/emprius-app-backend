@@ -1,9 +1,13 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/test/utils"
@@ -28,6 +32,13 @@ func TestLogin(t *testing.T) {
 		"register",
 	)
 	qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Response: %s", string(resp)))
+
+	// Check welcome mail is received
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	mailBody, err := c.MailService().FindEmail(ctx, "foo@test.com")
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, mailBody, qt.Contains, mailtemplates.AppName)
 
 	// try wrong auth token
 	_, code = c.Request(http.MethodPost, "",
@@ -65,6 +76,6 @@ func TestLogin(t *testing.T) {
 	qt.Assert(t, code, qt.Equals, 200)
 
 	logResp := &api.LoginResponse{}
-	err := json.Unmarshal(resp, logResp)
+	err = json.Unmarshal(resp, logResp)
 	qt.Assert(t, err, qt.IsNil)
 }
