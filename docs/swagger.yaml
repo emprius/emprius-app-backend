@@ -232,6 +232,20 @@ components:
                 enum: [ADMIN, MEMBER]
           description: List of communities the user belongs to with their roles
 
+    NotificationPreferences:
+      type: object
+      additionalProperties:
+        type: boolean
+      description: |
+        User notification preferences as key-value pairs where keys are notification types and values are boolean (enabled/disabled).
+        
+        Available notification types:
+        - incoming_requests: New booking requests for your tools
+        - booking_accepted: When your booking request is accepted
+      example:
+        incoming_requests: true
+        booking_accepted: true
+
     UserProfile:
       type: object
       properties:
@@ -276,6 +290,8 @@ components:
             type: string
           nullable: true
           description: List of communities ids where the user belongs to
+        notificationPreferences:
+          $ref: '#/components/schemas/NotificationPreferences'
     LoginRequest:
       type: object
       required:
@@ -941,6 +957,37 @@ paths:
                         type: integer
                         format: int64
                         description: Number of pending community invites
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /profile/notifications:
+    post:
+      tags:
+        - Users
+      summary: Update user notification preferences
+      description: Update notification preferences for the authenticated user
+      security:
+        - bearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferences'
+            example:
+              incoming_requests: true
+              booking_accepted: true
+      responses:
+        '200':
+          description: Notification preferences updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferences'
+        '400':
+          description: Invalid request body or unknown notification type
         '401':
           description: Unauthorized
         '500':

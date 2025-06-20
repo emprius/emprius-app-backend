@@ -15,23 +15,24 @@ import (
 
 // User represents the schema for the "users" collection.
 type User struct {
-	ID                 primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
-	Email              string              `bson:"email" json:"email"`
-	Name               string              `bson:"name" json:"name"`
-	Community          string              `bson:"community,omitempty" json:"community,omitempty"`
-	Password           []byte              `bson:"password" json:"-"` // Don't include password in JSON
-	Tokens             uint64              `bson:"tokens" json:"tokens" default:"1000"`
-	Active             bool                `bson:"active" json:"active" default:"true"`
-	Rating             int32               `bson:"rating" json:"rating" default:"50"`
-	RatingCount        int                 `bson:"ratingCount" json:"ratingCount" default:"0"`
-	AvatarHash         types.HexBytes      `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
-	Location           DBLocation          `bson:"location" json:"location"`
-	ObfuscatedLocation DBLocation          `bson:"obfuscatedLocation" json:"obfuscatedLocation"`
-	Verified           bool                `bson:"verified" json:"verified" default:"false"`
-	CreatedAt          time.Time           `bson:"createdAt,omitempty" json:"createdAt,omitempty"`
-	LastSeen           time.Time           `bson:"lastSeen,omitempty" json:"lastSeen,omitempty"`
-	Bio                string              `bson:"bio,omitempty" json:"bio,omitempty"`
-	Communities        []UserCommunityRole `bson:"communities,omitempty" json:"communities,omitempty"`
+	ID                      primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
+	Email                   string              `bson:"email" json:"email"`
+	Name                    string              `bson:"name" json:"name"`
+	Community               string              `bson:"community,omitempty" json:"community,omitempty"`
+	Password                []byte              `bson:"password" json:"-"` // Don't include password in JSON
+	Tokens                  uint64              `bson:"tokens" json:"tokens" default:"1000"`
+	Active                  bool                `bson:"active" json:"active" default:"true"`
+	Rating                  int32               `bson:"rating" json:"rating" default:"50"`
+	RatingCount             int                 `bson:"ratingCount" json:"ratingCount" default:"0"`
+	AvatarHash              types.HexBytes      `bson:"avatarHash,omitempty" json:"avatarHash,omitempty"`
+	Location                DBLocation          `bson:"location" json:"location"`
+	ObfuscatedLocation      DBLocation          `bson:"obfuscatedLocation" json:"obfuscatedLocation"`
+	Verified                bool                `bson:"verified" json:"verified" default:"false"`
+	CreatedAt               time.Time           `bson:"createdAt,omitempty" json:"createdAt,omitempty"`
+	LastSeen                time.Time           `bson:"lastSeen,omitempty" json:"lastSeen,omitempty"`
+	Bio                     string              `bson:"bio,omitempty" json:"bio,omitempty"`
+	Communities             []UserCommunityRole `bson:"communities,omitempty" json:"communities,omitempty"`
+	NotificationPreferences map[string]bool     `bson:"notificationPreferences,omitempty" json:"notificationPreferences,omitempty"`
 }
 
 // UserCommunityRole represents a user's role in a community
@@ -260,4 +261,53 @@ func (s *UserService) GetUserCommunities(ctx context.Context, userID primitive.O
 		return nil, err
 	}
 	return user.Communities, nil
+}
+
+// GetDefaultNotificationPreferences returns the default notification preferences for new users
+func GetDefaultNotificationPreferences() map[string]bool {
+	return types.GetDefaultNotificationPreferences()
+}
+
+// UpdateNotificationPreferences updates a user's notification preferences
+func (s *UserService) UpdateNotificationPreferences(ctx context.Context, userID primitive.ObjectID, preferences map[string]bool) error {
+	// Get current preferences to merge with new ones
+	currentPreferences, err := s.GetNotificationPreferences(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Merge new preferences with current ones
+	for key, value := range preferences {
+		currentPreferences[key] = value
+	}
+
+	_, err = s.Collection.UpdateOne(
+		ctx,
+		bson.M{"_id": userID},
+		bson.M{"$set": bson.M{"notificationPreferences": currentPreferences}},
+	)
+	return err
+}
+
+// GetNotificationPreferences retrieves a user's notification preferences, returning defaults if none exist
+func (s *UserService) GetNotificationPreferences(ctx context.Context, userID primitive.ObjectID) (map[string]bool, error) {
+	user, err := s.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If user has no notification preferences set, return defaults
+	if user.NotificationPreferences == nil || len(user.NotificationPreferences) == 0 {
+		return GetDefaultNotificationPreferences(), nil
+	}
+
+	// Merge with defaults to ensure all notification types are present
+	defaults := GetDefaultNotificationPreferences()
+	for key, defaultValue := range defaults {
+		if _, exists := user.NotificationPreferences[key]; !exists {
+			user.NotificationPreferences[key] = defaultValue
+		}
+	}
+
+	return user.NotificationPreferences, nil
 }

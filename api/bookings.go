@@ -285,33 +285,35 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		}
 
 		// Send the accepted notification to the requester
-		if err := a.sendMail(r.Context.Request.Context(), renter.Email, mailtemplates.BookingAcceptedMailNotification,
-			struct {
-				AppName    string
-				AppUrl     string
-				LogoURL    string
-				ToolName   string
-				FromDate   string
-				ToDate     string
-				ButtonUrl  string
-				UserName   string
-				UserUrl    string
-				UserRating string
-			}{
-				mailtemplates.AppName,
-				mailtemplates.AppUrl,
-				mailtemplates.LogoURL,
-				tool.Title,
-				booking.StartDate.Format("02 Jan 2006"),
-				booking.EndDate.Format("02 Jan 2006"),
-				mailtemplates.BookingUrl,
-				user.Name,
-				fmt.Sprintf(mailtemplates.UserUrl, user.ID.Hex()),
-				notifications.Stars(user.Rating),
-			},
-		); err != nil {
-			log.Warn().Err(err).Msg("could not send booking accepted notification")
-			// Continue even if email cannot be sent
+		if renter.NotificationPreferences[string(types.NotificationBookingAccepted)] {
+			if err := a.sendMail(r.Context.Request.Context(), renter.Email, mailtemplates.BookingAcceptedMailNotification,
+				struct {
+					AppName    string
+					AppUrl     string
+					LogoURL    string
+					ToolName   string
+					FromDate   string
+					ToDate     string
+					ButtonUrl  string
+					UserName   string
+					UserUrl    string
+					UserRating string
+				}{
+					mailtemplates.AppName,
+					mailtemplates.AppUrl,
+					mailtemplates.LogoURL,
+					tool.Title,
+					booking.StartDate.Format("02 Jan 2006"),
+					booking.EndDate.Format("02 Jan 2006"),
+					mailtemplates.BookingUrl,
+					user.Name,
+					fmt.Sprintf(mailtemplates.UserUrl, user.ID.Hex()),
+					notifications.Stars(user.Rating),
+				},
+			); err != nil {
+				log.Warn().Err(err).Msg("could not send booking accepted notification")
+				// Continue even if email cannot be sent
+			}
 		}
 	case BookingStatusRejected:
 		newStatus = db.BookingStatusRejected
@@ -702,40 +704,41 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// send the new request notification to the recipient
-	if err := a.sendMail(r.Context.Request.Context(), toUser.Email, mailtemplates.NewIncomingRequestMailNotification,
-		struct {
-			AppName      string
-			AppUrl       string
-			LogoURL      string
-			UserName     string
-			UserUrl      string
-			UserRating   string
-			ToolName     string
-			FromDate     string
-			ToDate       string
-			Comment      string
-			WayOfContact string
-			ButtonUrl    string
-		}{
-			mailtemplates.AppName,
-			mailtemplates.AppUrl,
-			mailtemplates.LogoURL,
-			fromUser.Name,
-			fmt.Sprintf(mailtemplates.UserUrl, fromUser.ID.Hex()),
-			notifications.Stars(fromUser.Rating),
-			tool.Title,
-			startDate.Format("02 Jan 2006"),
-			endDate.Format("02 Jan 2006"),
-			req.Comments,
-			req.Contact,
-			mailtemplates.IncomingUrl,
-		},
-	); err != nil {
-		log.Warn().Err(err).Msg("could not send new request notification")
-		// Continue even if email cannot be sent
+	if toUser.NotificationPreferences[string(types.NotificationNewIncomingRequest)] {
+		// send the new request notification to the recipient
+		if err := a.sendMail(r.Context.Request.Context(), toUser.Email, mailtemplates.NewIncomingRequestMailNotification,
+			struct {
+				AppName      string
+				AppUrl       string
+				LogoURL      string
+				UserName     string
+				UserUrl      string
+				UserRating   string
+				ToolName     string
+				FromDate     string
+				ToDate       string
+				Comment      string
+				WayOfContact string
+				ButtonUrl    string
+			}{
+				mailtemplates.AppName,
+				mailtemplates.AppUrl,
+				mailtemplates.LogoURL,
+				fromUser.Name,
+				fmt.Sprintf(mailtemplates.UserUrl, fromUser.ID.Hex()),
+				notifications.Stars(fromUser.Rating),
+				tool.Title,
+				startDate.Format("02 Jan 2006"),
+				endDate.Format("02 Jan 2006"),
+				req.Comments,
+				req.Contact,
+				mailtemplates.IncomingUrl,
+			},
+		); err != nil {
+			log.Warn().Err(err).Msg("could not send new request notification")
+			// Continue even if email cannot be sent
+		}
 	}
-
 	return a.convertBookingToResponse(booking, r.UserID), nil
 }
 
