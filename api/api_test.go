@@ -3,10 +3,11 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/notifications/smtp"
-	"github.com/emprius/emprius-app-backend/test/mail"
 	"testing"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications/smtp"
+	"github.com/emprius/emprius-app-backend/test/mail"
 
 	qt "github.com/frankban/quicktest"
 	"github.com/go-chi/chi/v5"

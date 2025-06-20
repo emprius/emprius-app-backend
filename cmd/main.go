@@ -3,14 +3,15 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/api"
-	"github.com/emprius/emprius-app-backend/db"
-	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
-	"github.com/emprius/emprius-app-backend/notifications/smtp"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/api"
+	"github.com/emprius/emprius-app-backend/db"
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
+	"github.com/emprius/emprius-app-backend/notifications/smtp"
 
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"

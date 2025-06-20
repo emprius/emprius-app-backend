@@ -5,9 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
-	"github.com/emprius/emprius-app-backend/notifications/smtp"
-	"github.com/emprius/emprius-app-backend/test/mail"
 	"io"
 	"math/rand"
 	"net/http"
@@ -16,6 +13,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
+	"github.com/emprius/emprius-app-backend/notifications/smtp"
+	"github.com/emprius/emprius-app-backend/test/mail"
 
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/db"

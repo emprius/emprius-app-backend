@@ -3,10 +3,11 @@ package test
 import (
 	"context"
 	"encoding/json"
-	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/test/utils"

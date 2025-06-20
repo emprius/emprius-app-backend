@@ -269,7 +269,11 @@ func GetDefaultNotificationPreferences() map[string]bool {
 }
 
 // UpdateNotificationPreferences updates a user's notification preferences
-func (s *UserService) UpdateNotificationPreferences(ctx context.Context, userID primitive.ObjectID, preferences map[string]bool) error {
+func (s *UserService) UpdateNotificationPreferences(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	preferences map[string]bool,
+) error {
 	// Get current preferences to merge with new ones
 	currentPreferences, err := s.GetNotificationPreferences(ctx, userID)
 	if err != nil {
@@ -297,7 +301,7 @@ func (s *UserService) GetNotificationPreferences(ctx context.Context, userID pri
 	}
 
 	// If user has no notification preferences set, return defaults
-	if user.NotificationPreferences == nil || len(user.NotificationPreferences) == 0 {
+	if len(user.NotificationPreferences) == 0 {
 		return GetDefaultNotificationPreferences(), nil
 	}
 

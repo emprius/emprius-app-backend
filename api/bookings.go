@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/notifications"
-	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 	"strconv"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications"
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"

@@ -39,7 +39,13 @@ func TestNotificationPreferences(t *testing.T) {
 		for key, expectedValue := range expectedDefaults {
 			actualValue, exists := notificationResp.Data[key]
 			qt.Assert(t, exists, qt.IsTrue, qt.Commentf("Notification type %s should exist", key))
-			qt.Assert(t, actualValue, qt.Equals, expectedValue, qt.Commentf("Notification type %s should have default value %v", key, expectedValue))
+			qt.Assert(
+				t,
+				actualValue,
+				qt.Equals,
+				expectedValue,
+				qt.Commentf("Notification type %s should have default value %v", key, expectedValue),
+			)
 		}
 	})
 
@@ -189,7 +195,13 @@ func TestNotificationPreferences(t *testing.T) {
 		for key, expectedValue := range expectedDefaults {
 			actualValue, exists := profileResp.Data.NotificationPreferences[key]
 			qt.Assert(t, exists, qt.IsTrue, qt.Commentf("New user should have notification type %s", key))
-			qt.Assert(t, actualValue, qt.Equals, expectedValue, qt.Commentf("New user should have default value %v for %s", expectedValue, key))
+			qt.Assert(
+				t,
+				actualValue,
+				qt.Equals,
+				expectedValue,
+				qt.Commentf("New user should have default value %v for %s", expectedValue, key),
+			)
 		}
 	})
 
@@ -241,7 +253,12 @@ func TestNotificationPreferences(t *testing.T) {
 
 		// Verify notification preferences are NOT included in any user in the list
 		for _, user := range usersResp.Data.Users {
-			qt.Assert(t, user.NotificationPreferences, qt.IsNil, qt.Commentf("User %s should not have notification preferences in public list", user.ID))
+			qt.Assert(
+				t,
+				user.NotificationPreferences,
+				qt.IsNil,
+				qt.Commentf("User %s should not have notification preferences in public list", user.ID),
+			)
 		}
 
 		// But verify that the user's own profile DOES include notification preferences
@@ -319,13 +336,19 @@ func TestNewIncomingRequestNotification(t *testing.T) {
 		}
 		err := json.Unmarshal(resp, &notificationResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, notificationResp.Data["incoming_requests"], qt.Equals, true, qt.Commentf("incoming_requests should be enabled by default"))
+		qt.Assert(
+			t,
+			notificationResp.Data["incoming_requests"],
+			qt.Equals,
+			true,
+			qt.Commentf("incoming_requests should be enabled by default"),
+		)
 
 		// Owner creates a tool
 		toolID := c.CreateTool(ownerJWT, "Test Tool for Notifications")
 
 		// Renter creates a booking request
-		resp, code = c.Request(http.MethodPost, renterJWT,
+		_, code = c.Request(http.MethodPost, renterJWT,
 			api.CreateBookingRequest{
 				ToolID:    fmt.Sprint(toolID),
 				StartDate: time.Now().Add(24 * time.Hour).Unix(),
@@ -360,11 +383,11 @@ func TestNewIncomingRequestNotification(t *testing.T) {
 		updatePrefs := api.NotificationPreferences{
 			"incoming_requests": false,
 		}
-		resp, code := c.Request(http.MethodPost, ownerJWT, updatePrefs, "profile", "notifications")
+		_, code := c.Request(http.MethodPost, ownerJWT, updatePrefs, "profile", "notifications")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify the preference was updated
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "profile", "notifications")
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "profile", "notifications")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		var notificationResp struct {

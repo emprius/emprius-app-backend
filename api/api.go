@@ -3,13 +3,14 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/notifications"
-	"github.com/rs/zerolog"
 	"net/http"
 	"os"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications"
+	"github.com/rs/zerolog"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/go-chi/chi/v5"
