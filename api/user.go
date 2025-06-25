@@ -258,8 +258,22 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(fmt.Errorf("invalid user id format: %s", r.Context.URLParam("id")))
 	}
-	// Get user by ID
-	u, _ := a.getUserByID(userID.Hex())
+
+	// Get requesting user ID for access control
+	var requestingUserID primitive.ObjectID
+	if r.UserID != "" {
+		requestingUserID, err = primitive.ObjectIDFromHex(r.UserID)
+		if err != nil {
+			return nil, ErrInvalidUserID.WithErr(err)
+		}
+	}
+
+	// Use access control method to check if user can be accessed
+	u, err := a.database.UserService.GetUserByIDWithAccessControl(r.Context.Request.Context(), userID, requestingUserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
 	return new(User).FromDBUser(u, a.database, false), nil
 }
 
