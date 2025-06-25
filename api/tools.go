@@ -370,6 +370,10 @@ func (a *API) deleteTool(id int64) error {
 }
 
 func (a *API) toolHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
 	idParam := r.Context.URLParam("id")
 	if idParam == nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
@@ -379,26 +383,25 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get the tool from the database
-	dbTool, err := a.toolFromDB(id)
+	// Get requesting user ID
+	requestingUserID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	// Get the tool from the database with access control
+	dbTool, err := a.database.ToolService.GetToolByIDWithAccessControl(r.Context.Request.Context(), id, requestingUserID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
+		}
+		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	// Determine if we should use the real location
-	useRealLocation := false
+	useRealLocation := dbTool.UserID == requestingUserID || dbTool.ActualUserID == requestingUserID
 
-	// Only show real location if user is authenticated
-	if r.UserID != "" {
-		userObjID, err := primitive.ObjectIDFromHex(r.UserID)
-		if err == nil {
-			// Fetch the tool to check the owner
-			tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), id)
-			if err == nil && tool.UserID == userObjID || err == nil && tool.ActualUserID == userObjID {
-				useRealLocation = true
-			}
-		}
-	}
+	// Only show real location if user is authenticated and is the owner
 
 	// Convert DB tool to API tool with appropriate location
 	tool := new(Tool).FromDBTool(dbTool, useRealLocation)
@@ -454,12 +457,19 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	// Get requesting user ID
+	requestingUserID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
 	searchTerm := *r.Context.GetSearchTerm()
 
-	// Get paginated tools
-	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(
+	// Get paginated tools with access control
+	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginatedWithAccessControl(
 		context.Background(),
 		id,
+		requestingUserID,
 		page,
 		pageSize,
 		searchTerm,
@@ -651,10 +661,17 @@ func (a *API) HandleGetToolRatings(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get unified ratings for the tool
-	unifiedRatings, total, err := a.database.BookingService.GetRatingsByToolID(
+	// Get requesting user ID
+	requestingUserID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	// Get unified ratings for the tool with access control
+	unifiedRatings, total, err := a.database.BookingService.GetRatingsByToolIDWithAccessControl(
 		r.Context.Request.Context(),
 		idParam[0],
+		requestingUserID,
 		page,
 		pageSize,
 	)
@@ -718,10 +735,19 @@ func (a *API) toolHistoryHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get the tool to check if it's nomadic
-	tool, err := a.toolFromDB(id)
+	// Get requesting user ID
+	requestingUserID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	// Get the tool with access control to check if it's nomadic and accessible
+	tool, err := a.database.ToolService.GetToolByIDWithAccessControl(r.Context.Request.Context(), id, requestingUserID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", id))
+		}
+		return nil, ErrInternalServerError.WithErr(err)
 	}
 
 	if !tool.IsNomadic {

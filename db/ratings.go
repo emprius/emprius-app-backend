@@ -448,6 +448,72 @@ func (s *BookingService) GetRatingsByToolID(
 	return s.createUnifiedRatings(bookings, ratings), total, nil
 }
 
+// GetRatingsByToolIDWithAccessControl retrieves all ratings associated with a specific tool ID with access control.
+// Only allows access to ratings for tools from inactive users if the requesting user is the tool owner.
+func (s *BookingService) GetRatingsByToolIDWithAccessControl(
+	ctx context.Context,
+	toolID string,
+	requestingUserID primitive.ObjectID,
+	page int,
+	pageSize int,
+) ([]*UnifiedRating, int64, error) {
+	// First check if the tool owner is active or if the requesting user is the tool owner
+	toolIDInt, err := strconv.ParseInt(toolID, 10, 64)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid tool ID: %w", err)
+	}
+
+	// Use aggregation to check tool owner status
+	toolService := s.database.Collection("tools")
+	pipeline := mongo.Pipeline{
+		// Stage 1: Match the specific tool
+		bson.D{{Key: "$match", Value: bson.M{"_id": toolIDInt}}},
+		// Stage 2: Join with users collection to get tool owner info
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "users"},
+				{Key: "localField", Value: "userId"},
+				{Key: "foreignField", Value: "_id"},
+				{Key: "as", Value: "owner"},
+			}},
+		},
+		// Stage 3: Filter based on access control rules
+		bson.D{
+			{Key: "$match", Value: bson.D{
+				{Key: "$or", Value: bson.A{
+					// Allow if tool owner is active
+					bson.D{{Key: "owner.active", Value: true}},
+					// Allow if requesting user is the tool owner
+					bson.D{{Key: "userId", Value: requestingUserID}},
+				}},
+			}},
+		},
+	}
+
+	cursor, err := toolService.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var tools []interface{}
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, 0, err
+	}
+
+	// If no tools found (access denied), return empty results
+	if len(tools) == 0 {
+		return []*UnifiedRating{}, 0, nil
+	}
+
+	// Otherwise, use the regular method
+	return s.GetRatingsByToolID(ctx, toolID, page, pageSize)
+}
+
 // GetRatingsByBookingID retrieves all ratings associated with a specific booking ID
 func (s *BookingService) GetRatingsByBookingID(ctx context.Context, bookingID primitive.ObjectID) (*UnifiedRating, error) {
 	// First get the booking to have access to the tool ID and user IDs
