@@ -213,6 +213,16 @@ func TestSearchToolsByLocation(t *testing.T) {
 		Database: database,
 	})
 
+	// Initialize UserService and create a test user
+	userService := NewUserService(&Database{
+		Client:   client,
+		Database: database,
+	})
+
+	// Create a test user
+	userID, err := CreateTestUser(ctx, userService, "locationuser@example.com", "Location Test User")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create test user"))
+
 	// Base location (Barcelona area)
 	baseLocation := DBLocation{
 		Type: "Point",
@@ -278,6 +288,7 @@ func TestSearchToolsByLocation(t *testing.T) {
 	for i, tt := range tools {
 		tool := &Tool{
 			ID:          int64(i + 1),
+			UserID:      userID,
 			Title:       tt.name,
 			Description: "Test tool",
 			IsAvailable: true,
@@ -387,6 +398,16 @@ func TestSearchTitleAndDescription(t *testing.T) {
 		Database: database,
 	})
 
+	// Initialize UserService and create a test user
+	userService := NewUserService(&Database{
+		Client:   client,
+		Database: database,
+	})
+
+	// Create a test user
+	userID, err := CreateTestUser(ctx, userService, "searchuser@example.com", "Search Test User")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create test user"))
+
 	// Insert test tools
 	location := DBLocation{
 		Type: "Point",
@@ -399,6 +420,7 @@ func TestSearchTitleAndDescription(t *testing.T) {
 	tools := []Tool{
 		{
 			ID:          1,
+			UserID:      userID,
 			Title:       "AmazingTool",
 			Description: "A great tool for professionals",
 			IsAvailable: true,
@@ -406,6 +428,7 @@ func TestSearchTitleAndDescription(t *testing.T) {
 		},
 		{
 			ID:          2,
+			UserID:      userID,
 			Title:       "Super RangeFinder",
 			Description: "Find distances with precision",
 			IsAvailable: true,
@@ -413,6 +436,7 @@ func TestSearchTitleAndDescription(t *testing.T) {
 		},
 		{
 			ID:          3,
+			UserID:      userID,
 			Title:       "rangeX 3000",
 			Description: "Powerful laser range device",
 			IsAvailable: true,
@@ -420,6 +444,7 @@ func TestSearchTitleAndDescription(t *testing.T) {
 		},
 		{
 			ID:          4,
+			UserID:      userID,
 			Title:       "Basic Hammer",
 			Description: "Simple but effective hammer",
 			IsAvailable: true,
@@ -427,6 +452,7 @@ func TestSearchTitleAndDescription(t *testing.T) {
 		},
 		{
 			ID:          5,
+			UserID:      userID,
 			Title:       "DrillMaster",
 			Description: "A powerful drill machine",
 			IsAvailable: true,
