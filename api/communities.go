@@ -592,10 +592,10 @@ func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Check if user exists
-	_, err = a.database.UserService.GetUserByID(r.Context.Request.Context(), userID)
+	// Use access control method to check if user can be accessed
+	_, err = a.GetUserByIDWithAccessControl(r, userID)
 	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
+		return nil, err
 	}
 
 	// Get page from query parameters

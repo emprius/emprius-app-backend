@@ -398,10 +398,8 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 
-	// Determine if we should use the real location
-	useRealLocation := dbTool.UserID == requestingUserID || dbTool.ActualUserID == requestingUserID
-
 	// Only show real location if user is authenticated and is the owner
+	useRealLocation := dbTool.UserID == requestingUserID || dbTool.ActualUserID == requestingUserID
 
 	// Convert DB tool to API tool with appropriate location
 	tool := new(Tool).FromDBTool(dbTool, useRealLocation)
