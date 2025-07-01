@@ -245,32 +245,6 @@ func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
 	return tools, nil
 }
 
-// GetToolsByUserIDPaginatedWithAccessControl retrieves tools owned by a user with pagination and access control.
-// Only allows access to tools from inactive users if the requesting user is the same user.
-func (s *ToolService) GetToolsByUserIDPaginatedWithAccessControl(
-	ctx context.Context,
-	userID primitive.ObjectID,
-	requestingUserID primitive.ObjectID,
-	page int,
-	pageSize int,
-	searchTerm string,
-) ([]*Tool, int64, error) {
-	// First check if the user is active or if the requesting user is the same user
-	userService := NewUserService(&Database{Database: s.Collection.Database()})
-	user, err := userService.GetUserByID(ctx, userID)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// If user is inactive and requesting user is different, return empty results
-	if !user.Active && userID != requestingUserID {
-		return []*Tool{}, 0, nil
-	}
-
-	// Otherwise, use the regular method
-	return s.GetToolsByUserIDPaginated(ctx, userID, page, pageSize, searchTerm)
-}
-
 // GetToolsByUserIDPaginated retrieves tools owned by a user with pagination and optional search term filtering
 func (s *ToolService) GetToolsByUserIDPaginated(
 	ctx context.Context,
