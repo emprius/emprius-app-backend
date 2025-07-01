@@ -464,13 +464,10 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 					{Key: "as", Value: "user"},
 				}},
 			},
-			// Filter out tools from inactive users (unless the user is the owner)
+			// Filter out tools from inactive users
 			bson.D{
 				{Key: "$match", Value: bson.D{
-					{Key: "$or", Value: bson.A{
-						bson.D{{Key: "user.active", Value: true}},
-						bson.D{{Key: "userId", Value: opts.UserID}}, // Allow if requesting user is the owner
-					}},
+					{Key: "user.active", Value: true},
 				}},
 			},
 			// Remove the user field from the output
@@ -555,10 +552,7 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 		// Stage 3: Filter out tools from inactive users (unless the user is the owner)
 		bson.D{
 			{Key: "$match", Value: bson.D{
-				{Key: "$or", Value: bson.A{
-					bson.D{{Key: "user.active", Value: true}},
-					bson.D{{Key: "userId", Value: opts.UserID}}, // Allow if requesting user is the owner
-				}},
+				{Key: "user.active", Value: true},
 			}},
 		},
 		// Stage 4: Remove the user field from the output
