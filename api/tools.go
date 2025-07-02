@@ -813,7 +813,7 @@ func (a *API) GetToolByIDWithAccessControl(r *Request, toolId []string) (*db.Too
 	dbTool, err := a.database.ToolService.GetToolByIDWithAccessControl(r.Context.Request.Context(), id, requestingUserID)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %d not found", toolId))
+			return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %s not found", toolId[0]))
 		}
 		return nil, ErrInternalServerError.WithErr(err)
 	}

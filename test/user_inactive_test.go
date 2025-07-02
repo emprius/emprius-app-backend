@@ -282,15 +282,8 @@ func TestInactiveUserToolAccess(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Test with other user - should return empty results
-		resp, code := s.Request(http.MethodGet, otherToken, nil, "tools", fmt.Sprintf("%d/ratings", inactiveToolID))
-		qt.Assert(t, code, qt.Equals, 200)
-
-		var ratingsResp struct {
-			Data api.PaginatedUnifiedRatingsResponse `json:"data"`
-		}
-		err := json.Unmarshal(resp, &ratingsResp)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(ratingsResp.Data.Ratings), qt.Equals, 0)
+		_, code = s.Request(http.MethodGet, otherToken, nil, "tools", fmt.Sprintf("%d/ratings", inactiveToolID))
+		qt.Assert(t, code, qt.Equals, 404)
 	})
 
 	t.Run("GET /tools/user/{id} - Inactive user tools access", func(t *testing.T) {
@@ -299,15 +292,8 @@ func TestInactiveUserToolAccess(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Test with other user - should return empty results
-		resp, code := s.Request(http.MethodGet, otherToken, nil, "tools", "user", inactiveUserID)
-		qt.Assert(t, code, qt.Equals, 200)
-
-		var toolsResp struct {
-			Data api.PaginatedToolsResponse `json:"data"`
-		}
-		err := json.Unmarshal(resp, &toolsResp)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 0)
+		_, code = s.Request(http.MethodGet, otherToken, nil, "tools", "user", inactiveUserID)
+		qt.Assert(t, code, qt.Equals, 404)
 	})
 
 	t.Run("GET /tools/search - Should not return tools from inactive users", func(t *testing.T) {
@@ -326,14 +312,14 @@ func TestInactiveUserToolAccess(t *testing.T) {
 			qt.Assert(t, tool.UserID, qt.Not(qt.Equals), inactiveUserID)
 		}
 
-		// Test with inactive user - should see their own tools plus active user tools
+		// Test with inactive user - should NOT see own tools plus active user tools
 		resp, code = s.Request(http.MethodGet, inactiveToken, nil, "tools", "search")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		err = json.Unmarshal(resp, &toolsResp)
 		qt.Assert(t, err, qt.IsNil)
 
-		// Should contain the inactive user's own tools
+		// Should NOT contain the inactive user's own tools
 		foundOwnTool := false
 		for _, tool := range toolsResp.Data.Tools {
 			if tool.UserID == inactiveUserID {
@@ -341,6 +327,6 @@ func TestInactiveUserToolAccess(t *testing.T) {
 				break
 			}
 		}
-		qt.Assert(t, foundOwnTool, qt.IsTrue)
+		qt.Assert(t, foundOwnTool, qt.IsFalse)
 	})
 }
