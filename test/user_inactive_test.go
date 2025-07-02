@@ -166,17 +166,8 @@ func TestInactiveUserToolsAccessControl(t *testing.T) {
 
 	t.Run("GetUserTools denies access to inactive user tools by different user", func(t *testing.T) {
 		// Active user should not be able to access tools from inactive user
-		resp, code := c.Request(http.MethodGet, activeUserJWT, nil, "tools", "user", inactiveUserID)
-		qt.Assert(t, code, qt.Equals, 200)
-
-		var toolsResp struct {
-			Data struct {
-				Tools []*api.Tool `json:"tools"`
-			} `json:"data"`
-		}
-		err := json.Unmarshal(resp, &toolsResp)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 0) // Should return empty list
+		_, code := c.Request(http.MethodGet, activeUserJWT, nil, "tools", "user", inactiveUserID)
+		qt.Assert(t, code, qt.Equals, 404)
 	})
 
 	t.Run("GetUserTools allows access to inactive user tools by same user", func(t *testing.T) {
@@ -212,7 +203,7 @@ func TestInactiveUserToolsAccessControl(t *testing.T) {
 		qt.Assert(t, toolsResp.Data.Tools[0].ID, qt.Equals, activeToolID)
 	})
 
-	t.Run("SearchTools includes own tools for inactive user", func(t *testing.T) {
+	t.Run("SearchTools NOT includes own tools for inactive user", func(t *testing.T) {
 		resp, code := c.Request(http.MethodGet, inactiveUserJWT, nil, "tools", "search")
 		qt.Assert(t, code, qt.Equals, 200)
 
@@ -225,7 +216,7 @@ func TestInactiveUserToolsAccessControl(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Should return both tools (active user's tool + own tool)
-		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 2)
+		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 1)
 
 		// Verify we have both tools
 		toolIDs := make(map[int64]bool)
@@ -233,7 +224,7 @@ func TestInactiveUserToolsAccessControl(t *testing.T) {
 			toolIDs[tool.ID] = true
 		}
 		qt.Assert(t, toolIDs[activeToolID], qt.Equals, true)
-		qt.Assert(t, toolIDs[inactiveToolID], qt.Equals, true)
+		qt.Assert(t, toolIDs[inactiveToolID], qt.Equals, false)
 	})
 }
 
