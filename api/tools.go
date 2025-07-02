@@ -458,7 +458,6 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 
 	// Get paginated tools with access control
 	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(context.Background(), id, page, pageSize, searchTerm)
-
 	if err != nil {
 		return nil, err
 	}
@@ -653,8 +652,12 @@ func (a *API) HandleGetToolRatings(r *Request) (interface{}, error) {
 	}
 
 	// Get unified ratings for the tool with access control
-	unifiedRatings, total, err := a.database.BookingService.GetRatingsByToolID(r.Context.Request.Context(), idParam[0], page, pageSize)
-
+	unifiedRatings, total, err := a.database.BookingService.GetRatingsByToolID(
+		r.Context.Request.Context(),
+		idParam[0],
+		page,
+		pageSize,
+	)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
