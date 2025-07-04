@@ -145,6 +145,12 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		*t.IsAvailable = true
 	}
 
+	// Set the nomadic to false by default
+	if t.IsNomadic == nil {
+		t.IsNomadic = new(bool)
+		*t.IsNomadic = false
+	}
+
 	// Create the tool with real location
 	toolId := toolID(userID)
 	realLocation := t.Location.ToDBLocation()
@@ -170,7 +176,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		ObfuscatedLocation: db.ObfuscateLocation(realLocation, user.ID),
 		TransportOptions:   transportOptions,
 		ReservedDates:      []db.DateRange{}, // Initialize empty array
-		IsNomadic:          t.IsNomadic,
+		IsNomadic:          *t.IsNomadic,
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
@@ -229,8 +235,9 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 	if newTool.AskWithFee != nil {
 		tool.AskWithFee = *newTool.AskWithFee
 	}
-	// Update nomadic status
-	tool.IsNomadic = newTool.IsNomadic
+	if newTool.IsNomadic != nil {
+		tool.IsNomadic = *newTool.IsNomadic
+	}
 
 	if newTool.ToolValuation != nil {
 		tool.ToolValuation = *newTool.ToolValuation
@@ -349,6 +356,7 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 		"obfuscatedLocation": tool.ObfuscatedLocation,
 		"transportOptions":   tool.TransportOptions,
 		"isNomadic":          tool.IsNomadic,
+		"actualUserId":       tool.ActualUserID,
 	}
 	err = a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 	if err != nil {
@@ -370,38 +378,32 @@ func (a *API) deleteTool(id int64) error {
 }
 
 func (a *API) toolHandler(r *Request) (interface{}, error) {
+	if r.UserID == "" {
+		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user not authenticated"))
+	}
+
 	idParam := r.Context.URLParam("id")
 	if idParam == nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
 	}
-	id, err := strconv.ParseInt(idParam[0], 10, 64)
+
+	// Get requesting user ID
+	requestingUserID, err := primitive.ObjectIDFromHex(r.UserID)
 	if err != nil {
-		return nil, ErrInvalidRequestBodyData.WithErr(err)
+		return nil, ErrInvalidUserID.WithErr(err)
 	}
 
-	// Get the tool from the database
-	dbTool, err := a.toolFromDB(id)
+	// Get the tool from the database with access control
+	dbTool, err := a.GetToolByIDWithAccessControl(r, idParam)
 	if err != nil {
 		return nil, err
 	}
 
-	// Determine if we should use the real location
-	useRealLocation := false
-
-	// Only show real location if user is authenticated
-	if r.UserID != "" {
-		userObjID, err := primitive.ObjectIDFromHex(r.UserID)
-		if err == nil {
-			// Fetch the tool to check the owner
-			tool, err := a.database.ToolService.GetToolByID(r.Context.Request.Context(), id)
-			if err == nil && tool.UserID == userObjID || err == nil && tool.ActualUserID == userObjID {
-				useRealLocation = true
-			}
-		}
-	}
+	// Only show real location if user is authenticated and is the owner
+	useRealLocation := dbTool.UserID == requestingUserID || dbTool.ActualUserID == requestingUserID
 
 	// Convert DB tool to API tool with appropriate location
-	tool := new(Tool).FromDBTool(dbTool, useRealLocation)
+	tool := new(Tool).FromDBTool(dbTool, a.database, useRealLocation)
 
 	// Convert community ObjectIDs to strings
 	communityIDs := make([]string, len(dbTool.Communities))
@@ -448,6 +450,12 @@ func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 
 // Util function to DRY to get tools from a user with pagination and search term
 func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, error) {
+	// Use access control method to check if user can be accessed
+	_, err := a.GetUserByIDWithAccessControl(r, id)
+	if err != nil {
+		return nil, err
+	}
+
 	// Get pagination parameters
 	page, pageSize, err := r.Context.GetPaginationParams()
 	if err != nil {
@@ -456,14 +464,8 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 
 	searchTerm := *r.Context.GetSearchTerm()
 
-	// Get paginated tools
-	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(
-		context.Background(),
-		id,
-		page,
-		pageSize,
-		searchTerm,
-	)
+	// Get paginated tools with access control
+	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(context.Background(), id, page, pageSize, searchTerm)
 	if err != nil {
 		return nil, err
 	}
@@ -645,13 +647,19 @@ func (a *API) HandleGetToolRatings(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing tool id"))
 	}
 
+	// Get the tool from the database with access control
+	_, err := a.GetToolByIDWithAccessControl(r, idParam)
+	if err != nil {
+		return nil, err
+	}
+
 	// Get pagination parameters
 	page, pageSize, err := r.Context.GetPaginationParams()
 	if err != nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get unified ratings for the tool
+	// Get unified ratings for the tool with access control
 	unifiedRatings, total, err := a.database.BookingService.GetRatingsByToolID(
 		r.Context.Request.Context(),
 		idParam[0],
@@ -718,8 +726,7 @@ func (a *API) toolHistoryHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get the tool to check if it's nomadic
-	tool, err := a.toolFromDB(id)
+	tool, err := a.GetToolByIDWithAccessControl(r, idParam)
 	if err != nil {
 		return nil, err
 	}
@@ -767,7 +774,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	}
 
 	// Check if trying to change nomadic status
-	if tool.IsNomadic != t.IsNomadic {
+	if t.IsNomadic != nil && tool.IsNomadic != *t.IsNomadic {
 		// Only the owner can change nomadic status
 		if tool.UserID != user.ID {
 			return nil, ErrOnlyOwnerCanChangeNomadicStatus.WithErr(
@@ -799,4 +806,27 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 		return nil, err
 	}
 	return &ToolID{ID: newID}, nil
+}
+
+func (a *API) GetToolByIDWithAccessControl(r *Request, toolId []string) (*db.Tool, error) {
+	// Get requesting user ID
+	requestingUserID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	id, err := strconv.ParseInt(toolId[0], 10, 64)
+	if err != nil {
+		return nil, ErrInvalidRequestBodyData.WithErr(err)
+	}
+
+	// Get the tool from the database with access control
+	dbTool, err := a.database.ToolService.GetToolByIDWithAccessControl(r.Context.Request.Context(), id, requestingUserID)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, ErrToolNotFound.WithErr(fmt.Errorf("tool with id %s not found", toolId[0]))
+		}
+		return nil, ErrInternalServerError.WithErr(err)
+	}
+	return dbTool, nil
 }

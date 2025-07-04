@@ -254,12 +254,18 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 	if idParam == nil {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("missing id"))
 	}
+
 	userID, err := primitive.ObjectIDFromHex(idParam[0])
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(fmt.Errorf("invalid user id format: %s", r.Context.URLParam("id")))
 	}
-	// Get user by ID
-	u, _ := a.getUserByID(userID.Hex())
+
+	// Use access control method to check if user can be accessed
+	u, err := a.GetUserByIDWithAccessControl(r, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	return new(User).FromDBUser(u, a.database, false), nil
 }
 
@@ -507,6 +513,12 @@ func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
+	// Use access control method to check if user can be accessed
+	_, err = a.GetUserByIDWithAccessControl(r, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	// Get pagination parameters
 	page, pageSize, err := r.Context.GetPaginationParams()
 	if err != nil {
@@ -567,4 +579,26 @@ func (a *API) userNotificationPreferencesUpdateHandler(r *Request) (interface{},
 	}
 
 	return NotificationPreferences(updatedPreferences), nil
+}
+
+// GetUserByIDWithAccessControl Get user by ID with access control
+// This method checks if the requesting user has access to the user being requested.
+func (a *API) GetUserByIDWithAccessControl(r *Request, userID primitive.ObjectID) (*db.User, error) {
+	// Get requesting user ID for access control
+	var requestingUserID primitive.ObjectID
+	var err error
+	if r.UserID != "" {
+		requestingUserID, err = primitive.ObjectIDFromHex(r.UserID)
+		if err != nil {
+			return nil, ErrInvalidUserID.WithErr(err)
+		}
+	}
+
+	// Use access control method to check if user can be accessed
+	user, err := a.database.UserService.GetUserByIDWithAccessControl(r.Context.Request.Context(), userID, requestingUserID)
+	if err != nil {
+		return nil, ErrUserNotFound.WithErr(err)
+	}
+
+	return user, nil
 }

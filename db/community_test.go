@@ -7,6 +7,7 @@ import (
 
 	"github.com/emprius/emprius-app-backend/types"
 	qt "github.com/frankban/quicktest"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -998,5 +999,458 @@ func TestGetUserCommunitiesPerformance(t *testing.T) {
 		// Should have collected all communities
 		qt.Assert(t, len(allCommunities), qt.Equals, numCommunities)
 		qt.Assert(t, totalFromFirstPage, qt.Equals, int64(numCommunities))
+	})
+}
+
+func TestGetCommunityToolsPaginatedWithActiveUsers(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+	db.UserService = NewUserService(db)
+	db.ToolService = NewToolService(db)
+	db.CommunityService = NewCommunityService(db)
+
+	communityService := db.CommunityService
+	userService := db.UserService
+	toolService := db.ToolService
+
+	// Create test users - one active, one inactive
+	activeUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "active@test.com",
+		Name:     "Active User",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Location: NewLocation(40000000, 3000000),
+	}
+
+	inactiveUser := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "inactive@test.com",
+		Name:     "Inactive User",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   false, // This user is inactive
+		Rating:   50,
+		Location: NewLocation(41000000, 2000000),
+	}
+
+	_, err = userService.InsertUser(ctx, activeUser)
+	qt.Assert(t, err, qt.IsNil)
+	_, err = userService.InsertUser(ctx, inactiveUser)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create a test community
+	community, err := communityService.CreateCommunity(
+		ctx,
+		"Test Community",
+		types.HexBytes{0x01, 0x02, 0x03},
+		activeUser.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Add inactive user to community
+	err = userService.AddUserToCommunity(ctx, inactiveUser.ID, community.ID, CommunityRoleUser)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create tools - some from active user, some from inactive user
+	activeUserTool1 := &Tool{
+		ID:          1,
+		Title:       "Active User Tool 1",
+		Description: "Tool from active user",
+		UserID:      activeUser.ID,
+		Communities: []primitive.ObjectID{},
+	}
+
+	activeUserTool2 := &Tool{
+		ID:          2,
+		Title:       "Active User Tool 2",
+		Description: "Another tool from active user",
+		UserID:      activeUser.ID,
+		Communities: []primitive.ObjectID{},
+	}
+
+	inactiveUserTool1 := &Tool{
+		ID:          3,
+		Title:       "Inactive User Tool 1",
+		Description: "Tool from inactive user",
+		UserID:      inactiveUser.ID,
+		Communities: []primitive.ObjectID{},
+	}
+
+	inactiveUserTool2 := &Tool{
+		ID:          4,
+		Title:       "Inactive User Tool 2",
+		Description: "Another tool from inactive user",
+		UserID:      inactiveUser.ID,
+		Communities: []primitive.ObjectID{},
+	}
+
+	// Insert tools
+	_, err = toolService.Collection.InsertOne(ctx, activeUserTool1)
+	qt.Assert(t, err, qt.IsNil)
+	_, err = toolService.Collection.InsertOne(ctx, activeUserTool2)
+	qt.Assert(t, err, qt.IsNil)
+	_, err = toolService.Collection.InsertOne(ctx, inactiveUserTool1)
+	qt.Assert(t, err, qt.IsNil)
+	_, err = toolService.Collection.InsertOne(ctx, inactiveUserTool2)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Add all tools to the community
+	err = communityService.AddToolToCommunity(ctx, activeUserTool1.ID, community.ID)
+	qt.Assert(t, err, qt.IsNil)
+	err = communityService.AddToolToCommunity(ctx, activeUserTool2.ID, community.ID)
+	qt.Assert(t, err, qt.IsNil)
+	err = communityService.AddToolToCommunity(ctx, inactiveUserTool1.ID, community.ID)
+	qt.Assert(t, err, qt.IsNil)
+	err = communityService.AddToolToCommunity(ctx, inactiveUserTool2.ID, community.ID)
+	qt.Assert(t, err, qt.IsNil)
+
+	t.Run("Only tools from active users are returned", func(t *testing.T) {
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should only return tools from active users (2 tools)
+		qt.Assert(t, total, qt.Equals, int64(2))
+		qt.Assert(t, len(tools), qt.Equals, 2)
+
+		// Verify that only active user tools are returned
+		toolIDs := make(map[int64]bool)
+		for _, tool := range tools {
+			toolIDs[tool.ID] = true
+		}
+
+		qt.Assert(t, toolIDs[activeUserTool1.ID], qt.IsTrue)
+		qt.Assert(t, toolIDs[activeUserTool2.ID], qt.IsTrue)
+		qt.Assert(t, toolIDs[inactiveUserTool1.ID], qt.IsFalse)
+		qt.Assert(t, toolIDs[inactiveUserTool2.ID], qt.IsFalse)
+	})
+
+	t.Run("Search functionality works with active user filtering", func(t *testing.T) {
+		// Search for "Active" - should find tools from active user only
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "Active")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(2))
+		qt.Assert(t, len(tools), qt.Equals, 2)
+
+		// All returned tools should be from active user
+		for _, tool := range tools {
+			qt.Assert(t, tool.UserID, qt.Equals, activeUser.ID)
+		}
+
+		// Search for "Inactive" - should find no tools (inactive user tools are filtered out)
+		tools, total, err = communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "Inactive")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(tools), qt.Equals, 0)
+	})
+
+	t.Run("Pagination works correctly with filtering", func(t *testing.T) {
+		// Test pagination with page size 1
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 1, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(2)) // Total should still be 2
+		qt.Assert(t, len(tools), qt.Equals, 1)   // But only 1 tool per page
+
+		// Get second page
+		tools2, total2, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 1, 1, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total2, qt.Equals, int64(2)) // Total should still be 2
+		qt.Assert(t, len(tools2), qt.Equals, 1)   // Second page should have 1 tool
+
+		// Verify we got different tools
+		qt.Assert(t, tools[0].ID != tools2[0].ID, qt.IsTrue)
+
+		// Third page should be empty
+		tools3, total3, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 2, 1, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total3, qt.Equals, int64(2)) // Total should still be 2
+		qt.Assert(t, len(tools3), qt.Equals, 0)   // Third page should be empty
+	})
+
+	t.Run("Tools are sorted by title", func(t *testing.T) {
+		tools, _, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(tools), qt.Equals, 2)
+
+		// Tools should be sorted by title
+		qt.Assert(t, tools[0].Title <= tools[1].Title, qt.IsTrue)
+	})
+}
+
+func TestGetCommunityToolsPaginatedEdgeCases(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+	db.UserService = NewUserService(db)
+	db.ToolService = NewToolService(db)
+	db.CommunityService = NewCommunityService(db)
+
+	communityService := db.CommunityService
+	userService := db.UserService
+
+	// Create test user
+	user := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "edge@test.com",
+		Name:     "Edge Case User",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Location: NewLocation(40000000, 3000000),
+	}
+
+	_, err = userService.InsertUser(ctx, user)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create a test community
+	community, err := communityService.CreateCommunity(
+		ctx,
+		"Edge Case Community",
+		types.HexBytes{0x01, 0x02, 0x03},
+		user.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	t.Run("Empty community returns no tools", func(t *testing.T) {
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(tools), qt.Equals, 0)
+	})
+
+	t.Run("Community with only inactive user tools returns no tools", func(t *testing.T) {
+		// Create inactive user
+		inactiveUser := &User{
+			ID:       primitive.NewObjectID(),
+			Email:    "inactive-edge@test.com",
+			Name:     "Inactive Edge User",
+			Password: []byte("password"),
+			Tokens:   1000,
+			Active:   false,
+			Rating:   50,
+			Location: NewLocation(41000000, 2000000),
+		}
+
+		_, err := userService.InsertUser(ctx, inactiveUser)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Add inactive user to community
+		err = userService.AddUserToCommunity(ctx, inactiveUser.ID, community.ID, CommunityRoleUser)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Create tool from inactive user
+		inactiveTool := &Tool{
+			ID:          100,
+			Title:       "Inactive Tool",
+			Description: "Tool from inactive user",
+			UserID:      inactiveUser.ID,
+			Communities: []primitive.ObjectID{},
+		}
+
+		_, err = db.ToolService.Collection.InsertOne(ctx, inactiveTool)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Add tool to community
+		err = communityService.AddToolToCommunity(ctx, inactiveTool.ID, community.ID)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should return no tools since the only tool is from inactive user
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(tools), qt.Equals, 0)
+	})
+
+	t.Run("Negative page number is handled correctly", func(t *testing.T) {
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, -1, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should treat negative page as page 0
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(tools), qt.Equals, 0)
+	})
+
+	t.Run("Negative page size uses default", func(t *testing.T) {
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, -1, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should use default page size
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(tools), qt.Equals, 0)
+	})
+
+	t.Run("Non-existent community returns no tools", func(t *testing.T) {
+		nonExistentCommunityID := primitive.NewObjectID()
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, nonExistentCommunityID, 0, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(tools), qt.Equals, 0)
+	})
+}
+
+func TestGetCommunityToolsPaginatedUserStatusChange(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+	db.UserService = NewUserService(db)
+	db.ToolService = NewToolService(db)
+	db.CommunityService = NewCommunityService(db)
+
+	communityService := db.CommunityService
+	userService := db.UserService
+	toolService := db.ToolService
+
+	// Create test user (initially active)
+	user := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "status@test.com",
+		Name:     "Status Change User",
+		Password: []byte("password"),
+		Tokens:   1000,
+		Active:   true,
+		Rating:   50,
+		Location: NewLocation(40000000, 3000000),
+	}
+
+	_, err = userService.InsertUser(ctx, user)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create a test community
+	community, err := communityService.CreateCommunity(
+		ctx,
+		"Status Test Community",
+		types.HexBytes{0x01, 0x02, 0x03},
+		user.ID,
+	)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Create a tool from the user
+	tool := &Tool{
+		ID:          200,
+		Title:       "Status Test Tool",
+		Description: "Tool for testing status changes",
+		UserID:      user.ID,
+		Communities: []primitive.ObjectID{},
+	}
+
+	_, err = toolService.Collection.InsertOne(ctx, tool)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Add tool to community
+	err = communityService.AddToolToCommunity(ctx, tool.ID, community.ID)
+	qt.Assert(t, err, qt.IsNil)
+
+	t.Run("Tool is visible when user is active", func(t *testing.T) {
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(1))
+		qt.Assert(t, len(tools), qt.Equals, 1)
+		qt.Assert(t, tools[0].ID, qt.Equals, tool.ID)
+	})
+
+	t.Run("Tool is hidden when user becomes inactive", func(t *testing.T) {
+		// Deactivate the user
+		_, err := userService.UpdateUser(ctx, user.ID, bson.M{"active": false})
+		qt.Assert(t, err, qt.IsNil)
+
+		// Tool should no longer be visible
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(0))
+		qt.Assert(t, len(tools), qt.Equals, 0)
+	})
+
+	t.Run("Tool becomes visible again when user is reactivated", func(t *testing.T) {
+		// Reactivate the user
+		_, err := userService.UpdateUser(ctx, user.ID, bson.M{"active": true})
+		qt.Assert(t, err, qt.IsNil)
+
+		// Tool should be visible again
+		tools, total, err := communityService.GetCommunityToolsPaginated(ctx, community.ID, 0, 10, "")
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, total, qt.Equals, int64(1))
+		qt.Assert(t, len(tools), qt.Equals, 1)
+		qt.Assert(t, tools[0].ID, qt.Equals, tool.ID)
 	})
 }

@@ -162,6 +162,14 @@ var (
 		Code:    http.StatusForbidden,
 		Message: "user not involved in booking",
 	}
+	ErrUserInactive = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "user account is inactive",
+	}
+	ErrRecipientUserInactive = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "recipient user account is inactive",
+	}
 )
 
 // Conflict errors

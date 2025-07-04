@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -130,6 +131,94 @@ func (s *ToolService) GetToolByID(ctx context.Context, id int64) (*Tool, error) 
 		return nil, err
 	}
 	return &tool, nil
+}
+
+// GetToolByIDWithAccessControl retrieves a Tool by its ID with access control for inactive users.
+// Allows access to tools from inactive users if:
+// 1. The requesting user is the tool owner, OR
+// 2. The requesting user was involved in any booking request for this tool
+func (s *ToolService) GetToolByIDWithAccessControl(
+	ctx context.Context,
+	id int64,
+	requestingUserID primitive.ObjectID,
+) (*Tool, error) {
+	// Convert tool ID to string for booking lookup
+	toolIDStr := strconv.FormatInt(id, 10)
+
+	// Use aggregation to join with users and bookings collections and check access control
+	pipeline := mongo.Pipeline{
+		// Stage 1: Match the specific tool
+		bson.D{{Key: "$match", Value: bson.M{"_id": id}}},
+		// Stage 2: Join with users collection to get tool owner info
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "users"},
+				{Key: "localField", Value: "userId"},
+				{Key: "foreignField", Value: "_id"},
+				{Key: "as", Value: "owner"},
+			}},
+		},
+		// Stage 3: Join with bookings collection to check if requesting user was involved in any booking
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "bookings"},
+				{Key: "let", Value: bson.D{{Key: "toolId", Value: toolIDStr}}},
+				{Key: "pipeline", Value: bson.A{
+					bson.D{{Key: "$match", Value: bson.D{
+						{Key: "$expr", Value: bson.D{
+							{Key: "$and", Value: bson.A{
+								bson.D{{Key: "$eq", Value: bson.A{"$toolId", "$$toolId"}}},
+								bson.D{{Key: "$or", Value: bson.A{
+									bson.D{{Key: "$eq", Value: bson.A{"$fromUserId", requestingUserID}}},
+									bson.D{{Key: "$eq", Value: bson.A{"$toUserId", requestingUserID}}},
+								}}},
+							}},
+						}},
+					}}},
+					bson.D{{Key: "$limit", Value: 1}}, // We only need to know if at least one booking exists
+				}},
+				{Key: "as", Value: "userBookings"},
+			}},
+		},
+		// Stage 4: Filter based on access control rules
+		bson.D{
+			{Key: "$match", Value: bson.D{
+				{Key: "$or", Value: bson.A{
+					// Allow if tool owner is active
+					bson.D{{Key: "owner.active", Value: true}},
+					// Allow if requesting user is the tool owner
+					bson.D{{Key: "userId", Value: requestingUserID}},
+					// Allow if requesting user was involved in any booking for this tool
+					bson.D{{Key: "userBookings", Value: bson.D{{Key: "$ne", Value: bson.A{}}}}},
+				}},
+			}},
+		},
+		// Stage 5: Remove the temporary fields from output
+		bson.D{
+			{Key: "$unset", Value: bson.A{"owner", "userBookings"}},
+		},
+	}
+
+	cursor, err := s.Collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var tools []*Tool
+	if err := cursor.All(ctx, &tools); err != nil {
+		return nil, err
+	}
+
+	if len(tools) == 0 {
+		return nil, mongo.ErrNoDocuments
+	}
+
+	return tools[0], nil
 }
 
 // UpdateTool updates a Tool document by ID.
@@ -370,6 +459,25 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 					{Key: "query", Value: filter},
 				}},
 			},
+			// Join with users collection to filter out tools from inactive users
+			bson.D{
+				{Key: "$lookup", Value: bson.D{
+					{Key: "from", Value: "users"},
+					{Key: "localField", Value: "userId"},
+					{Key: "foreignField", Value: "_id"},
+					{Key: "as", Value: "user"},
+				}},
+			},
+			// Filter out tools from inactive users
+			bson.D{
+				{Key: "$match", Value: bson.D{
+					{Key: "user.active", Value: true},
+				}},
+			},
+			// Remove the user field from the output
+			bson.D{
+				{Key: "$unset", Value: "user"},
+			},
 			bson.D{
 				{Key: "$facet", Value: bson.D{
 					{Key: "data", Value: bson.A{
@@ -429,30 +537,72 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 		return tools, total, nil
 	}
 
-	// Otherwise, perform a normal Find query with pagination
+	// Otherwise, perform a normal Find query with pagination using aggregation to filter inactive users
 	log.Debug().Interface("filter", filter).Msg("Executing search with filter and pagination")
 
-	// Count total documents for pagination
-	total, err := s.Collection.CountDocuments(ctx, filter)
-	if err != nil {
-		return nil, 0, err
+	// Use aggregation pipeline to join with users and filter out inactive users
+	pipeline := mongo.Pipeline{
+		// Stage 1: Match tools based on search criteria
+		bson.D{{Key: "$match", Value: filter}},
+		// Stage 2: Join with users collection to filter out tools from inactive users
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "users"},
+				{Key: "localField", Value: "userId"},
+				{Key: "foreignField", Value: "_id"},
+				{Key: "as", Value: "user"},
+			}},
+		},
+		// Stage 3: Filter out tools from inactive users (unless the user is the owner)
+		bson.D{
+			{Key: "$match", Value: bson.D{
+				{Key: "user.active", Value: true},
+			}},
+		},
+		// Stage 4: Remove the user field from the output
+		bson.D{
+			{Key: "$unset", Value: "user"},
+		},
+		// Stage 5: Use $facet to get both data and count
+		bson.D{
+			{Key: "$facet", Value: bson.D{
+				{Key: "data", Value: bson.A{
+					bson.D{{Key: "$skip", Value: skip}},
+					bson.D{{Key: "$limit", Value: DefaultPageSize}},
+				}},
+				{Key: "count", Value: bson.A{
+					bson.D{{Key: "$count", Value: "total"}},
+				}},
+			}},
+		},
 	}
 
-	// Set up options for pagination
-	findOptions := options.Find()
-	findOptions.SetSkip(int64(skip))
-	findOptions.SetLimit(int64(DefaultPageSize))
-
-	cursor, err := s.Collection.Find(ctx, filter, findOptions)
+	cursor, err := s.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer cursor.Close(ctx) //nolint:errcheck
 
-	var tools []*Tool
-	if err := cursor.All(ctx, &tools); err != nil {
+	var result []struct {
+		Data  []*Tool `bson:"data"`
+		Count []struct {
+			Total int64 `bson:"total"`
+		} `bson:"count"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
 		return nil, 0, err
 	}
+
+	var tools []*Tool
+	var total int64
+	if len(result) > 0 {
+		tools = result[0].Data
+		if len(result[0].Count) > 0 {
+			total = result[0].Count[0].Total
+		}
+	}
+
 	log.Debug().Int("total_tools", len(tools)).Int64("total_count", total).Msg("Search completed")
 
 	// Filter tools by community membership if user ID is provided

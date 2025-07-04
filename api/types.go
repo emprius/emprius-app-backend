@@ -245,7 +245,9 @@ type ToolHistoryEntry struct {
 type Tool struct {
 	ID                 int64              `json:"id"`
 	UserID             string             `json:"userId"`
+	UserActive         bool               `json:"userActive"`
 	ActualUserID       string             `json:"actualUserId,omitempty"`
+	ActualUserActive   bool               `json:"actualUserActive,omitempty"`
 	Title              string             `json:"title"`
 	Description        string             `json:"description"`
 	IsAvailable        *bool              `json:"isAvailable"`
@@ -262,14 +264,15 @@ type Tool struct {
 	Weight             uint32             `json:"weight"`
 	MaxDistance        uint32             `json:"maxDistance"`
 	ReservedDates      []db.DateRange     `json:"reservedDates"`
-	IsNomadic          bool               `json:"isNomadic"`
+	IsNomadic          *bool              `json:"isNomadic"`
 	Communities        []string           `json:"communities,omitempty"`
 	HistoryEntries     []ToolHistoryEntry `json:"historyEntries,omitempty"`
 }
 
 // FromDBTool converts a DB Tool to an API Tool.
+// If database is provided, it will populate UserActive and ActualUserActive fields.
 // If useRealLocation is true, the real location is used instead of the obfuscated one
-func (t *Tool) FromDBTool(dbt *db.Tool, useRealLocation ...bool) *Tool {
+func (t *Tool) FromDBTool(dbt *db.Tool, database *db.Database, useRealLocation ...bool) *Tool {
 	t.ID = dbt.ID
 	t.UserID = dbt.UserID.Hex()
 	if !dbt.ActualUserID.IsZero() {
@@ -302,13 +305,38 @@ func (t *Tool) FromDBTool(dbt *db.Tool, useRealLocation ...bool) *Tool {
 	t.Weight = dbt.Weight
 	t.MaxDistance = dbt.MaxDistance
 	t.ReservedDates = dbt.ReservedDates
-	t.IsNomadic = dbt.IsNomadic
+	t.IsNomadic = &dbt.IsNomadic
 
 	// Convert communities
 	if len(dbt.Communities) > 0 {
 		t.Communities = make([]string, len(dbt.Communities))
 		for i, comm := range dbt.Communities {
 			t.Communities[i] = comm.Hex()
+		}
+	}
+
+	// Populate user activity status if database is provided
+	if database != nil {
+		// Check owner user activity status
+		if !dbt.UserID.IsZero() {
+			if user, err := database.UserService.GetUserByID(context.Background(), dbt.UserID); err == nil {
+				t.UserActive = user.Active
+			} else {
+				// Default to false if user lookup fails
+				t.UserActive = false
+				log.Debug().Err(err).Str("userId", dbt.UserID.Hex()).Msg("Failed to get user for UserActive check")
+			}
+		}
+
+		// Check actual user activity status
+		if !dbt.ActualUserID.IsZero() {
+			if actualUser, err := database.UserService.GetUserByID(context.Background(), dbt.ActualUserID); err == nil {
+				t.ActualUserActive = actualUser.Active
+			} else {
+				// Default to false if user lookup fails
+				t.ActualUserActive = false
+				log.Debug().Err(err).Str("actualUserId", dbt.ActualUserID.Hex()).Msg("Failed to get actual user for ActualUserActive check")
+			}
 		}
 	}
 

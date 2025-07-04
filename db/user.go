@@ -119,8 +119,30 @@ func (s *UserService) GetUserByID(ctx context.Context, id primitive.ObjectID) (*
 	return &user, nil
 }
 
+// GetUserByIDWithAccessControl retrieves a User by their ID with access control.
+// Only allows access to inactive users if the requesting user is the same user.
+func (s *UserService) GetUserByIDWithAccessControl(
+	ctx context.Context,
+	userID,
+	requestingUserID primitive.ObjectID,
+) (*User, error) {
+	user, err := s.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Allow access if user is active OR if requesting user is the same user
+	if user.Active || userID == requestingUserID {
+		return user, nil
+	}
+
+	// Deny access to inactive user by different user
+	return nil, mongo.ErrNoDocuments
+}
+
 // GetUsers retrieves users whose names partially match the given string using aggregation pipeline
 // Returns users and total count for pagination. Only searches if partialName is not empty.
+// This method excludes inactive users from the results.
 func (s *UserService) GetUsers(ctx context.Context, partialName string, page int) ([]*User, int64, error) {
 	if page < 0 {
 		page = 0
@@ -134,8 +156,11 @@ func (s *UserService) GetUsers(ctx context.Context, partialName string, page int
 
 	// Create the aggregation pipeline with $facet to get both data and count
 	pipeline := mongo.Pipeline{
-		// Stage 1: Match users by name
-		bson.D{{Key: "$match", Value: bson.M{"name": regex}}},
+		// Stage 1: Match users by name AND active status
+		bson.D{{Key: "$match", Value: bson.M{
+			"name":   regex,
+			"active": true, // Only include active users
+		}}},
 		// Stage 2: Sort by name
 		bson.D{{Key: "$sort", Value: bson.D{{Key: "name", Value: 1}}}},
 		// Stage 3: Use $facet to get both data and count

@@ -753,7 +753,7 @@ func TestTools(t *testing.T) {
 		}
 		err = json.Unmarshal(getToolResp, &toolDetails)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, toolDetails.Data.IsNomadic, qt.Equals, false)
+		qt.Assert(t, *toolDetails.Data.IsNomadic, qt.Equals, false)
 	})
 
 	t.Run("Tool Cost Management", func(t *testing.T) {
@@ -1259,5 +1259,361 @@ func TestToolsDistanceValidation(t *testing.T) {
 			qt.Assert(t, len(searchResp.Data.Tools), qt.Equals, 3,
 				qt.Commentf("Iteration %d: Expected 3 tools, got %d", i+1, len(searchResp.Data.Tools)))
 		}
+	})
+}
+
+func TestToolAccessWithBookingHistory(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users
+	activeUserJWT := c.RegisterAndLogin("active@test.com", "Active User", "password")
+	inactiveUserJWT := c.RegisterAndLogin("inactive@test.com", "Inactive User", "password")
+	requesterJWT := c.RegisterAndLogin("requester@test.com", "Requester User", "password")
+	otherUserJWT := c.RegisterAndLogin("other@test.com", "Other User", "password")
+
+	// Create tools
+	activeToolID := c.CreateTool(activeUserJWT, "Active User Tool")
+	inactiveToolID := c.CreateTool(inactiveUserJWT, "Inactive User Tool")
+
+	// Create a booking request from requester to inactive user's tool
+	bookingRequest := api.CreateBookingRequest{
+		ToolID:    fmt.Sprintf("%d", inactiveToolID),
+		StartDate: time.Now().Add(24 * time.Hour).Unix(),
+		EndDate:   time.Now().Add(48 * time.Hour).Unix(),
+		Contact:   "test@example.com",
+		Comments:  "Test booking request",
+	}
+
+	// Make the booking request
+	resp, code := c.Request(http.MethodPost, requesterJWT, bookingRequest, "bookings")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var bookingResp struct {
+		Data *api.BookingResponse `json:"data"`
+	}
+	err := json.Unmarshal(resp, &bookingResp)
+	qt.Assert(t, err, qt.IsNil)
+
+	// Now deactivate the inactive user
+	_, code = c.Request(http.MethodPost, inactiveUserJWT,
+		api.UserProfile{
+			Active: &[]bool{false}[0], // Set active to false
+		},
+		"profile",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	t.Run("Inactive user tool owner can still access own tool", func(t *testing.T) {
+		_, code := c.Request(http.MethodGet, inactiveUserJWT, nil, "tools", fmt.Sprintf("%d", inactiveToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+	})
+
+	t.Run("User with booking history can access inactive user's tool", func(t *testing.T) {
+		// Requester should be able to access the tool because they made a booking request
+		_, code := c.Request(http.MethodGet, requesterJWT, nil, "tools", fmt.Sprintf("%d", inactiveToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+	})
+
+	t.Run("User without booking history cannot access inactive user's tool", func(t *testing.T) {
+		// Other user should not be able to access the tool (no booking history)
+		_, code := c.Request(http.MethodGet, otherUserJWT, nil, "tools", fmt.Sprintf("%d", inactiveToolID))
+		qt.Assert(t, code, qt.Equals, 404)
+	})
+
+	t.Run("Active user tools remain accessible to everyone", func(t *testing.T) {
+		// All users should still be able to access active user's tools
+		_, code := c.Request(http.MethodGet, requesterJWT, nil, "tools", fmt.Sprintf("%d", activeToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+
+		_, code = c.Request(http.MethodGet, otherUserJWT, nil, "tools", fmt.Sprintf("%d", activeToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+
+		_, code = c.Request(http.MethodGet, inactiveUserJWT, nil, "tools", fmt.Sprintf("%d", activeToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+	})
+}
+
+func TestToolAccessWithMultipleBookings(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users
+	toolOwnerJWT := c.RegisterAndLogin("owner@test.com", "Tool Owner", "password")
+	requester1JWT := c.RegisterAndLogin("requester1@test.com", "Requester 1", "password")
+	requester2JWT := c.RegisterAndLogin("requester2@test.com", "Requester 2", "password")
+	noBookingJWT := c.RegisterAndLogin("nobooking@test.com", "No Booking User", "password")
+
+	// Create tool
+	toolID := c.CreateTool(toolOwnerJWT, "Test Tool")
+
+	// Create booking requests from both requesters
+	bookingRequest1 := api.CreateBookingRequest{
+		ToolID:    fmt.Sprintf("%d", toolID),
+		StartDate: time.Now().Add(24 * time.Hour).Unix(),
+		EndDate:   time.Now().Add(48 * time.Hour).Unix(),
+		Contact:   "requester1@example.com",
+		Comments:  "First booking request",
+	}
+
+	bookingRequest2 := api.CreateBookingRequest{
+		ToolID:    fmt.Sprintf("%d", toolID),
+		StartDate: time.Now().Add(72 * time.Hour).Unix(),
+		EndDate:   time.Now().Add(96 * time.Hour).Unix(),
+		Contact:   "requester2@example.com",
+		Comments:  "Second booking request",
+	}
+
+	// Make booking requests
+	_, code := c.Request(http.MethodPost, requester1JWT, bookingRequest1, "bookings")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	_, code = c.Request(http.MethodPost, requester2JWT, bookingRequest2, "bookings")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	// Deactivate the tool owner
+	_, code = c.Request(http.MethodPost, toolOwnerJWT,
+		api.UserProfile{
+			Active: &[]bool{false}[0], // Set active to false
+		},
+		"profile",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	t.Run("Both requesters can access inactive owner's tool", func(t *testing.T) {
+		// Both requesters should have access
+		_, code := c.Request(http.MethodGet, requester1JWT, nil, "tools", fmt.Sprintf("%d", toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+
+		_, code = c.Request(http.MethodGet, requester2JWT, nil, "tools", fmt.Sprintf("%d", toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+	})
+
+	t.Run("User without booking history cannot access", func(t *testing.T) {
+		// User with no booking history should not have access
+		_, code := c.Request(http.MethodGet, noBookingJWT, nil, "tools", fmt.Sprintf("%d", toolID))
+		qt.Assert(t, code, qt.Equals, 404)
+	})
+
+	t.Run("Tool owner can still access own tool", func(t *testing.T) {
+		// Tool owner should still have access to their own tool
+		_, code := c.Request(http.MethodGet, toolOwnerJWT, nil, "tools", fmt.Sprintf("%d", toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+	})
+}
+
+func TestToolRatingsAccessWithBookingHistory(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users
+	toolOwnerJWT := c.RegisterAndLogin("owner@test.com", "Tool Owner", "password")
+	requesterJWT := c.RegisterAndLogin("requester@test.com", "Requester", "password")
+	otherUserJWT := c.RegisterAndLogin("other@test.com", "Other User", "password")
+
+	// Create tool
+	toolID := c.CreateTool(toolOwnerJWT, "Test Tool")
+
+	// Create booking request
+	bookingRequest := api.CreateBookingRequest{
+		ToolID:    fmt.Sprintf("%d", toolID),
+		StartDate: time.Now().Add(24 * time.Hour).Unix(),
+		EndDate:   time.Now().Add(48 * time.Hour).Unix(),
+		Contact:   "requester@example.com",
+		Comments:  "Test booking request",
+	}
+
+	_, code := c.Request(http.MethodPost, requesterJWT, bookingRequest, "bookings")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	// Deactivate the tool owner
+	_, code = c.Request(http.MethodPost, toolOwnerJWT,
+		api.UserProfile{
+			Active: &[]bool{false}[0], // Set active to false
+		},
+		"profile",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	t.Run("User with booking history can access tool ratings", func(t *testing.T) {
+		// Requester should be able to access tool ratings
+		_, code := c.Request(http.MethodGet, requesterJWT, nil, "tools", fmt.Sprintf("%d/ratings", toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+	})
+
+	t.Run("User without booking history cannot access tool ratings", func(t *testing.T) {
+		// Other user should not be able to access tool ratings
+		_, code := c.Request(http.MethodGet, otherUserJWT, nil, "tools", fmt.Sprintf("%d/ratings", toolID))
+		qt.Assert(t, code, qt.Equals, 404)
+	})
+
+	t.Run("Tool owner can access own tool ratings", func(t *testing.T) {
+		// Tool owner should still be able to access their own tool ratings
+		_, code := c.Request(http.MethodGet, toolOwnerJWT, nil, "tools", fmt.Sprintf("%d/ratings", toolID))
+		qt.Assert(t, code, qt.Equals, 200)
+	})
+}
+
+func TestToolUserActiveFields(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users with different active states
+	activeUserJWT := c.RegisterAndLogin("active@test.com", "Active User", "password")
+	inactiveUserJWT := c.RegisterAndLogin("inactive@test.com", "Inactive User", "password")
+
+	// Create tools owned by both users
+	activeUserToolID := c.CreateTool(activeUserJWT, "Active User Tool")
+	inactiveUserToolID := c.CreateTool(inactiveUserJWT, "Inactive User Tool")
+
+	// Deactivate the inactive user
+	_, code := c.Request(http.MethodPost, inactiveUserJWT,
+		api.UserProfile{
+			Active: &[]bool{false}[0], // Set active to false
+		},
+		"profile",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	t.Run("UserActive is true when owner is active", func(t *testing.T) {
+		resp, code := c.Request(http.MethodGet, activeUserJWT, nil, "tools", fmt.Sprintf("%d", activeUserToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolResp struct {
+			Data api.Tool `json:"data"`
+		}
+		err := json.Unmarshal(resp, &toolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, toolResp.Data.UserActive, qt.IsTrue, qt.Commentf("UserActive should be true when owner is active"))
+		qt.Assert(t, toolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf(
+			"ActualUserActive should be false when ActualUserID is not set"),
+		)
+	})
+
+	t.Run("UserActive is false when owner is inactive", func(t *testing.T) {
+		// Inactive user can still access their own tool
+		resp, code := c.Request(http.MethodGet, inactiveUserJWT, nil, "tools", fmt.Sprintf("%d", inactiveUserToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolResp struct {
+			Data api.Tool `json:"data"`
+		}
+		err := json.Unmarshal(resp, &toolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, toolResp.Data.UserActive, qt.IsFalse, qt.Commentf("UserActive should be false when owner is inactive"))
+		qt.Assert(t, toolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf(
+			"ActualUserActive should be false when ActualUserID is not set"),
+		)
+	})
+
+	t.Run("Tool search includes UserActive information", func(t *testing.T) {
+		// Search for tools as active user
+		resp, code := c.Request(http.MethodGet, activeUserJWT, nil, "tools/search")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var searchResp struct {
+			Data struct {
+				Tools []api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &searchResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find our test tools in the search results
+		var activeUserTool, inactiveUserTool *api.Tool
+		for i := range searchResp.Data.Tools {
+			tool := &searchResp.Data.Tools[i]
+			switch tool.ID {
+			case activeUserToolID:
+				activeUserTool = tool
+			case inactiveUserToolID:
+				inactiveUserTool = tool
+			}
+		}
+
+		// Verify UserActive fields are populated correctly
+		if activeUserTool != nil {
+			qt.Assert(t, activeUserTool.UserActive, qt.IsTrue, qt.Commentf("Active user's tool should have UserActive=true"))
+		}
+
+		// Note: Inactive user's tool might not appear in search results due to access control,
+		// but if it does, UserActive should be false
+		if inactiveUserTool != nil {
+			qt.Assert(t, inactiveUserTool.UserActive, qt.IsFalse, qt.Commentf("Inactive user's tool should have UserActive=false"))
+		}
+	})
+
+	t.Run("Tool list includes UserActive information", func(t *testing.T) {
+		// Get active user's own tools
+		resp, code := c.Request(http.MethodGet, activeUserJWT, nil, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var listResp struct {
+			Data struct {
+				Tools []api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find our test tool
+		var foundTool *api.Tool
+		for i := range listResp.Data.Tools {
+			if listResp.Data.Tools[i].ID == activeUserToolID {
+				foundTool = &listResp.Data.Tools[i]
+				break
+			}
+		}
+
+		qt.Assert(t, foundTool, qt.Not(qt.IsNil), qt.Commentf("Should find the active user's tool"))
+		qt.Assert(t, foundTool.UserActive, qt.IsTrue, qt.Commentf("UserActive should be true for active user's tool"))
+		qt.Assert(t, foundTool.ActualUserActive, qt.IsFalse, qt.Commentf(
+			"ActualUserActive should be false when ActualUserID is not set"),
+		)
+	})
+
+	t.Run("UserActive fields work with nomadic tools", func(t *testing.T) {
+		// Create a nomadic tool
+		isNomadic := true
+		resp, code := c.Request(http.MethodPost, activeUserJWT,
+			api.Tool{
+				Title:         "Nomadic Tool",
+				Description:   "Test nomadic tool",
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				IsNomadic:     &isNomadic,
+				Location: api.Location{
+					Latitude:  41695384,
+					Longitude: 2492793,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &toolResp)
+		qt.Assert(t, err, qt.IsNil)
+		nomadicToolID := toolResp.Data.ID
+
+		// Get the nomadic tool
+		resp, code = c.Request(http.MethodGet, activeUserJWT, nil, "tools", fmt.Sprintf("%d", nomadicToolID))
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var getToolResp struct {
+			Data api.Tool `json:"data"`
+		}
+		err = json.Unmarshal(resp, &getToolResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, getToolResp.Data.UserActive, qt.IsTrue, qt.Commentf(
+			"UserActive should be true for nomadic tool with active owner"),
+		)
+		qt.Assert(t, *getToolResp.Data.IsNomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
+		qt.Assert(t, getToolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf(
+			"ActualUserActive should be false when ActualUserID is not set"),
+		)
 	})
 }

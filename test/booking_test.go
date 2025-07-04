@@ -816,7 +816,7 @@ func TestBookings(t *testing.T) {
 			}
 			err = json.Unmarshal(getToolResp, &toolDetails)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, toolDetails.Data.IsNomadic, qt.IsTrue)
+			qt.Assert(t, *toolDetails.Data.IsNomadic, qt.IsTrue)
 
 			// Create a booking for the nomadic tool
 			resp, code = c.Request(http.MethodPost, renterJWT,
@@ -1790,5 +1790,489 @@ func TestBookingPagination(t *testing.T) {
 		qt.Assert(t, pendingCount > 0, qt.IsTrue, qt.Commentf("Should have some pending bookings"))
 		qt.Assert(t, acceptedCount > 0, qt.IsTrue, qt.Commentf("Should have some accepted bookings"))
 		qt.Assert(t, returnedCount > 0, qt.IsTrue, qt.Commentf("Should have some returned bookings"))
+	})
+}
+
+func TestBookingInactiveUserValidation(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users for testing
+	activeOwnerJWT, activeOwnerID := c.RegisterAndLoginWithID("active-owner@test.com", "Active Owner", "password")
+	activeRenterJWT, activeRenterID := c.RegisterAndLoginWithID("active-renter@test.com", "Active Renter", "password")
+	inactiveOwnerJWT, _ := c.RegisterAndLoginWithID("inactive-owner@test.com", "Inactive Owner", "password")
+	inactiveRenterJWT, _ := c.RegisterAndLoginWithID("inactive-renter@test.com", "Inactive Renter", "password")
+
+	// Create tools from both active and inactive owners
+	activeOwnerToolID := c.CreateTool(activeOwnerJWT, "Active Owner Tool")
+	inactiveOwnerToolID := c.CreateTool(inactiveOwnerJWT, "Inactive Owner Tool")
+
+	// Deactivate the inactive users
+	_, code := c.Request(http.MethodPost, inactiveOwnerJWT,
+		api.UserProfile{
+			Active: &[]bool{false}[0], // Set active to false
+		},
+		"profile",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	_, code = c.Request(http.MethodPost, inactiveRenterJWT,
+		api.UserProfile{
+			Active: &[]bool{false}[0], // Set active to false
+		},
+		"profile",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	// Test booking dates
+	tomorrow := time.Now().Add(24 * time.Hour)
+	dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+	t.Run("Active user booking from active owner (should succeed)", func(t *testing.T) {
+		resp, code := c.Request(http.MethodPost, activeRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(activeOwnerToolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking from active user to active owner",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var response struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &response)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, response.Data.ToolID, qt.Equals, fmt.Sprint(activeOwnerToolID))
+		qt.Assert(t, response.Data.FromUserID, qt.Equals, activeRenterID)
+		qt.Assert(t, response.Data.ToUserID, qt.Equals, activeOwnerID)
+	})
+
+	t.Run("Inactive user trying to create booking (should fail)", func(t *testing.T) {
+		resp, code := c.Request(http.MethodPost, inactiveRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(activeOwnerToolID),
+				StartDate: tomorrow.Add(72 * time.Hour).Unix(),
+				EndDate:   dayAfterTomorrow.Add(72 * time.Hour).Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking from inactive user",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 403) // Forbidden
+
+		// Verify error message
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err := json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "user account is inactive")
+	})
+
+	t.Run("Active user trying to book from inactive owner (should fail)", func(t *testing.T) {
+		resp, code := c.Request(http.MethodPost, activeRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(inactiveOwnerToolID),
+				StartDate: tomorrow.Add(96 * time.Hour).Unix(),
+				EndDate:   dayAfterTomorrow.Add(96 * time.Hour).Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking from active user to inactive owner",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 403) // Forbidden
+
+		// Verify error message
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err := json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "recipient user account is inactive")
+	})
+
+	t.Run("Inactive user trying to book from inactive owner (should fail with requester error)", func(t *testing.T) {
+		resp, code := c.Request(http.MethodPost, inactiveRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(inactiveOwnerToolID),
+				StartDate: tomorrow.Add(120 * time.Hour).Unix(),
+				EndDate:   dayAfterTomorrow.Add(120 * time.Hour).Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking from inactive user to inactive owner",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 403) // Forbidden
+
+		// Should fail with requester inactive error (checked first)
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err := json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "user account is inactive")
+	})
+}
+
+func TestBookingInactiveUserValidationWithNomadicTools(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users for testing
+	activeOwnerJWT, _ := c.RegisterAndLoginWithID("nomadic-active-owner@test.com", "Active Owner", "password")
+	activeRenterJWT, activeRenterID := c.RegisterAndLoginWithID("nomadic-active-renter@test.com", "Active Renter", "password")
+	inactiveActualUserJWT, inactiveActualUserID := c.RegisterAndLoginWithID(
+		"nomadic-inactive-actual@test.com",
+		"Inactive Actual User",
+		"password",
+	)
+
+	// Create a nomadic tool from active owner
+	createToolResp, code := c.Request(http.MethodPost, activeOwnerJWT, map[string]interface{}{
+		"title":         "Nomadic Tool",
+		"description":   "This is a nomadic tool for testing",
+		"toolCategory":  1,
+		"toolValuation": 100,
+		"isNomadic":     true,
+	}, "tools")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var toolIDResp struct {
+		Data struct {
+			ID int64 `json:"id"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(createToolResp, &toolIDResp)
+	qt.Assert(t, err, qt.IsNil)
+	nomadicToolID := toolIDResp.Data.ID
+
+	// Test booking dates
+	today := time.Now().Unix()
+	oneDay := time.Now().Add(24 * time.Hour).Unix()
+	twoDays := time.Now().Add(48 * time.Hour).Unix()
+	threeDays := time.Now().Add(72 * time.Hour).Unix()
+	fourDays := time.Now().Add(96 * time.Hour).Unix()
+	fiveDays := time.Now().Add(120 * time.Hour).Unix()
+	sixDays := time.Now().Add(148 * time.Hour).Unix()
+
+	// Set the inactive user as the actual user of the nomadic tool
+	resp, code := c.Request(http.MethodPost, inactiveActualUserJWT,
+		api.CreateBookingRequest{
+			ToolID:    fmt.Sprint(nomadicToolID),
+			StartDate: today,
+			EndDate:   today,
+			Contact:   "test@example.com",
+			Comments:  "Booking for nomadic tool test",
+		},
+		"bookings",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var bookingResp struct {
+		Data api.BookingResponse `json:"data"`
+	}
+	err = json.Unmarshal(resp, &bookingResp)
+	qt.Assert(t, err, qt.IsNil)
+	bookingID := bookingResp.Data.ID
+
+	// Owner accepts the booking
+	_, code = c.Request(http.MethodPut, activeOwnerJWT,
+		&api.BookingStatusUpdate{
+			Status: "ACCEPTED",
+		}, "bookings", bookingID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	// Mark as picked by owner
+	_, code = c.Request(http.MethodPut, activeOwnerJWT,
+		&api.BookingStatusUpdate{
+			Status: "PICKED",
+		}, "bookings", bookingID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	// Deactivate the actual user
+	_, code = c.Request(http.MethodPost, inactiveActualUserJWT,
+		api.UserProfile{
+			Active: &[]bool{false}[0], // Set active to false
+		},
+		"profile",
+	)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	t.Run("Active user trying to book nomadic tool with inactive actual user (should fail)", func(t *testing.T) {
+		resp, code := c.Request(http.MethodPost, activeRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: oneDay,
+				EndDate:   twoDays,
+				Contact:   "test@example.com",
+				Comments:  "Test booking nomadic tool with inactive actual user",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 403) // Forbidden
+
+		// Verify error message
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err := json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "recipient user account is inactive")
+	})
+
+	t.Run("Reactivate actual user and booking should succeed", func(t *testing.T) {
+		// Reactivate the actual user
+		_, code := c.Request(http.MethodPost, inactiveActualUserJWT,
+			api.UserProfile{
+				Active: &[]bool{true}[0], // Set active to true
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Now the booking should succeed
+		resp, code := c.Request(http.MethodPost, activeRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: threeDays,
+				EndDate:   fourDays,
+				Contact:   "test@example.com",
+				Comments:  "Test booking nomadic tool with reactivated actual user",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var response struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &response)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, response.Data.ToolID, qt.Equals, fmt.Sprint(nomadicToolID))
+		qt.Assert(t, response.Data.FromUserID, qt.Equals, activeRenterID)
+		// For nomadic tools with actual user, the booking goes to the actual user
+		qt.Assert(t, response.Data.ToUserID, qt.Equals, inactiveActualUserID)
+	})
+
+	t.Run("Nomadic tool without actual user - inactive owner should fail", func(t *testing.T) {
+		// Create another nomadic tool without actual user
+		createToolResp, code := c.Request(http.MethodPost, activeOwnerJWT, map[string]interface{}{
+			"title":         "Nomadic Tool No Actual User",
+			"description":   "This is a nomadic tool without actual user",
+			"toolCategory":  1,
+			"toolValuation": 100,
+			"isNomadic":     true,
+		}, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err := json.Unmarshal(createToolResp, &toolIDResp)
+		qt.Assert(t, err, qt.IsNil)
+		nomadicToolID2 := toolIDResp.Data.ID
+
+		// Deactivate the owner
+		_, code = c.Request(http.MethodPost, activeOwnerJWT,
+			api.UserProfile{
+				Active: &[]bool{false}[0], // Set active to false
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Try to book the nomadic tool - should fail because owner is inactive
+		resp, code := c.Request(http.MethodPost, activeRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID2),
+				StartDate: fiveDays,
+				EndDate:   sixDays,
+				Contact:   "test@example.com",
+				Comments:  "Test booking nomadic tool with inactive owner",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 403) // Forbidden
+
+		// Verify error message
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err = json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "recipient user account is inactive")
+	})
+}
+
+func TestBookingInactiveUserValidationEdgeCases(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users
+	activeOwnerJWT, _ := c.RegisterAndLoginWithID("edge-active-owner@test.com", "Active Owner", "password")
+	activeRenterJWT, _ := c.RegisterAndLoginWithID("edge-active-renter@test.com", "Active Renter", "password")
+
+	// Create tool
+	toolID := c.CreateTool(activeOwnerJWT, "Edge Case Tool")
+
+	// Test booking dates
+	tomorrow := time.Now().Add(24 * time.Hour)
+	dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+	t.Run("User deactivated after booking creation but before acceptance", func(t *testing.T) {
+		// Create booking while both users are active
+		resp, code := c.Request(http.MethodPost, activeRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking before deactivation",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var response struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &response)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := response.Data.ID
+
+		// Deactivate the renter after booking creation
+		_, code = c.Request(http.MethodPost, activeRenterJWT,
+			api.UserProfile{
+				Active: &[]bool{false}[0], // Set active to false
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Owner should still be able to accept the booking
+		// (The validation only applies to booking creation, not status updates)
+		_, code = c.Request(http.MethodPut, activeOwnerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Verify booking was accepted
+		resp, code = c.Request(http.MethodGet, activeOwnerJWT, nil, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, bookingResp.Data.BookingStatus, qt.Equals, "ACCEPTED")
+	})
+
+	t.Run("Validation order - requester checked before recipient", func(t *testing.T) {
+		// Create another user to be the inactive owner
+		inactiveOwnerJWT, _ := c.RegisterAndLoginWithID("edge-inactive-owner@test.com", "Inactive Owner", "password")
+		inactiveRenterJWT, _ := c.RegisterAndLoginWithID("edge-inactive-renter@test.com", "Inactive Renter", "password")
+
+		// Create tool from inactive owner
+		inactiveToolID := c.CreateTool(inactiveOwnerJWT, "Inactive Owner Tool")
+
+		// Deactivate both users
+		_, code := c.Request(http.MethodPost, inactiveOwnerJWT,
+			api.UserProfile{
+				Active: &[]bool{false}[0],
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		_, code = c.Request(http.MethodPost, inactiveRenterJWT,
+			api.UserProfile{
+				Active: &[]bool{false}[0],
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Try to create booking - should fail with requester inactive error first
+		resp, code := c.Request(http.MethodPost, inactiveRenterJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(inactiveToolID),
+				StartDate: tomorrow.Add(168 * time.Hour).Unix(),
+				EndDate:   dayAfterTomorrow.Add(168 * time.Hour).Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test validation order",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 403)
+
+		var errorResp struct {
+			Header api.ResponseHeader `json:"header"`
+		}
+		err := json.Unmarshal(resp, &errorResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
+		// Should get the requester inactive error, not the recipient inactive error
+		qt.Assert(t, errorResp.Header.Message, qt.Contains, "user account is inactive")
+		qt.Assert(t, errorResp.Header.Message, qt.Not(qt.Contains), "recipient")
+	})
+}
+
+func TestBookingInactiveUserValidationUnit(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Test that the validation logic correctly identifies inactive users
+	t.Run("Unit test for inactive user validation", func(t *testing.T) {
+		// Create an active user
+		activeUserJWT, activeUserID := c.RegisterAndLoginWithID("active@test.com", "Active User", "password")
+
+		// Create an inactive user
+		inactiveUserJWT, _ := c.RegisterAndLoginWithID("inactive@test.com", "Inactive User", "password")
+
+		// Deactivate the user
+		_, code := c.Request("POST", inactiveUserJWT,
+			api.UserProfile{
+				Active: &[]bool{false}[0],
+			},
+			"profile",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Create a tool from the active user
+		toolID := c.CreateTool(activeUserJWT, "Test Tool")
+
+		// Try to create a booking from the inactive user - should fail
+		_, code = c.Request("POST", inactiveUserJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: 1751708400,
+				EndDate:   1751794800,
+				Contact:   "test@example.com",
+				Comments:  "Test booking from inactive user",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 403, qt.Commentf("Inactive user should not be able to create bookings"))
+
+		// Verify that active user can still create bookings
+		_, code = c.Request("POST", activeUserJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(toolID),
+				StartDate: 1751881200,
+				EndDate:   1751967600,
+				Contact:   "test@example.com",
+				Comments:  "Test booking from active user",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Active user should be able to create bookings"))
+
+		t.Logf("✓ Inactive user validation working correctly")
+		t.Logf("✓ Active user: %s can create bookings", activeUserID)
+		t.Logf("✓ Inactive user cannot create bookings")
 	})
 }

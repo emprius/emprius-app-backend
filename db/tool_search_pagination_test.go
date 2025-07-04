@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	qt "github.com/frankban/quicktest"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -48,8 +47,17 @@ func TestSearchToolsPagination(t *testing.T) {
 	}
 
 	testToolsCount := 40
+	// Initialize UserService and create a test user
+	userService := NewUserService(&Database{
+		Client:   client,
+		Database: database,
+	})
+
+	// Create a test user
+	userID, err := CreateTestUser(ctx, userService, "testuser@example.com", "Test User")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create test user"))
+
 	// Insert test tools
-	userID := primitive.NewObjectID()
 	for i := 1; i <= testToolsCount; i++ {
 		tool := &Tool{
 			ID:           int64(i),
@@ -185,8 +193,17 @@ func TestSearchToolsPaginationWithGeoNear(t *testing.T) {
 		},
 	}
 
+	// Initialize UserService and create a test user
+	userService := NewUserService(&Database{
+		Client:   client,
+		Database: database,
+	})
+
+	// Create a test user
+	userID, err := CreateTestUser(ctx, userService, "geouser@example.com", "Geo Test User")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create test user"))
+
 	// Create test tools at different distances but within search radius
-	userID := primitive.NewObjectID()
 	locations := []DBLocation{
 		// Tools within 10km radius
 		{Type: "Point", Coordinates: []float64{2.492793, 41.695384}}, // 0km
@@ -326,8 +343,17 @@ func TestSearchToolsPaginationWithFilters(t *testing.T) {
 		},
 	}
 
+	// Initialize UserService and create a test user
+	userService := NewUserService(&Database{
+		Client:   client,
+		Database: database,
+	})
+
+	// Create a test user
+	userID, err := CreateTestUser(ctx, userService, "filteruser@example.com", "Filter Test User")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create test user"))
+
 	// Insert tools with different categories and costs
-	userID := primitive.NewObjectID()
 	testTools := []Tool{
 		// Category 1 tools (cheap)
 		{

@@ -611,6 +611,7 @@ func (s *CommunityService) GetCommunityTools(ctx context.Context, communityID pr
 }
 
 // GetCommunityToolsPaginated retrieves tools in a community with pagination and search
+// Only returns tools where the owner user is active
 func (s *CommunityService) GetCommunityToolsPaginated(ctx context.Context,
 	communityID primitive.ObjectID,
 	page int,
@@ -627,30 +628,60 @@ func (s *CommunityService) GetCommunityToolsPaginated(ctx context.Context,
 
 	skip := page * pageSize
 
-	// Build the base filter
-	filter := bson.M{"communities": communityID}
+	// Build the base filter for the match stage
+	matchFilter := bson.M{"communities": communityID}
 
 	// Add search filter if search term is provided
 	if searchTerm != "" {
 		searchTerm = SanitizeString(searchTerm)
-		filter["$or"] = []bson.M{
+		matchFilter["$or"] = []bson.M{
 			{"title": bson.M{"$regex": searchTerm, "$options": "i"}},
 			{"description": bson.M{"$regex": searchTerm, "$options": "i"}},
 		}
 	}
 
-	// Get total count
-	total, err := s.ToolService.Collection.CountDocuments(ctx, filter)
-	if err != nil {
-		return nil, 0, err
+	// Use aggregation pipeline to join with users and filter out tools from inactive users
+	pipeline := mongo.Pipeline{
+		// Stage 1: Match tools based on community and search criteria
+		bson.D{{Key: "$match", Value: matchFilter}},
+		// Stage 2: Join with users collection to get tool owner info
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "users"},
+				{Key: "localField", Value: "userId"},
+				{Key: "foreignField", Value: "_id"},
+				{Key: "as", Value: "user"},
+			}},
+		},
+		// Stage 3: Filter out tools from inactive users
+		bson.D{
+			{Key: "$match", Value: bson.D{
+				{Key: "user.active", Value: true},
+			}},
+		},
+		// Stage 4: Remove the user field from the output
+		bson.D{
+			{Key: "$unset", Value: "user"},
+		},
+		// Stage 5: Sort by title
+		bson.D{
+			{Key: "$sort", Value: bson.D{{Key: "title", Value: 1}}},
+		},
+		// Stage 6: Use $facet to get both data and count
+		bson.D{
+			{Key: "$facet", Value: bson.D{
+				{Key: "data", Value: bson.A{
+					bson.D{{Key: "$skip", Value: int64(skip)}},
+					bson.D{{Key: "$limit", Value: int64(pageSize)}},
+				}},
+				{Key: "count", Value: bson.A{
+					bson.D{{Key: "$count", Value: "total"}},
+				}},
+			}},
+		},
 	}
 
-	// Get paginated results
-	findOptions := options.Find()
-	findOptions.SetSkip(int64(skip))
-	findOptions.SetLimit(int64(pageSize))
-	findOptions.SetSort(bson.D{{Key: "title", Value: 1}})
-	cursor, err := s.ToolService.Collection.Find(ctx, filter, findOptions)
+	cursor, err := s.ToolService.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -660,9 +691,24 @@ func (s *CommunityService) GetCommunityToolsPaginated(ctx context.Context,
 		}
 	}()
 
-	var tools []*Tool
-	if err := cursor.All(ctx, &tools); err != nil {
+	var result []struct {
+		Data  []*Tool `bson:"data"`
+		Count []struct {
+			Total int64 `bson:"total"`
+		} `bson:"count"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
 		return nil, 0, err
+	}
+
+	var tools []*Tool
+	var total int64
+	if len(result) > 0 {
+		tools = result[0].Data
+		if len(result[0].Count) > 0 {
+			total = result[0].Count[0].Total
+		}
 	}
 
 	return tools, total, nil

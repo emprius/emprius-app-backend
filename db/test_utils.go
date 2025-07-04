@@ -8,6 +8,7 @@ import (
 
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // StartMongoContainer creates and starts an instance of the MongoDB container.
@@ -43,4 +44,56 @@ func RandomDatabaseName() string {
 		dbChars[i] = DBNameChars[int(bigN.Int64())]
 	}
 	return string(dbChars)
+}
+
+// CreateTestUser creates a test user and returns the inserted user ID
+func CreateTestUser(ctx context.Context, userService *UserService, email string, name string) (primitive.ObjectID, error) {
+	user := &User{
+		Email:    email,
+		Name:     name,
+		Password: []byte("testpassword"),
+		Active:   true,
+		Tokens:   1000,
+		Rating:   50,
+		Location: DBLocation{
+			Type: "Point",
+			Coordinates: []float64{
+				2.492793,  // longitude
+				41.695384, // latitude
+			},
+		},
+		Verified: true,
+	}
+
+	result, err := userService.InsertUser(ctx, user)
+	if err != nil {
+		return primitive.NilObjectID, err
+	}
+
+	return result.InsertedID.(primitive.ObjectID), nil
+}
+
+// CreateTestUserWithDetails creates a test user with specific details
+func CreateTestUserWithDetails(ctx context.Context, userService *UserService, user *User) (primitive.ObjectID, error) {
+	// Set defaults if not provided
+	if user.Password == nil {
+		user.Password = []byte("testpassword")
+	}
+	if user.Tokens == 0 {
+		user.Tokens = 1000
+	}
+	if user.Rating == 0 {
+		user.Rating = 50
+	}
+	// Default to active if not explicitly set
+	if !user.Active {
+		user.Active = true
+	}
+
+	result, err := userService.InsertUser(ctx, user)
+	if err != nil {
+		return primitive.NilObjectID, err
+	}
+
+	return result.InsertedID.(primitive.ObjectID), nil
 }
