@@ -264,7 +264,7 @@ type Tool struct {
 	Weight             uint32             `json:"weight"`
 	MaxDistance        uint32             `json:"maxDistance"`
 	ReservedDates      []db.DateRange     `json:"reservedDates"`
-	IsNomadic          bool               `json:"isNomadic"`
+	IsNomadic          *bool              `json:"isNomadic"`
 	Communities        []string           `json:"communities,omitempty"`
 	HistoryEntries     []ToolHistoryEntry `json:"historyEntries,omitempty"`
 }
@@ -305,7 +305,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool, database *db.Database, useRealLocation .
 	t.Weight = dbt.Weight
 	t.MaxDistance = dbt.MaxDistance
 	t.ReservedDates = dbt.ReservedDates
-	t.IsNomadic = dbt.IsNomadic
+	t.IsNomadic = &dbt.IsNomadic
 
 	// Convert communities
 	if len(dbt.Communities) > 0 {

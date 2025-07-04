@@ -170,7 +170,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		ObfuscatedLocation: db.ObfuscateLocation(realLocation, user.ID),
 		TransportOptions:   transportOptions,
 		ReservedDates:      []db.DateRange{}, // Initialize empty array
-		IsNomadic:          t.IsNomadic,
+		IsNomadic:          *t.IsNomadic,
 	}
 	log.Info().Msgf("adding tool to database, title: %s, user: %s, id: %d", t.Title, userID, dbTool.ID)
 
@@ -229,8 +229,9 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 	if newTool.AskWithFee != nil {
 		tool.AskWithFee = *newTool.AskWithFee
 	}
-	// Update nomadic status
-	tool.IsNomadic = newTool.IsNomadic
+	if newTool.IsNomadic != nil {
+		tool.IsNomadic = *newTool.IsNomadic
+	}
 
 	if newTool.ToolValuation != nil {
 		tool.ToolValuation = *newTool.ToolValuation
@@ -349,6 +350,7 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 		"obfuscatedLocation": tool.ObfuscatedLocation,
 		"transportOptions":   tool.TransportOptions,
 		"isNomadic":          tool.IsNomadic,
+		"actualUserId":       tool.ActualUserID,
 	}
 	err = a.database.ToolService.UpdateToolFields(context.Background(), id, updates)
 	if err != nil {
@@ -766,7 +768,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	}
 
 	// Check if trying to change nomadic status
-	if tool.IsNomadic != t.IsNomadic {
+	if tool.IsNomadic != *t.IsNomadic {
 		// Only the owner can change nomadic status
 		if tool.UserID != user.ID {
 			return nil, ErrOnlyOwnerCanChangeNomadicStatus.WithErr(

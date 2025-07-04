@@ -1608,13 +1608,14 @@ func TestToolUserActiveFields(t *testing.T) {
 
 	t.Run("UserActive fields work with nomadic tools", func(t *testing.T) {
 		// Create a nomadic tool
+		isNomadic := true
 		resp, code := c.Request(http.MethodPost, activeUserJWT,
 			api.Tool{
 				Title:         "Nomadic Tool",
 				Description:   "Test nomadic tool",
 				Category:      1,
 				ToolValuation: uint64Ptr(10000),
-				IsNomadic:     true,
+				IsNomadic:     &isNomadic,
 				Location: api.Location{
 					Latitude:  41695384,
 					Longitude: 2492793,
