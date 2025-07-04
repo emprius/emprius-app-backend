@@ -165,7 +165,7 @@ func TestNotificationPreferences(t *testing.T) {
 
 	t.Run("New User Has Default Notification Preferences", func(t *testing.T) {
 		// Register a new user and verify they get default notification preferences
-		newUserJWT := c.RegisterAndLogin("newuser@test.com", "newuser", "newpass")
+		newUserJWT := c.RegisterAndLogin("newuser@test.com", "newuser", "newuser@test.com")
 
 		// Get the new user's profile
 		resp, code := c.Request(http.MethodGet, newUserJWT, nil, "profile")

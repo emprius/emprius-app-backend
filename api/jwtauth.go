@@ -2,10 +2,11 @@ package api
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"net/http"
 	"time"
+
+	"golang.org/x/crypto/argon2"
 
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/lestrrat-go/jwx/v2/jwt"
@@ -63,6 +64,15 @@ func (a *API) makeToken(id string) (*LoginResponse, error) {
 	return &lr, nil
 }
 
+// HashPassword helper function allows to hash a password using a salt.
 func hashPassword(password string) []byte {
-	return sha256.New().Sum([]byte(passwordSalt + password))
+	return argon2hash([]byte(password), []byte(passwordSalt))
+}
+
+func argon2hash(data, salt []byte) []byte {
+	// Argon2 parameters for hashing, if modified, the current hashes will be invalidated
+	memory := uint32(64 * 1024)
+	argonTime := uint32(4)
+	argonThreads := uint8(8)
+	return argon2.IDKey([]byte(data), []byte(salt), argonTime, memory, argonThreads, 32)
 }

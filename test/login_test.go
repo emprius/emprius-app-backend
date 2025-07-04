@@ -27,6 +27,10 @@ func TestLogin(t *testing.T) {
 				Name:      "testuser",
 				Community: "testCommunity",
 				Password:  "testpassword",
+				Location: &api.Location{
+					Latitude:  int64(0),
+					Longitude: int64(0),
+				},
 			},
 		},
 		"register",
