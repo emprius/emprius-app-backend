@@ -3,9 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
-	"golang.org/x/crypto/argon2"
 	"net/http"
 	"time"
+
+	"golang.org/x/crypto/argon2"
 
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/lestrrat-go/jwx/v2/jwt"

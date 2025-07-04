@@ -5,8 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/notifications"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications"
 
 	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 
