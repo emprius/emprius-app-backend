@@ -597,18 +597,27 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 
 	// Determine the recipient of the booking
 	var toUserID primitive.ObjectID
+	// For non-nomadic tools or nomadic tools without an actual user, send the booking to the owner
+	toUserID = tool.UserID
 	if tool.IsNomadic && !tool.ActualUserID.IsZero() {
 		// For nomadic tools with an actual user, send the booking to the actual user
 		toUserID = tool.ActualUserID
-	} else {
-		// For non-nomadic tools or nomadic tools without an actual user, send the booking to the owner
-		toUserID = tool.UserID
 	}
 
 	// Get the recipient user
 	toUser, err := a.database.UserService.GetUserByID(r.Context.Request.Context(), toUserID)
 	if err != nil {
 		return nil, ErrUserNotFound.WithErr(fmt.Errorf("recipient user not found: %w", err))
+	}
+
+	// Check if requesting user is active
+	if !fromUser.Active {
+		return nil, ErrUserInactive.WithErr(fmt.Errorf("requesting user is inactive"))
+	}
+
+	// Check if recipient user is active
+	if !toUser.Active {
+		return nil, ErrRecipientUserInactive.WithErr(fmt.Errorf("recipient user is inactive"))
 	}
 
 	// Check if the tool belongs to any communities
