@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/notifications"
 	"time"
 
 	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
@@ -88,6 +89,21 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		}
 	}
 
+	// check the name is not empty
+	if userInfo.Name == "" {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("name is empty"))
+	}
+
+	// check the password is correct format
+	if len(userInfo.Password) < 8 {
+		return nil, ErrPasswordTooShort
+	}
+
+	// check the email is correct format
+	if !notifications.ValidEmail(userInfo.UserEmail) {
+		return nil, ErrMalformedEmail
+	}
+
 	user := db.User{
 		Email:                   userInfo.UserEmail,
 		Password:                hashPassword(userInfo.Password),
@@ -97,6 +113,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		Tokens:                  1000,
 		NotificationPreferences: db.GetDefaultNotificationPreferences(),
 	}
+
 	if userInfo.Avatar != nil {
 		image, err := a.addImage(userInfo.Name+"_avatar", userInfo.Avatar)
 		if err != nil {
@@ -104,8 +121,11 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		}
 		user.AvatarHash = image.Hash
 	}
+
 	if userInfo.Location != nil {
 		user.Location = userInfo.Location.ToDBLocation()
+	} else {
+		return nil, ErrLocationNotSet
 	}
 
 	id, err := a.addUser(&user)
@@ -402,10 +422,12 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 			return nil, ErrEmailChangeNotAllowed
 		}
 	}
+
 	user, err := a.getDBUserByID(r.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user profile: %w", err)
 	}
+
 	if newUserInfo.Name != "" {
 		user.Name = newUserInfo.Name
 	}
@@ -416,6 +438,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if newUserInfo.Bio != "" {
 		user.Bio = newUserInfo.Bio
 	}
+
 	var avatar *db.Image
 	if len(newUserInfo.Avatar) > 0 {
 		avatar, err = a.addImage(user.Name+"_avatar", newUserInfo.Avatar)
@@ -424,14 +447,17 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		}
 		user.AvatarHash = avatar.Hash
 	}
+
 	if newUserInfo.Location != nil {
 		user.Location = newUserInfo.Location.ToDBLocation()
 		// Generate obfuscated location
 		user.ObfuscatedLocation = db.ObfuscateLocation(user.Location, user.ID)
 	}
+
 	if newUserInfo.Active != nil {
 		user.Active = *newUserInfo.Active
 	}
+
 	if newUserInfo.Password != "" {
 		// If password is being changed, require the actual password
 		if newUserInfo.ActualPassword == "" {
@@ -445,6 +471,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 
 		user.Password = hashPassword(newUserInfo.Password)
 	}
+
 	update := bson.M{
 		"name":               user.Name,
 		"avatarHash":         user.AvatarHash,
@@ -456,14 +483,17 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		"bio":                user.Bio,
 		"lastSeen":           time.Now(), // Update lastSeen when profile is updated
 	}
+
 	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
 	if err != nil {
 		return nil, ErrCouldNotInsertToDatabase.WithErr(err)
 	}
+
 	newUser, err := a.getUserByID(r.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user profile: %w", err)
 	}
+
 	return newUser, nil
 }
 

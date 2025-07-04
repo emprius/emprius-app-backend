@@ -202,6 +202,18 @@ var (
 		Code:    http.StatusBadRequest,
 		Message: "can only cancel pending requests",
 	}
+	ErrPasswordTooShort = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "password must be at least 8 characters long",
+	}
+	ErrMalformedEmail = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "malformed email address",
+	}
+	ErrLocationNotSet = &HTTPError{
+		Code:    http.StatusBadRequest,
+		Message: "Location is not set",
+	}
 	ErrInvalidInviteCode = &HTTPError{
 		Code:    http.StatusBadRequest,
 		Message: "invalid invite code",
