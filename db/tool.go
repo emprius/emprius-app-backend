@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"regexp"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -133,13 +134,18 @@ func (s *ToolService) GetToolByID(ctx context.Context, id int64) (*Tool, error) 
 }
 
 // GetToolByIDWithAccessControl retrieves a Tool by its ID with access control for inactive users.
-// Only allows access to tools from inactive users if the requesting user is the tool owner.
+// Allows access to tools from inactive users if:
+// 1. The requesting user is the tool owner, OR
+// 2. The requesting user was involved in any booking request for this tool
 func (s *ToolService) GetToolByIDWithAccessControl(
 	ctx context.Context,
 	id int64,
 	requestingUserID primitive.ObjectID,
 ) (*Tool, error) {
-	// Use aggregation to join with users collection and check access control
+	// Convert tool ID to string for booking lookup
+	toolIDStr := strconv.FormatInt(id, 10)
+
+	// Use aggregation to join with users and bookings collections and check access control
 	pipeline := mongo.Pipeline{
 		// Stage 1: Match the specific tool
 		bson.D{{Key: "$match", Value: bson.M{"_id": id}}},
@@ -152,7 +158,29 @@ func (s *ToolService) GetToolByIDWithAccessControl(
 				{Key: "as", Value: "owner"},
 			}},
 		},
-		// Stage 3: Filter based on access control rules
+		// Stage 3: Join with bookings collection to check if requesting user was involved in any booking
+		bson.D{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "bookings"},
+				{Key: "let", Value: bson.D{{Key: "toolId", Value: toolIDStr}}},
+				{Key: "pipeline", Value: bson.A{
+					bson.D{{Key: "$match", Value: bson.D{
+						{Key: "$expr", Value: bson.D{
+							{Key: "$and", Value: bson.A{
+								bson.D{{Key: "$eq", Value: bson.A{"$toolId", "$$toolId"}}},
+								bson.D{{Key: "$or", Value: bson.A{
+									bson.D{{Key: "$eq", Value: bson.A{"$fromUserId", requestingUserID}}},
+									bson.D{{Key: "$eq", Value: bson.A{"$toUserId", requestingUserID}}},
+								}}},
+							}},
+						}},
+					}}},
+					bson.D{{Key: "$limit", Value: 1}}, // We only need to know if at least one booking exists
+				}},
+				{Key: "as", Value: "userBookings"},
+			}},
+		},
+		// Stage 4: Filter based on access control rules
 		bson.D{
 			{Key: "$match", Value: bson.D{
 				{Key: "$or", Value: bson.A{
@@ -160,12 +188,14 @@ func (s *ToolService) GetToolByIDWithAccessControl(
 					bson.D{{Key: "owner.active", Value: true}},
 					// Allow if requesting user is the tool owner
 					bson.D{{Key: "userId", Value: requestingUserID}},
+					// Allow if requesting user was involved in any booking for this tool
+					bson.D{{Key: "userBookings", Value: bson.D{{Key: "$ne", Value: bson.A{}}}}},
 				}},
 			}},
 		},
-		// Stage 4: Remove the owner field from output
+		// Stage 5: Remove the temporary fields from output
 		bson.D{
-			{Key: "$unset", Value: "owner"},
+			{Key: "$unset", Value: bson.A{"owner", "userBookings"}},
 		},
 	}
 
