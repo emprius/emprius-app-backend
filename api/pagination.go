@@ -49,7 +49,7 @@ func (a *API) getToolListPaginatedResponse(tools []*db.Tool, page int, pageSize 
 	// Convert DB tools to API tools
 	apiTools := make([]*Tool, len(tools))
 	for i, t := range tools {
-		apiTools[i] = new(Tool).FromDBTool(t)
+		apiTools[i] = new(Tool).FromDBTool(t, a.database)
 	}
 
 	// Calculate pagination info

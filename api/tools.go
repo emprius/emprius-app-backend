@@ -395,7 +395,7 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 	useRealLocation := dbTool.UserID == requestingUserID || dbTool.ActualUserID == requestingUserID
 
 	// Convert DB tool to API tool with appropriate location
-	tool := new(Tool).FromDBTool(dbTool, useRealLocation)
+	tool := new(Tool).FromDBTool(dbTool, a.database, useRealLocation)
 
 	// Convert community ObjectIDs to strings
 	communityIDs := make([]string, len(dbTool.Communities))
