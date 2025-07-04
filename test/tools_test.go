@@ -1482,7 +1482,9 @@ func TestToolUserActiveFields(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		qt.Assert(t, toolResp.Data.UserActive, qt.IsTrue, qt.Commentf("UserActive should be true when owner is active"))
-		qt.Assert(t, toolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf("ActualUserActive should be false when ActualUserID is not set"))
+		qt.Assert(t, toolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf(
+			"ActualUserActive should be false when ActualUserID is not set"),
+		)
 	})
 
 	t.Run("UserActive is false when owner is inactive", func(t *testing.T) {
@@ -1497,7 +1499,9 @@ func TestToolUserActiveFields(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		qt.Assert(t, toolResp.Data.UserActive, qt.IsFalse, qt.Commentf("UserActive should be false when owner is inactive"))
-		qt.Assert(t, toolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf("ActualUserActive should be false when ActualUserID is not set"))
+		qt.Assert(t, toolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf(
+			"ActualUserActive should be false when ActualUserID is not set"),
+		)
 	})
 
 	t.Run("Tool search includes UserActive information", func(t *testing.T) {
@@ -1517,9 +1521,10 @@ func TestToolUserActiveFields(t *testing.T) {
 		var activeUserTool, inactiveUserTool *api.Tool
 		for i := range searchResp.Data.Tools {
 			tool := &searchResp.Data.Tools[i]
-			if tool.ID == activeUserToolID {
+			switch tool.ID {
+			case activeUserToolID:
 				activeUserTool = tool
-			} else if tool.ID == inactiveUserToolID {
+			case inactiveUserToolID:
 				inactiveUserTool = tool
 			}
 		}
@@ -1560,7 +1565,9 @@ func TestToolUserActiveFields(t *testing.T) {
 
 		qt.Assert(t, foundTool, qt.Not(qt.IsNil), qt.Commentf("Should find the active user's tool"))
 		qt.Assert(t, foundTool.UserActive, qt.IsTrue, qt.Commentf("UserActive should be true for active user's tool"))
-		qt.Assert(t, foundTool.ActualUserActive, qt.IsFalse, qt.Commentf("ActualUserActive should be false when ActualUserID is not set"))
+		qt.Assert(t, foundTool.ActualUserActive, qt.IsFalse, qt.Commentf(
+			"ActualUserActive should be false when ActualUserID is not set"),
+		)
 	})
 
 	t.Run("UserActive fields work with nomadic tools", func(t *testing.T) {
@@ -1601,8 +1608,12 @@ func TestToolUserActiveFields(t *testing.T) {
 		err = json.Unmarshal(resp, &getToolResp)
 		qt.Assert(t, err, qt.IsNil)
 
-		qt.Assert(t, getToolResp.Data.UserActive, qt.IsTrue, qt.Commentf("UserActive should be true for nomadic tool with active owner"))
+		qt.Assert(t, getToolResp.Data.UserActive, qt.IsTrue, qt.Commentf(
+			"UserActive should be true for nomadic tool with active owner"),
+		)
 		qt.Assert(t, *getToolResp.Data.IsNomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
-		qt.Assert(t, getToolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf("ActualUserActive should be false when ActualUserID is not set"))
+		qt.Assert(t, getToolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf(
+			"ActualUserActive should be false when ActualUserID is not set"),
+		)
 	})
 }

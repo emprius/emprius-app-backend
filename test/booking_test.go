@@ -1926,7 +1926,11 @@ func TestBookingInactiveUserValidationWithNomadicTools(t *testing.T) {
 	// Create users for testing
 	activeOwnerJWT, _ := c.RegisterAndLoginWithID("nomadic-active-owner@test.com", "Active Owner", "password")
 	activeRenterJWT, activeRenterID := c.RegisterAndLoginWithID("nomadic-active-renter@test.com", "Active Renter", "password")
-	inactiveActualUserJWT, inactiveActualUserID := c.RegisterAndLoginWithID("nomadic-inactive-actual@test.com", "Inactive Actual User", "password")
+	inactiveActualUserJWT, inactiveActualUserID := c.RegisterAndLoginWithID(
+		"nomadic-inactive-actual@test.com",
+		"Inactive Actual User",
+		"password",
+	)
 
 	// Create a nomadic tool from active owner
 	createToolResp, code := c.Request(http.MethodPost, activeOwnerJWT, map[string]interface{}{
