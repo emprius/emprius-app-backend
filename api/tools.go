@@ -145,6 +145,12 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		*t.IsAvailable = true
 	}
 
+	// Set the nomadic to false by default
+	if t.IsNomadic == nil {
+		t.IsNomadic = new(bool)
+		*t.IsNomadic = false
+	}
+
 	// Create the tool with real location
 	toolId := toolID(userID)
 	realLocation := t.Location.ToDBLocation()
@@ -768,7 +774,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 	}
 
 	// Check if trying to change nomadic status
-	if tool.IsNomadic != *t.IsNomadic {
+	if t.IsNomadic != nil && tool.IsNomadic != *t.IsNomadic {
 		// Only the owner can change nomadic status
 		if tool.UserID != user.ID {
 			return nil, ErrOnlyOwnerCanChangeNomadicStatus.WithErr(

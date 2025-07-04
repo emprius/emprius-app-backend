@@ -816,7 +816,7 @@ func TestBookings(t *testing.T) {
 			}
 			err = json.Unmarshal(getToolResp, &toolDetails)
 			qt.Assert(t, err, qt.IsNil)
-			qt.Assert(t, toolDetails.Data.IsNomadic, qt.IsTrue)
+			qt.Assert(t, *toolDetails.Data.IsNomadic, qt.IsTrue)
 
 			// Create a booking for the nomadic tool
 			resp, code = c.Request(http.MethodPost, renterJWT,

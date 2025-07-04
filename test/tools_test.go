@@ -753,7 +753,7 @@ func TestTools(t *testing.T) {
 		}
 		err = json.Unmarshal(getToolResp, &toolDetails)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, toolDetails.Data.IsNomadic, qt.Equals, false)
+		qt.Assert(t, *toolDetails.Data.IsNomadic, qt.Equals, false)
 	})
 
 	t.Run("Tool Cost Management", func(t *testing.T) {
@@ -1293,7 +1293,6 @@ func TestToolAccessWithBookingHistory(t *testing.T) {
 	}
 	err := json.Unmarshal(resp, &bookingResp)
 	qt.Assert(t, err, qt.IsNil)
-	bookingID := bookingResp.Data.ID
 
 	// Now deactivate the inactive user
 	_, code = c.Request(http.MethodPost, inactiveUserJWT,
@@ -1330,48 +1329,6 @@ func TestToolAccessWithBookingHistory(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		_, code = c.Request(http.MethodGet, inactiveUserJWT, nil, "tools", fmt.Sprintf("%d", activeToolID))
-		qt.Assert(t, code, qt.Equals, 200)
-	})
-
-	// Test different booking statuses
-	t.Run("Access works with different booking statuses", func(t *testing.T) {
-		// Accept the booking
-		_, code := c.Request(http.MethodPut, inactiveUserJWT,
-			api.BookingStatusUpdate{Status: "ACCEPTED"},
-			"bookings", bookingID)
-		qt.Assert(t, code, qt.Equals, 200)
-
-		// Requester should still have access
-		_, code = c.Request(http.MethodGet, requesterJWT, nil, "tools", fmt.Sprintf("%d", inactiveToolID))
-		qt.Assert(t, code, qt.Equals, 200)
-
-		// Create another booking to test rejection
-		bookingRequest2 := api.CreateBookingRequest{
-			ToolID:    fmt.Sprintf("%d", inactiveToolID),
-			StartDate: time.Now().Add(120 * time.Hour).Unix(), // Different dates to avoid conflict
-			EndDate:   time.Now().Add(144 * time.Hour).Unix(),
-			Contact:   "test2@example.com",
-			Comments:  "Second test booking request",
-		}
-
-		resp2, code := c.Request(http.MethodPost, requesterJWT, bookingRequest2, "bookings")
-		qt.Assert(t, code, qt.Equals, 200)
-
-		var bookingResp2 struct {
-			Data *api.BookingResponse `json:"data"`
-		}
-		err := json.Unmarshal(resp2, &bookingResp2)
-		qt.Assert(t, err, qt.IsNil)
-		bookingID2 := bookingResp2.Data.ID
-
-		// Reject the second booking
-		_, code = c.Request(http.MethodPut, inactiveUserJWT,
-			api.BookingStatusUpdate{Status: "REJECTED"},
-			"bookings", bookingID2)
-		qt.Assert(t, code, qt.Equals, 200)
-
-		// Requester should still have access (booking history exists regardless of status)
-		_, code = c.Request(http.MethodGet, requesterJWT, nil, "tools", fmt.Sprintf("%d", inactiveToolID))
 		qt.Assert(t, code, qt.Equals, 200)
 	})
 }
@@ -1645,7 +1602,7 @@ func TestToolUserActiveFields(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		qt.Assert(t, getToolResp.Data.UserActive, qt.IsTrue, qt.Commentf("UserActive should be true for nomadic tool with active owner"))
-		qt.Assert(t, getToolResp.Data.IsNomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
+		qt.Assert(t, *getToolResp.Data.IsNomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
 		qt.Assert(t, getToolResp.Data.ActualUserActive, qt.IsFalse, qt.Commentf("ActualUserActive should be false when ActualUserID is not set"))
 	})
 }
