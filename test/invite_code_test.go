@@ -64,6 +64,10 @@ func TestInviteCodes(t *testing.T) {
 				UserProfile: api.UserProfile{
 					Name:     "Invited User",
 					Password: "invitedpass",
+					Location: &api.Location{
+						Latitude:  int64(0),
+						Longitude: int64(0),
+					},
 				},
 			},
 			"register",
