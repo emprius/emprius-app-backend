@@ -204,8 +204,25 @@ func (a *API) loginHandler(r *Request) (interface{}, error) {
 	if err != nil {
 		return nil, ErrWrongLogin
 	}
-	if !bytes.Equal(user.Password, hashPassword(loginInfo.Password)) {
-		return nil, ErrWrongLogin
+
+	// Check if password is empty (password recovery scenario)
+	if len(user.Password) == 0 {
+		// Password recovery: set the provided password as the new password
+		newPasswordHash := hashPassword(loginInfo.Password)
+		update := bson.M{"password": newPasswordHash}
+		_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
+		if err != nil {
+			log.Error().Err(err).Str("userId", user.ID.Hex()).Msg("Failed to update password during recovery")
+			return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to update password: %w", err))
+		}
+
+		log.Info().Str("userId", user.ID.Hex()).Str("email", user.Email).Msg("Password recovery completed successfully")
+		// Continue with normal login flow after setting password
+	} else {
+		// Normal login: compare passwords
+		if !bytes.Equal(user.Password, hashPassword(loginInfo.Password)) {
+			return nil, ErrWrongLogin
+		}
 	}
 
 	// Update LastSeen timestamp
