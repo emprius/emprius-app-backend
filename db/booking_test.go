@@ -812,3 +812,207 @@ func TestNomadicTool(t *testing.T) {
 	// Verify the nomadic attribute is correctly set in the tool
 	qt.Assert(t, finalTool.IsNomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
 }
+
+func TestGetUserBookings_PendingDatePriority(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	db := client.Database(dbName)
+
+	bookingService := NewBookingService(db)
+
+	// Create test users
+	owner := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "owner@test.com",
+		Name:     "Owner",
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+
+	renter := &User{
+		ID:       primitive.NewObjectID(),
+		Email:    "renter@test.com",
+		Name:     "Renter",
+		Active:   true,
+		Rating:   50,
+		Verified: true,
+	}
+
+	now := time.Now()
+	yesterday := now.Add(-24 * time.Hour)
+	tomorrow := now.Add(24 * time.Hour)
+	dayAfterTomorrow := now.Add(48 * time.Hour)
+
+	// Create test bookings with different statuses and dates
+	bookings := []*Booking{
+		// Future pending booking - should be prioritized
+		{
+			ID:            primitive.NewObjectID(),
+			ToolID:        "1",
+			FromUserID:    renter.ID,
+			ToUserID:      owner.ID,
+			StartDate:     tomorrow,
+			EndDate:       dayAfterTomorrow,
+			Contact:       "test@example.com",
+			Comments:      "Future pending booking",
+			BookingStatus: BookingStatusPending,
+			CreatedAt:     now.Add(-1 * time.Hour), // Created 1 hour ago
+			UpdatedAt:     now.Add(-1 * time.Hour),
+		},
+		// Past pending booking - should NOT be prioritized
+		{
+			ID:            primitive.NewObjectID(),
+			ToolID:        "2",
+			FromUserID:    renter.ID,
+			ToUserID:      owner.ID,
+			StartDate:     yesterday,
+			EndDate:       now.Add(-12 * time.Hour),
+			Contact:       "test@example.com",
+			Comments:      "Past pending booking",
+			BookingStatus: BookingStatusPending,
+			CreatedAt:     now.Add(-2 * time.Hour), // Created 2 hours ago
+			UpdatedAt:     now.Add(-2 * time.Hour),
+		},
+		// Accepted booking - should not be prioritized
+		{
+			ID:            primitive.NewObjectID(),
+			ToolID:        "3",
+			FromUserID:    renter.ID,
+			ToUserID:      owner.ID,
+			StartDate:     tomorrow.Add(24 * time.Hour),
+			EndDate:       tomorrow.Add(48 * time.Hour),
+			Contact:       "test@example.com",
+			Comments:      "Accepted booking",
+			BookingStatus: BookingStatusAccepted,
+			CreatedAt:     now.Add(-3 * time.Hour), // Created 3 hours ago
+			UpdatedAt:     now.Add(-3 * time.Hour),
+		},
+		// Another future pending booking - should be prioritized
+		{
+			ID:            primitive.NewObjectID(),
+			ToolID:        "4",
+			FromUserID:    renter.ID,
+			ToUserID:      owner.ID,
+			StartDate:     tomorrow.Add(72 * time.Hour),
+			EndDate:       tomorrow.Add(96 * time.Hour),
+			Contact:       "test@example.com",
+			Comments:      "Another future pending booking",
+			BookingStatus: BookingStatusPending,
+			CreatedAt:     now.Add(-30 * time.Minute), // Created 30 minutes ago
+			UpdatedAt:     now.Add(-30 * time.Minute),
+		},
+	}
+
+	// Insert all bookings
+	for _, booking := range bookings {
+		_, err = bookingService.collection.InsertOne(ctx, booking)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert booking"))
+	}
+
+	// Test incoming bookings (owner's perspective)
+	t.Run("Incoming bookings - future pending first", func(t *testing.T) {
+		result, total, err := bookingService.GetUserBookings(ctx, owner.ID, IncomingBookings, 0, 10)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get incoming bookings"))
+		qt.Assert(t, total, qt.Equals, int64(4), qt.Commentf("Should have 4 total bookings"))
+		qt.Assert(t, len(result), qt.Equals, 4, qt.Commentf("Should return 4 bookings"))
+
+		// Debug: Print the actual ordering
+		t.Logf("Actual booking order:")
+		for i, booking := range result {
+			t.Logf("  %d: Status=%s, StartDate=%v, Comments=%s, CreatedAt=%v",
+				i, booking.BookingStatus, booking.StartDate, booking.Comments, booking.CreatedAt)
+		}
+
+		// Verify that future pending bookings come first
+		futurePendingCount := 0
+		for i, booking := range result {
+			if booking.BookingStatus == BookingStatusPending && booking.StartDate.After(now) {
+				futurePendingCount++
+				qt.Assert(t, i < 2, qt.IsTrue,
+					qt.Commentf("Future pending booking should be in first 2 positions, but found at position %d", i))
+			}
+		}
+		qt.Assert(t, futurePendingCount, qt.Equals, 2, qt.Commentf("Should have exactly 2 future pending bookings"))
+
+		// Verify that past pending and accepted bookings come after future pending
+		for i, booking := range result {
+			if i >= 2 { // After the first 2 positions
+				if booking.BookingStatus == BookingStatusPending {
+					qt.Assert(t, booking.StartDate.Before(now), qt.IsTrue, qt.Commentf("Past pending booking should be in the past"))
+				}
+			}
+		}
+	})
+
+	// Test outgoing bookings (renter's perspective)
+	t.Run("Outgoing bookings - future pending first", func(t *testing.T) {
+		result, total, err := bookingService.GetUserBookings(ctx, renter.ID, OutgoingBookings, 0, 10)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get outgoing bookings"))
+		qt.Assert(t, total, qt.Equals, int64(4), qt.Commentf("Should have 4 total bookings"))
+		qt.Assert(t, len(result), qt.Equals, 4, qt.Commentf("Should return 4 bookings"))
+
+		// Same ordering should apply for outgoing bookings
+		qt.Assert(t, result[0].BookingStatus, qt.Equals, BookingStatusPending, qt.Commentf("First booking should be pending"))
+		qt.Assert(t, result[0].StartDate.After(now), qt.IsTrue, qt.Commentf("First booking should be in the future"))
+		qt.Assert(t, result[0].Comments, qt.Equals, "Another future pending booking",
+			qt.Commentf("Should be the most recently created future pending"))
+
+		qt.Assert(t, result[1].BookingStatus, qt.Equals, BookingStatusPending, qt.Commentf("Second booking should be pending"))
+		qt.Assert(t, result[1].StartDate.After(now), qt.IsTrue, qt.Commentf("Second booking should be in the future"))
+		qt.Assert(t, result[1].Comments, qt.Equals, "Future pending booking", qt.Commentf("Should be the older future pending"))
+	})
+
+	// Test edge case: booking starting exactly now
+	t.Run("Booking starting exactly now", func(t *testing.T) {
+		// Create a booking that starts exactly now
+		nowBooking := &Booking{
+			ID:            primitive.NewObjectID(),
+			ToolID:        "5",
+			FromUserID:    renter.ID,
+			ToUserID:      owner.ID,
+			StartDate:     now,
+			EndDate:       now.Add(24 * time.Hour),
+			Contact:       "test@example.com",
+			Comments:      "Booking starting now",
+			BookingStatus: BookingStatusPending,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+
+		_, err = bookingService.collection.InsertOne(ctx, nowBooking)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert now booking"))
+
+		result, total, err := bookingService.GetUserBookings(ctx, owner.ID, IncomingBookings, 0, 10)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get bookings"))
+		qt.Assert(t, total, qt.Equals, int64(5), qt.Commentf("Should have 5 total bookings"))
+
+		// The booking starting now should be prioritized (since startDate >= now)
+		foundNowBooking := false
+		for i, booking := range result {
+			if booking.Comments == "Booking starting now" {
+				foundNowBooking = true
+				// Should be among the first 3 bookings (the prioritized ones)
+				qt.Assert(t, i < 3, qt.IsTrue, qt.Commentf("Booking starting now should be prioritized"))
+				break
+			}
+		}
+		qt.Assert(t, foundNowBooking, qt.IsTrue, qt.Commentf("Should find the booking starting now"))
+	})
+}

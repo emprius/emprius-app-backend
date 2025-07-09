@@ -1593,7 +1593,7 @@ func TestBookingPagination(t *testing.T) {
 	}
 
 	// Test outgoing requests pagination (renter's perspective)
-	t.Run("Outgoing BookingRequests Pagination", func(t *testing.T) {
+	t.Run("Outgoing IncomingBookings Pagination", func(t *testing.T) {
 		// Test first page with default page size
 		resp, code := c.Request(http.MethodGet, renterJWT, nil, "bookings", "requests", "outgoing")
 		qt.Assert(t, code, qt.Equals, 200)
@@ -1636,7 +1636,7 @@ func TestBookingPagination(t *testing.T) {
 	})
 
 	// Test incoming requests pagination (owner's perspective)
-	t.Run("Incoming BookingRequests Pagination", func(t *testing.T) {
+	t.Run("Incoming IncomingBookings Pagination", func(t *testing.T) {
 		// Test first page
 		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "bookings", "requests", "incoming?page=0&pageSize=5")
 		qt.Assert(t, code, qt.Equals, 200)
@@ -2227,6 +2227,9 @@ func TestBookingInactiveUserValidationUnit(t *testing.T) {
 
 	// Test that the validation logic correctly identifies inactive users
 	t.Run("Unit test for inactive user validation", func(t *testing.T) {
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
 		// Create an active user
 		activeUserJWT, activeUserID := c.RegisterAndLoginWithID("active@test.com", "Active User", "password")
 
@@ -2249,8 +2252,8 @@ func TestBookingInactiveUserValidationUnit(t *testing.T) {
 		_, code = c.Request("POST", inactiveUserJWT,
 			api.CreateBookingRequest{
 				ToolID:    fmt.Sprint(toolID),
-				StartDate: 1751708400,
-				EndDate:   1751794800,
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
 				Contact:   "test@example.com",
 				Comments:  "Test booking from inactive user",
 			},
@@ -2262,8 +2265,8 @@ func TestBookingInactiveUserValidationUnit(t *testing.T) {
 		_, code = c.Request("POST", activeUserJWT,
 			api.CreateBookingRequest{
 				ToolID:    fmt.Sprint(toolID),
-				StartDate: 1751881200,
-				EndDate:   1751967600,
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
 				Contact:   "test@example.com",
 				Comments:  "Test booking from active user",
 			},

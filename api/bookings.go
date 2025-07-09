@@ -132,7 +132,7 @@ func (a *API) HandleGetOutgoingRequests(r *Request) (interface{}, error) {
 	bookings, total, err := a.database.BookingService.GetUserBookings(
 		r.Context.Request.Context(),
 		user.ID,
-		db.BookingPetitions,
+		db.OutgoingBookings,
 		page,
 		pageSize,
 	)
@@ -165,7 +165,7 @@ func (a *API) HandleGetIncomingRequests(r *Request) (interface{}, error) {
 	bookings, total, err := a.database.BookingService.GetUserBookings(
 		r.Context.Request.Context(),
 		user.ID,
-		db.BookingRequests,
+		db.IncomingBookings,
 		page,
 		pageSize,
 	)

@@ -180,8 +180,8 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 type BookingType string
 
 const (
-	BookingPetitions BookingType = "fromUserId"
-	BookingRequests  BookingType = "toUserId"
+	OutgoingBookings BookingType = "fromUserId"
+	IncomingBookings BookingType = "toUserId"
 )
 
 // GetUserBookings returns paginated bookings where the given user is either the requester (fromUserId)
@@ -208,7 +208,12 @@ func (s *BookingService) GetUserBookings(
 		{{Key: "$addFields", Value: bson.M{
 			"isPending": bson.M{
 				"$cond": bson.M{
-					"if":   bson.M{"$eq": []interface{}{"$bookingStatus", BookingStatusPending}},
+					"if": bson.M{
+						"$and": []interface{}{
+							bson.M{"$eq": []interface{}{"$bookingStatus", BookingStatusPending}},
+							bson.M{"$gte": []interface{}{"$startDate", time.Now()}},
+						},
+					},
 					"then": 1,
 					"else": 0,
 				},
