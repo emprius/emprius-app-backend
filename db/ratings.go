@@ -849,6 +849,10 @@ func (s *BookingService) CountPendingActions(
 	ctx context.Context,
 	userID primitive.ObjectID,
 ) (*CountPendingActionsResponse, error) {
+	now := time.Now()
+	// Get the beginning of today (i.e., 00:00:00)
+	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
 	pipeline := mongo.Pipeline{
 		{{
 			Key: "$facet", Value: bson.D{
@@ -888,6 +892,7 @@ func (s *BookingService) CountPendingActions(
 					bson.D{{Key: "$match", Value: bson.M{
 						"toUserId":      userID,
 						"bookingStatus": BookingStatusPending,
+						"startDate":     bson.M{"$gte": startOfToday},
 					}}},
 					bson.D{{Key: "$count", Value: "count"}},
 				}},
