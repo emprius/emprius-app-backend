@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -603,7 +604,7 @@ func (s *BookingService) RateBooking(
 	var booking Booking
 	err := s.collection.FindOne(ctx, bson.M{"_id": bookingID}).Decode(&booking)
 	if err != nil {
-		if err == mongo.ErrNoDocuments {
+		if errors.Is(err, mongo.ErrNoDocuments) {
 			return ErrBookingNotFound
 		}
 		return err
@@ -670,11 +671,11 @@ func (s *BookingService) RateBooking(
 	}
 
 	// Update overall ratings for the tool and for the recipient
-	return s.updateRatings(ctx, &booking)
+	return s.updateRatings(ctx, &booking, rateeID)
 }
 
 // updateRatings updates the overall ratings for a tool and user after a new rating is submitted
-func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) error {
+func (s *BookingService) updateRatings(ctx context.Context, booking *Booking, raterID primitive.ObjectID) error {
 	if booking == nil {
 		log.Error().Msg("Cannot update ratings: booking is nil")
 		return fmt.Errorf("booking cannot be nil")
@@ -695,13 +696,13 @@ func (s *BookingService) updateRatings(ctx context.Context, booking *Booking) er
 		return fmt.Errorf("failed to update tool rating: %w", err)
 	}
 
-	// Update the owner's overall rating
-	if err := s.updateUserRating(ctx, booking); err != nil {
+	// Update the rater's overall rating
+	if err := s.updateUserRatingByUserID(ctx, raterID); err != nil {
 		log.Error().Err(err).
 			Str("bookingId", booking.ID.Hex()).
-			Str("userId", booking.ToUserID.Hex()).
-			Msg("Failed to update user rating")
-		return fmt.Errorf("failed to update user rating: %w", err)
+			Str("userId", raterID.Hex()).
+			Msg("Failed to update rater rating")
+		return fmt.Errorf("failed to update owner rating: %w", err)
 	}
 
 	log.Debug().
@@ -779,13 +780,13 @@ func (s *BookingService) updateToolRating(ctx context.Context, booking *Booking)
 	return nil
 }
 
-// updateUserRating updates the average rating for a user
-func (s *BookingService) updateUserRating(ctx context.Context, booking *Booking) error {
-	// Only consider ratings where the owner (toUserId) is the recipient (rateeId)
+// updateUserRatingByUserID updates the average rating for a specific user ID
+func (s *BookingService) updateUserRatingByUserID(ctx context.Context, userID primitive.ObjectID) error {
+	// Consider all ratings where the specified user is the recipient (rateeId)
 	userPipeline := mongo.Pipeline{
 		{{Key: "$match", Value: bson.M{
-			"rateeId": booking.ToUserID,
-			"raterId": bson.M{"$ne": booking.ToUserID}, // exclude self-ratings
+			"rateeId": userID,
+			"raterId": bson.M{"$ne": userID}, // exclude self-ratings
 		}}},
 		{{Key: "$group", Value: bson.M{
 			"_id":       nil,
@@ -819,14 +820,14 @@ func (s *BookingService) updateUserRating(ctx context.Context, booking *Booking)
 		overall := int32(math.Round((avg / 5.0) * 100))
 
 		log.Debug().
-			Str("userId", booking.ToUserID.Hex()).
+			Str("userId", userID.Hex()).
 			Float64("avgRating", avg).
 			Int32("overallPercentage", overall).
 			Int("ratingCount", count).
 			Msg("Updating user rating")
 
 		userService := s.database.Collection("users")
-		_, err = userService.UpdateOne(ctx, bson.M{"_id": booking.ToUserID}, bson.M{
+		_, err = userService.UpdateOne(ctx, bson.M{"_id": userID}, bson.M{
 			"$set": bson.M{
 				"rating":      overall,
 				"ratingCount": count,
@@ -837,7 +838,7 @@ func (s *BookingService) updateUserRating(ctx context.Context, booking *Booking)
 		}
 	} else {
 		log.Debug().
-			Str("userId", booking.ToUserID.Hex()).
+			Str("userId", userID.Hex()).
 			Msg("No ratings found for user")
 	}
 

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -834,7 +835,7 @@ func (a *API) HandleRateBooking(r *Request) (interface{}, error) {
 	)
 	if err != nil {
 		switch {
-		case err == db.ErrBookingNotFound:
+		case errors.Is(err, db.ErrBookingNotFound):
 			return nil, ErrBookingNotFound.WithErr(err)
 		case err.Error() == "booking must be in RETURNED or PICKED state to be rated":
 			return nil, ErrInvalidBookingStatus.WithErr(err)

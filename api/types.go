@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
@@ -165,7 +164,7 @@ func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
 
 // FromDBUser converts a DB User to an API User (full version)
 // If includePrivateData is true, private data like notification preferences and useRealLocation will be included
-func (u *User) FromDBUser(dbu *db.User, dbc *db.Database, includePrivateData bool) *User {
+func (u *User) FromDBUser(dbu *db.User, includePrivateData bool) *User {
 	// First fill UserPreview fields
 	u.FromDBUserPreview(dbu)
 
@@ -198,20 +197,8 @@ func (u *User) FromDBUser(dbu *db.User, dbc *db.Database, includePrivateData boo
 		}
 	}
 
-	// Get rating count (number of ratings received by this user)
-	filter := bson.M{
-		"rateeId": u.ID,
-		"raterId": bson.M{"$ne": u.ID}, // exclude self-ratings
-	}
-
-	ratingCount, err := dbc.Database.Collection("ratings").CountDocuments(context.Background(), filter)
-	if err != nil {
-		log.Error().Err(err).Str("userId", u.ID).Msg("Failed to count user ratings")
-		// Continue even if count fails, just set to 0
-		u.RatingCount = 0
-	} else {
-		u.RatingCount = int(ratingCount)
-	}
+	// Use the rating count from the database user object (already calculated and stored)
+	u.RatingCount = dbu.RatingCount
 
 	return u
 }
