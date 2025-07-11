@@ -1575,8 +1575,8 @@ func TestBookingPagination(t *testing.T) {
 		resp, code := c.Request(http.MethodPost, renterJWT,
 			api.CreateBookingRequest{
 				ToolID:    fmt.Sprint(toolID),
-				StartDate: time.Now().Add(time.Duration(24*(i+1)) * time.Hour).Unix(),
-				EndDate:   time.Now().Add(time.Duration(24*(i+2)) * time.Hour).Unix(),
+				StartDate: time.Now().Add(time.Duration(24*i) * time.Hour).Unix(),
+				EndDate:   time.Now().Add(time.Duration((24*i)+2) * time.Hour).Unix(),
 				Contact:   "test@example.com",
 				Comments:  fmt.Sprintf("Test booking %d", i+1),
 			},
@@ -2277,5 +2277,444 @@ func TestBookingInactiveUserValidationUnit(t *testing.T) {
 		t.Logf("✓ Inactive user validation working correctly")
 		t.Logf("✓ Active user: %s can create bookings", activeUserID)
 		t.Logf("✓ Inactive user cannot create bookings")
+	})
+}
+
+func TestBookingDateConflicts(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users for testing
+	ownerJWT := c.RegisterAndLogin("conflicts-owner@test.com", "conflicts-owner", "ownerpass")
+	renterJWT := c.RegisterAndLogin("conflicts-renter@test.com", "conflicts-renter", "renterpass")
+
+	// Owner creates a tool
+	toolID := c.CreateTool(ownerJWT, "Date Conflicts Test Tool")
+
+	// Define base time periods for testing
+	baseTime := time.Now().Add(24 * time.Hour) // Start tomorrow to avoid past date issues
+
+	// Period 1: Day 1-3 (will be used as the reference booking)
+	period1Start := baseTime
+	period1End := baseTime.Add(48 * time.Hour) // 2 days duration
+
+	// Period 2: Day 2-4 (overlaps with period 1)
+	period2Start := baseTime.Add(24 * time.Hour)
+	period2End := baseTime.Add(72 * time.Hour)
+
+	// Period 3: Day 0-2 (overlaps with period 1, starts before)
+	period3Start := baseTime.Add(-24 * time.Hour)
+	period3End := baseTime.Add(24 * time.Hour)
+
+	// Period 4: Day 1.5-2.5 (completely inside period 1)
+	period4Start := baseTime.Add(12 * time.Hour)
+	period4End := baseTime.Add(36 * time.Hour)
+
+	// Period 5: Day 0-5 (completely contains period 1)
+	period5Start := baseTime.Add(-24 * time.Hour)
+	period5End := baseTime.Add(96 * time.Hour)
+
+	// Period 6: Day 1-3 (exact same dates as period 1)
+	period6Start := period1Start
+	period6End := period1End
+
+	t.Run("Basic Conflict Behavior", func(t *testing.T) {
+		t.Run("PENDING booking overlap should succeed", func(t *testing.T) {
+			// Create first booking (will be PENDING)
+			resp1, code1 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(toolID),
+					StartDate: period1Start.Unix(),
+					EndDate:   period1End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "First booking (PENDING)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code1, qt.Equals, 200, qt.Commentf("First booking should succeed"))
+
+			var booking1Response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp1, &booking1Response)
+			qt.Assert(t, err, qt.IsNil)
+			booking1ID := booking1Response.Data.ID
+
+			// Create overlapping booking while first is still PENDING (should succeed)
+			_, code2 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(toolID),
+					StartDate: period2Start.Unix(),
+					EndDate:   period2End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Second booking (overlapping with PENDING)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code2, qt.Equals, 200, qt.Commentf("Overlapping booking should succeed when first is PENDING"))
+
+			// Clean up - cancel the first booking for next tests
+			_, code := c.Request(http.MethodPut, renterJWT,
+				&api.BookingStatusUpdate{
+					Status: "CANCELLED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		})
+
+		t.Run("ACCEPTED booking overlap should fail", func(t *testing.T) {
+			// Create first booking
+			resp1, code1 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(toolID),
+					StartDate: period1Start.Unix(),
+					EndDate:   period1End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "First booking (to be ACCEPTED)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code1, qt.Equals, 200)
+
+			var booking1Response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp1, &booking1Response)
+			qt.Assert(t, err, qt.IsNil)
+			booking1ID := booking1Response.Data.ID
+
+			// Accept the first booking
+			_, code := c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to create overlapping booking (should fail)
+			_, code2 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(toolID),
+					StartDate: period2Start.Unix(),
+					EndDate:   period2End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Second booking (should fail due to conflict)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code2, qt.Equals, 400, qt.Commentf("Overlapping booking should fail when first is ACCEPTED"))
+
+			// Clean up - mark as returned for next tests
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "RETURNED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		})
+
+		t.Run("Accept booking with conflict should fail", func(t *testing.T) {
+			// Create a separate tool for this test to avoid conflicts with previous tests
+			conflictToolID := c.CreateTool(ownerJWT, "Accept Conflict Test Tool")
+
+			// Create and accept first booking
+			resp1, code1 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(conflictToolID),
+					StartDate: period1Start.Unix(),
+					EndDate:   period1End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "First booking (to be ACCEPTED)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code1, qt.Equals, 200)
+
+			var booking1Response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp1, &booking1Response)
+			qt.Assert(t, err, qt.IsNil)
+			booking1ID := booking1Response.Data.ID
+
+			_, code := c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Create second booking (will be PENDING) - this should fail since conflicts are checked on creation against ACCEPTED bookings
+			_, code2 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(conflictToolID),
+					StartDate: period2Start.Unix(),
+					EndDate:   period2End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Second booking (PENDING, overlapping)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code2, qt.Equals, 400, qt.Commentf("Creating overlapping booking should fail when there's an ACCEPTED booking"))
+
+			// Clean up
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "RETURNED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		})
+	})
+
+	t.Run("Date Boundary Edge Cases", func(t *testing.T) {
+		t.Run("Exact same dates should conflict", func(t *testing.T) {
+			// Create a separate tool for this test
+			exactDatesToolID := c.CreateTool(ownerJWT, "Exact Dates Test Tool")
+
+			// Create and accept first booking
+			resp1, code1 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(exactDatesToolID),
+					StartDate: period6Start.Unix(),
+					EndDate:   period6End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "First booking (exact dates)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code1, qt.Equals, 200)
+
+			var booking1Response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp1, &booking1Response)
+			qt.Assert(t, err, qt.IsNil)
+			booking1ID := booking1Response.Data.ID
+
+			_, code := c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to create booking with exact same dates (should fail)
+			_, code2 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(exactDatesToolID),
+					StartDate: period6Start.Unix(),
+					EndDate:   period6End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Second booking (exact same dates)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code2, qt.Equals, 400, qt.Commentf("Booking with exact same dates should fail"))
+
+			// Clean up
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "RETURNED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		})
+
+		t.Run("Partial overlap - start before, end during", func(t *testing.T) {
+			// Create a separate tool for this test
+			partialOverlap1ToolID := c.CreateTool(ownerJWT, "Partial Overlap 1 Test Tool")
+
+			// Create and accept first booking
+			resp1, code1 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(partialOverlap1ToolID),
+					StartDate: period1Start.Unix(),
+					EndDate:   period1End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "First booking (reference)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code1, qt.Equals, 200)
+
+			var booking1Response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp1, &booking1Response)
+			qt.Assert(t, err, qt.IsNil)
+			booking1ID := booking1Response.Data.ID
+
+			_, code := c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to create booking that starts before and ends during (should fail)
+			_, code2 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(partialOverlap1ToolID),
+					StartDate: period3Start.Unix(),
+					EndDate:   period3End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Overlapping booking (start before, end during)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code2, qt.Equals, 400, qt.Commentf("Partial overlap (start before, end during) should fail"))
+
+			// Clean up
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "RETURNED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		})
+
+		t.Run("Partial overlap - start during, end after", func(t *testing.T) {
+			// Create a separate tool for this test
+			partialOverlap2ToolID := c.CreateTool(ownerJWT, "Partial Overlap 2 Test Tool")
+
+			// Create and accept first booking
+			resp1, code1 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(partialOverlap2ToolID),
+					StartDate: period1Start.Unix(),
+					EndDate:   period1End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "First booking (reference)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code1, qt.Equals, 200)
+
+			var booking1Response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp1, &booking1Response)
+			qt.Assert(t, err, qt.IsNil)
+			booking1ID := booking1Response.Data.ID
+
+			_, code := c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to create booking that starts during and ends after (should fail)
+			_, code2 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(partialOverlap2ToolID),
+					StartDate: period2Start.Unix(),
+					EndDate:   period2End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Overlapping booking (start during, end after)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code2, qt.Equals, 400, qt.Commentf("Partial overlap (start during, end after) should fail"))
+
+			// Clean up
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "RETURNED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		})
+
+		t.Run("Complete containment - new booking inside existing", func(t *testing.T) {
+			// Create a separate tool for this test
+			containmentToolID := c.CreateTool(ownerJWT, "Containment Test Tool")
+
+			// Create and accept first booking
+			resp1, code1 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(containmentToolID),
+					StartDate: period1Start.Unix(),
+					EndDate:   period1End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "First booking (container)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code1, qt.Equals, 200)
+
+			var booking1Response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp1, &booking1Response)
+			qt.Assert(t, err, qt.IsNil)
+			booking1ID := booking1Response.Data.ID
+
+			_, code := c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to create booking completely inside existing one (should fail)
+			_, code2 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(containmentToolID),
+					StartDate: period4Start.Unix(),
+					EndDate:   period4End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Contained booking (inside existing)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code2, qt.Equals, 400, qt.Commentf("Booking completely inside existing should fail"))
+
+			// Clean up
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "RETURNED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		})
+
+		t.Run("Complete container - new booking contains existing", func(t *testing.T) {
+			// Create a separate tool for this test
+			containerToolID := c.CreateTool(ownerJWT, "Container Test Tool")
+
+			// Create and accept first booking
+			resp1, code1 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(containerToolID),
+					StartDate: period1Start.Unix(),
+					EndDate:   period1End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "First booking (to be contained)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code1, qt.Equals, 200)
+
+			var booking1Response struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp1, &booking1Response)
+			qt.Assert(t, err, qt.IsNil)
+			booking1ID := booking1Response.Data.ID
+
+			_, code := c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "ACCEPTED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			// Try to create booking that completely contains existing one (should fail)
+			_, code2 := c.Request(http.MethodPost, renterJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(containerToolID),
+					StartDate: period5Start.Unix(),
+					EndDate:   period5End.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Container booking (contains existing)",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code2, qt.Equals, 400, qt.Commentf("Booking that contains existing should fail"))
+
+			// Clean up
+			_, code = c.Request(http.MethodPut, ownerJWT,
+				&api.BookingStatusUpdate{
+					Status: "RETURNED",
+				}, "bookings", booking1ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		})
 	})
 }

@@ -17,6 +17,23 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// validateBookingDates checks if the booking dates conflict with existing bookings or reserved dates
+func (a *API) validateBookingDates(
+	ctx context.Context,
+	toolID string,
+	startDate, endDate time.Time,
+	excludeBookingID primitive.ObjectID,
+) error {
+	conflictExists, err := a.database.BookingService.CheckDateConflicts(ctx, toolID, startDate, endDate, excludeBookingID)
+	if err != nil {
+		return ErrInternalServerError.WithErr(fmt.Errorf("error checking date conflicts: %w", err))
+	}
+	if conflictExists {
+		return ErrBookingDatesConflict.WithErr(fmt.Errorf("booking dates overlap with existing booking or reserved dates"))
+	}
+	return nil
+}
+
 // RegisterBookingRoutes registers all booking-related routes to the provided router group
 func (a *API) RegisterBookingRoutes(r chi.Router) {
 	// POST /bookings
@@ -277,6 +294,13 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 				return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the actual user of this nomadic tool", user.ID))
 			}
 			return nil, ErrOnlyOwnerCanAccept.WithErr(fmt.Errorf("user %s is not the owner", user.ID))
+		}
+
+		// Validate booking dates against existing bookings and reserved dates before accepting
+		if err := a.validateBookingDates(
+			r.Context.Request.Context(), booking.ToolID, booking.StartDate, booking.EndDate, booking.ID,
+		); err != nil {
+			return nil, err
 		}
 
 		// Set the pickup place in the booking
@@ -695,6 +719,13 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 				fmt.Errorf("nomadic tool cannot be booked when there is a booking planned or in process"),
 			)
 		}
+	}
+
+	// Validate booking dates against existing bookings and reserved dates
+	if err := a.validateBookingDates(
+		r.Context.Request.Context(), req.ToolID, startDate, endDate, primitive.NilObjectID,
+	); err != nil {
+		return nil, err
 	}
 
 	// Create booking request
