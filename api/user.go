@@ -275,7 +275,7 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 
 	userList := []*User{}
 	for _, u := range users {
-		userList = append(userList, new(User).FromDBUser(u, a.database, false))
+		userList = append(userList, new(User).FromDBUser(u, false))
 	}
 
 	// Return users with pagination info
@@ -304,7 +304,7 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 		return nil, err
 	}
 
-	return new(User).FromDBUser(u, a.database, false), nil
+	return new(User).FromDBUser(u, false), nil
 }
 
 // validateObjectID checks if a string is a valid MongoDB ObjectID
@@ -347,7 +347,7 @@ func (a *API) userProfileHandler(r *Request) (interface{}, error) {
 	}
 
 	// Create API user from DB user with real location and private data (true parameters)
-	user := new(User).FromDBUser(dbUser, a.database, true)
+	user := new(User).FromDBUser(dbUser, true)
 
 	// Get user's unused invite codes
 	objID, err := primitive.ObjectIDFromHex(r.UserID)

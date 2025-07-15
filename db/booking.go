@@ -129,7 +129,7 @@ func (s *BookingService) Create(
 	}
 
 	// Check for date conflicts
-	conflictExists, err := s.checkDateConflicts(ctx, booking.ToolID, booking.StartDate, booking.EndDate, primitive.NilObjectID)
+	conflictExists, err := s.CheckDateConflicts(ctx, booking.ToolID, booking.StartDate, booking.EndDate, primitive.NilObjectID)
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +180,8 @@ func (s *BookingService) Get(ctx context.Context, id primitive.ObjectID) (*Booki
 type BookingType string
 
 const (
-	BookingPetitions BookingType = "fromUserId"
-	BookingRequests  BookingType = "toUserId"
+	OutgoingBookings BookingType = "fromUserId"
+	IncomingBookings BookingType = "toUserId"
 )
 
 // GetUserBookings returns paginated bookings where the given user is either the requester (fromUserId)
@@ -208,7 +208,12 @@ func (s *BookingService) GetUserBookings(
 		{{Key: "$addFields", Value: bson.M{
 			"isPending": bson.M{
 				"$cond": bson.M{
-					"if":   bson.M{"$eq": []interface{}{"$bookingStatus", BookingStatusPending}},
+					"if": bson.M{
+						"$and": []interface{}{
+							bson.M{"$eq": []interface{}{"$bookingStatus", BookingStatusPending}},
+							bson.M{"$gte": []interface{}{"$startDate", time.Now()}},
+						},
+					},
 					"then": 1,
 					"else": 0,
 				},
@@ -362,8 +367,17 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 			return fmt.Errorf("error finding tool: %w", err)
 		}
 
-		// If accepting, check if user has enough tokens
+		// If accepting, check for date conflicts and user tokens
 		if status == BookingStatusAccepted {
+			// Check for date conflicts before accepting
+			conflictExists, err := s.CheckDateConflicts(ctx, booking.ToolID, booking.StartDate, booking.EndDate, booking.ID)
+			if err != nil {
+				return fmt.Errorf("error checking date conflicts: %w", err)
+			}
+			if conflictExists {
+				return ErrBookingDatesConflict
+			}
+
 			userService := s.database.Collection("users")
 			var fromUser User
 			err = userService.FindOne(ctx, bson.M{"_id": booking.FromUserID}).Decode(&fromUser)
@@ -487,7 +501,7 @@ func (s *BookingService) SetPickupPlace(ctx context.Context, id primitive.Object
 
 // checkDateConflicts checks if there are any conflicting bookings for the given tool and dates.
 // It takes a tool ID, start and end times, and an optional booking ID to exclude from the check.
-func (s *BookingService) checkDateConflicts(
+func (s *BookingService) CheckDateConflicts(
 	ctx context.Context,
 	toolID string,
 	start, end time.Time,
