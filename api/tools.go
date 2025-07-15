@@ -173,7 +173,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		MaxDistance:        t.MaxDistance,
 		Images:             dbImages,
 		Location:           realLocation,
-		ObfuscatedLocation: db.ObfuscateLocation(realLocation, user.ID),
+		ObfuscatedLocation: db.ObfuscateLocation(realLocation, user.ID, user.Salt),
 		TransportOptions:   transportOptions,
 		ReservedDates:      []db.DateRange{}, // Initialize empty array
 		IsNomadic:          *t.IsNomadic,
@@ -210,7 +210,7 @@ func (a *API) toolFromDB(id int64) (*db.Tool, error) {
 	return tool, nil
 }
 
-func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int64, error) {
+func (a *API) editTool(id int64, newTool *Tool, user *db.User) (int64, error) {
 	tool, err := a.toolFromDB(id)
 	if err != nil {
 		return 0, err
@@ -276,7 +276,7 @@ func (a *API) editTool(id int64, newTool *Tool, userID primitive.ObjectID) (int6
 	}
 	if newTool.Location.Latitude != 0 || newTool.Location.Longitude != 0 {
 		tool.Location = newTool.Location.ToDBLocation()
-		tool.ObfuscatedLocation = db.ObfuscateLocation(tool.Location, userID)
+		tool.ObfuscatedLocation = db.ObfuscateLocation(tool.Location, user.ID, user.Salt)
 	}
 	if newTool.IsAvailable != nil {
 		tool.IsAvailable = *newTool.IsAvailable
@@ -801,7 +801,7 @@ func (a *API) editToolHandler(r *Request) (interface{}, error) {
 		return nil, err
 	}
 
-	newID, err := a.editTool(id, &t, tool.UserID)
+	newID, err := a.editTool(id, &t, user)
 	if err != nil {
 		return nil, err
 	}

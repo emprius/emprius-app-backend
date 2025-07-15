@@ -156,6 +156,7 @@ func TestGenerateObfuscatedLocation(t *testing.T) {
 }
 
 func TestObfuscateLocation(t *testing.T) {
+	randomSalt := "random-salt"
 	// Test case 1: Basic functionality
 	t.Run("Basic Functionality", func(t *testing.T) {
 		// Create a test location
@@ -166,7 +167,7 @@ func TestObfuscateLocation(t *testing.T) {
 		seedId := primitive.NewObjectID()
 
 		// Generate obfuscated location
-		obfuscatedLocation := ObfuscateLocation(originalLocation, seedId)
+		obfuscatedLocation := ObfuscateLocation(originalLocation, seedId, randomSalt)
 
 		// Verify the obfuscated location is different from the original
 		if obfuscatedLocation.Coordinates[0] == originalLocation.Coordinates[0] &&
@@ -195,8 +196,8 @@ func TestObfuscateLocation(t *testing.T) {
 		seedId := primitive.NewObjectID()
 
 		// Generate obfuscated location twice with the same inputs
-		obfuscatedLocation1 := ObfuscateLocation(originalLocation, seedId)
-		obfuscatedLocation2 := ObfuscateLocation(originalLocation, seedId)
+		obfuscatedLocation1 := ObfuscateLocation(originalLocation, seedId, randomSalt)
+		obfuscatedLocation2 := ObfuscateLocation(originalLocation, seedId, randomSalt)
 
 		// Verify both obfuscated locations are the same
 		if obfuscatedLocation1.Coordinates[0] != obfuscatedLocation2.Coordinates[0] ||
@@ -216,8 +217,8 @@ func TestObfuscateLocation(t *testing.T) {
 		seedId2 := primitive.NewObjectID()
 
 		// Generate obfuscated locations with different seed IDs
-		obfuscatedLocation1 := ObfuscateLocation(originalLocation, seedId1)
-		obfuscatedLocation2 := ObfuscateLocation(originalLocation, seedId2)
+		obfuscatedLocation1 := ObfuscateLocation(originalLocation, seedId1, randomSalt)
+		obfuscatedLocation2 := ObfuscateLocation(originalLocation, seedId2, randomSalt)
 
 		// Verify the obfuscated locations are different
 		if obfuscatedLocation1.Coordinates[0] == obfuscatedLocation2.Coordinates[0] &&

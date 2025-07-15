@@ -14,15 +14,6 @@ const (
 	DefaultObfuscationRadiusMeters = 1000
 )
 
-// locationSalt is used to add randomness to the obfuscation algorithm
-// It will be set during initialization
-var locationSalt = "emprius-location-salt-v1" // Default value for backward compatibility
-
-// SetLocationSalt sets the salt used for location obfuscation
-func SetLocationSalt(salt string) {
-	locationSalt = salt
-}
-
 // GenerateObfuscatedLocation generates a deterministically randomized location within the specified radius
 func GenerateObfuscatedLocation(location DBLocation, entityID string, salt string, radiusMeters float64) DBLocation {
 	// Create a deterministic seed from the entity ID and salt
@@ -57,6 +48,6 @@ func GenerateObfuscatedLocation(location DBLocation, entityID string, salt strin
 }
 
 // ObfuscateLocation generates an obfuscated location for a user
-func ObfuscateLocation(location DBLocation, seedId primitive.ObjectID) DBLocation {
-	return GenerateObfuscatedLocation(location, seedId.Hex(), locationSalt, DefaultObfuscationRadiusMeters)
+func ObfuscateLocation(location DBLocation, seedId primitive.ObjectID, salt string) DBLocation {
+	return GenerateObfuscatedLocation(location, seedId.Hex(), salt, DefaultObfuscationRadiusMeters)
 }

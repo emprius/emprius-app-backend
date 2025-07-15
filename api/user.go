@@ -141,7 +141,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	// Generate and update obfuscated location after user is created and ID is assigned
 	if userInfo.Location != nil {
 		// Update the user with obfuscated location
-		obfuscatedLocation := db.ObfuscateLocation(user.Location, id)
+		obfuscatedLocation := db.ObfuscateLocation(user.Location, id, randomSalt)
 		update := bson.M{"obfuscatedLocation": obfuscatedLocation}
 		_, err := a.database.UserService.UpdateUser(context.Background(), id, update)
 		if err != nil {
@@ -489,7 +489,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if newUserInfo.Location != nil {
 		user.Location = newUserInfo.Location.ToDBLocation()
 		// Generate obfuscated location
-		user.ObfuscatedLocation = db.ObfuscateLocation(user.Location, user.ID)
+		user.ObfuscatedLocation = db.ObfuscateLocation(user.Location, user.ID, user.Salt)
 	}
 
 	if newUserInfo.Active != nil {

@@ -35,11 +35,6 @@ func New(uri string, secret ...string) (*Database, error) {
 		uri = "mongodb://localhost:27017"
 	}
 
-	// Set the location salt if provided
-	if len(secret) > 0 && secret[0] != "" {
-		SetLocationSalt(secret[0])
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
