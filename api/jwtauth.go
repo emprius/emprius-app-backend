@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"time"
@@ -65,8 +67,8 @@ func (a *API) makeToken(id string) (*LoginResponse, error) {
 }
 
 // HashPassword helper function allows to hash a password using a salt.
-func hashPassword(password string) []byte {
-	return argon2hash([]byte(password), []byte(passwordSalt))
+func hashPassword(password, salt string) []byte {
+	return argon2hash([]byte(password), []byte(salt))
 }
 
 func argon2hash(data, salt []byte) []byte {
@@ -75,4 +77,17 @@ func argon2hash(data, salt []byte) []byte {
 	argonTime := uint32(4)
 	argonThreads := uint8(8)
 	return argon2.IDKey([]byte(data), []byte(salt), argonTime, memory, argonThreads, 32)
+}
+
+// generateRandomSalt generates a cryptographically secure random salt
+func generateRandomSalt() (string, error) {
+	// Generate 32 bytes of random data (256 bits)
+	saltBytes := make([]byte, 32)
+	_, err := rand.Read(saltBytes)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate random salt: %w", err)
+	}
+
+	// Convert to hex string for storage
+	return hex.EncodeToString(saltBytes), nil
 }

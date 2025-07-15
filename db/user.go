@@ -20,6 +20,7 @@ type User struct {
 	Name                    string              `bson:"name" json:"name"`
 	Community               string              `bson:"community,omitempty" json:"community,omitempty"`
 	Password                []byte              `bson:"password" json:"-"` // Don't include password in JSON
+	Salt                    string              `bson:"salt" json:"-"`     // Don't include salt in JSON
 	Tokens                  uint64              `bson:"tokens" json:"tokens" default:"1000"`
 	Active                  bool                `bson:"active" json:"active" default:"true"`
 	Rating                  int32               `bson:"rating" json:"rating" default:"50"`
