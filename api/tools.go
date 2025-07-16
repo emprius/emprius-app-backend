@@ -400,7 +400,14 @@ func (a *API) toolHandler(r *Request) (interface{}, error) {
 	}
 
 	// Only show real location if user is authenticated and is the owner
-	useRealLocation := dbTool.UserID == requestingUserID || dbTool.ActualUserID == requestingUserID
+	useRealLocation := !dbTool.IsNomadic && dbTool.UserID == requestingUserID
+	// Or if the tool is nomadic and the user is the actual user
+	if dbTool.IsNomadic && dbTool.ActualUserID == requestingUserID {
+		useRealLocation = true
+		// Or if the tool is nomadic and the user is the owner and the actual user is not set
+	} else if dbTool.IsNomadic && dbTool.ActualUserID.IsZero() && dbTool.UserID == requestingUserID {
+		useRealLocation = true
+	}
 
 	// Convert DB tool to API tool with appropriate location
 	tool := new(Tool).FromDBTool(dbTool, a.database, useRealLocation)
