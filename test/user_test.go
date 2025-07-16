@@ -33,7 +33,8 @@ func TestUser(t *testing.T) {
 		}
 		err := json.Unmarshal(resp, &usersResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 5) // All users since we have less than page size
+		// All users since we have less than page size
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 5)
 
 		// Test unauthorized access
 		_, code = c.Request(http.MethodGet, "", nil, "users")
@@ -97,10 +98,13 @@ func TestUser(t *testing.T) {
 		qt.Assert(t, profileResp.Data.Email, qt.Equals, "user1@test.com")
 
 		// Verify new fields are present
-		qt.Assert(t, profileResp.Data.CreatedAt.IsZero(), qt.Equals, false, qt.Commentf("CreatedAt should not be zero"))
-		qt.Assert(t, profileResp.Data.LastSeen.IsZero(), qt.Equals, false, qt.Commentf("LastSeen should not be zero"))
+		qt.Assert(t, profileResp.Data.CreatedAt.IsZero(), qt.Equals, false,
+			qt.Commentf("CreatedAt should not be zero"))
+		qt.Assert(t, profileResp.Data.LastSeen.IsZero(), qt.Equals, false,
+			qt.Commentf("LastSeen should not be zero"))
 		qt.Assert(t, profileResp.Data.Bio, qt.Equals, "")
-		qt.Assert(t, profileResp.Data.RatingCount >= 0, qt.IsTrue, qt.Commentf("RatingCount should be >= 0"))
+		qt.Assert(t, profileResp.Data.RatingCount >= 0, qt.IsTrue,
+			qt.Commentf("RatingCount should be >= 0"))
 
 		// Try to get profile without auth
 		_, code = c.Request(http.MethodGet, "", nil, "profile")
@@ -152,7 +156,8 @@ func TestUser(t *testing.T) {
 		qt.Assert(t, profileResp.Data.Name, qt.Equals, "Updated User1")
 		qt.Assert(t, profileResp.Data.Community, qt.Equals, "Updated Community")
 		qt.Assert(t, profileResp.Data.Bio, qt.Equals, "This is my bio")
-		qt.Assert(t, profileResp.Data.LastSeen.IsZero(), qt.Equals, false, qt.Commentf("LastSeen should be updated"))
+		qt.Assert(t, profileResp.Data.LastSeen.IsZero(), qt.Equals, false,
+			qt.Commentf("LastSeen should be updated"))
 
 		// Get other user's profile
 		var user1ID string
@@ -382,7 +387,8 @@ func TestUserLocationUpdates(t *testing.T) {
 		// Create a nomadic tool owned by owner
 		nomadicToolID := createNomadicTool(ownerJWT, "Nomadic Tool", barcelonaLocation)
 
-		// Simulate the tool being picked up by holder (this would normally happen through booking flow)
+		// Simulate the tool being picked up by holder
+		// (this would normally happen through booking flow)
 		// For testing purposes, we'll need to create a booking and mark it as picked up
 		tomorrow := time.Now().Add(24 * time.Hour)
 		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
@@ -414,7 +420,8 @@ func TestUserLocationUpdates(t *testing.T) {
 			}, "bookings", bookingID)
 		qt.Assert(t, code, qt.Equals, 200)
 
-		// Owner marks as picked up (this should set actualUserId and update tool location)
+		// Owner marks as picked up
+		// (this should set actualUserId and update tool location)
 		_, code = c.Request(http.MethodPut, ownerJWT,
 			&api.BookingStatusUpdate{
 				Status: "PICKED",
@@ -512,10 +519,14 @@ func TestUserLocationUpdates(t *testing.T) {
 
 		// Verify that the nomadic tool location DID NOT change (should remain at holder's location)
 		updatedTool := getTool(ownerJWT, nomadicToolID)
-		qt.Assert(t, updatedTool.Location.Latitude, qt.Equals, originalLat, qt.Commentf("Tool location should not change when owner moves"))
-		qt.Assert(t, updatedTool.Location.Longitude, qt.Equals, originalLon, qt.Commentf("Tool location should not change when owner moves"))
-		qt.Assert(t, updatedTool.ActualUserID, qt.Equals, holderID, qt.Commentf("Tool should still be held by holder"))
-		qt.Assert(t, updatedTool.UserID, qt.Equals, ownerID, qt.Commentf("Tool should still be owned by owner"))
+		qt.Assert(t, updatedTool.Location.Latitude, qt.Equals, originalLat,
+			qt.Commentf("Tool location should not change when owner moves"))
+		qt.Assert(t, updatedTool.Location.Longitude, qt.Equals, originalLon,
+			qt.Commentf("Tool location should not change when owner moves"))
+		qt.Assert(t, updatedTool.ActualUserID, qt.Equals, holderID,
+			qt.Commentf("Tool should still be held by holder"))
+		qt.Assert(t, updatedTool.UserID, qt.Equals, ownerID,
+			qt.Commentf("Tool should still be owned by owner"))
 	})
 
 	t.Run("Mixed Scenario - Owned and Nomadic Tools", func(t *testing.T) {

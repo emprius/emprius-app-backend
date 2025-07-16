@@ -391,7 +391,9 @@ func locationsEqual(loc1, loc2 DBLocation) bool {
 
 // updateToolsLocation updates the location of all tools that match the old user location
 // This includes tools owned by the user and nomadic tools currently held by the user
-func (s *UserService) updateToolsLocation(ctx context.Context, userID primitive.ObjectID, oldLocation, newLocation DBLocation, userSalt string) error {
+func (s *UserService) updateToolsLocation(
+	ctx context.Context, userID primitive.ObjectID, oldLocation, newLocation DBLocation, userSalt string,
+) error {
 	// Get tools collection
 	toolsCollection := s.Collection.Database().Collection("tools")
 

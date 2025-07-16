@@ -355,7 +355,8 @@ func TestUpdateUser_LocationUpdate(t *testing.T) {
 		// Verify that tool with different location was not updated
 		updatedTool3, err := toolService.GetToolByID(ctx, 3)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get updated tool3"))
-		c.Assert(updatedTool3.Location.Coordinates, qt.DeepEquals, differentLocation.Coordinates, qt.Commentf("Tool3 location should not have been updated"))
+		c.Assert(updatedTool3.Location.Coordinates, qt.DeepEquals, differentLocation.Coordinates,
+			qt.Commentf("Tool3 location should not have been updated"))
 	})
 
 	c.Run("Updates Nomadic Tools", func(c *qt.C) {
@@ -409,7 +410,8 @@ func TestUpdateUser_LocationUpdate(t *testing.T) {
 		// Verify that the nomadic tool location was updated
 		updatedTool, err := toolService.GetToolByID(ctx, 4)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get updated nomadic tool"))
-		c.Assert(updatedTool.Location.Coordinates, qt.DeepEquals, newLocation.Coordinates, qt.Commentf("Nomadic tool location not updated"))
+		c.Assert(updatedTool.Location.Coordinates, qt.DeepEquals, newLocation.Coordinates,
+			qt.Commentf("Nomadic tool location not updated"))
 	})
 
 	c.Run("Mixed Scenario", func(c *qt.C) {
@@ -496,22 +498,26 @@ func TestUpdateUser_LocationUpdate(t *testing.T) {
 		// Verify owned tool with matching location was updated
 		updatedOwnedTool, err := toolService.GetToolByID(ctx, 5)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get updated owned tool"))
-		c.Assert(updatedOwnedTool.Location.Coordinates, qt.DeepEquals, newLocation.Coordinates, qt.Commentf("Owned tool location not updated"))
+		c.Assert(updatedOwnedTool.Location.Coordinates, qt.DeepEquals, newLocation.Coordinates,
+			qt.Commentf("Owned tool location not updated"))
 
 		// Verify owned tool with different location was not updated
 		updatedOwnedToolDifferent, err := toolService.GetToolByID(ctx, 6)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get owned tool different"))
-		c.Assert(updatedOwnedToolDifferent.Location.Coordinates, qt.DeepEquals, differentLocation.Coordinates, qt.Commentf("Owned tool different location should not have been updated"))
+		c.Assert(updatedOwnedToolDifferent.Location.Coordinates, qt.DeepEquals, differentLocation.Coordinates,
+			qt.Commentf("Owned tool different location should not have been updated"))
 
 		// Verify nomadic tool held by user1 was updated
 		updatedNomadicTool, err := toolService.GetToolByID(ctx, 7)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get updated nomadic tool"))
-		c.Assert(updatedNomadicTool.Location.Coordinates, qt.DeepEquals, newLocation.Coordinates, qt.Commentf("Nomadic tool location not updated"))
+		c.Assert(updatedNomadicTool.Location.Coordinates, qt.DeepEquals, newLocation.Coordinates,
+			qt.Commentf("Nomadic tool location not updated"))
 
 		// Verify tool owned by different user was not updated
 		updatedOtherUserTool, err := toolService.GetToolByID(ctx, 8)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get other user tool"))
-		c.Assert(updatedOtherUserTool.Location.Coordinates, qt.DeepEquals, userLocation.Coordinates, qt.Commentf("Other user tool location should not have been updated"))
+		c.Assert(updatedOtherUserTool.Location.Coordinates, qt.DeepEquals, userLocation.Coordinates,
+			qt.Commentf("Other user tool location should not have been updated"))
 	})
 
 	c.Run("Non-Location Update Does Not Affect Tools", func(c *qt.C) {
@@ -551,7 +557,8 @@ func TestUpdateUser_LocationUpdate(t *testing.T) {
 		// Verify that tool location was not changed
 		updatedTool, err := toolService.GetToolByID(ctx, 9)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool after non-location update"))
-		c.Assert(updatedTool.Location.Coordinates, qt.DeepEquals, userLocation.Coordinates, qt.Commentf("Tool location should not have changed"))
+		c.Assert(updatedTool.Location.Coordinates, qt.DeepEquals, userLocation.Coordinates,
+			qt.Commentf("Tool location should not have changed"))
 
 		// Verify user name was updated
 		updatedUser, err := userService.GetUserByID(ctx, userID)
@@ -601,7 +608,8 @@ func TestUpdateUser_LocationUpdate(t *testing.T) {
 		updatedTool, err := toolService.GetToolByID(ctx, 10)
 		c.Assert(err, qt.IsNil, qt.Commentf("Failed to get tool after obfuscated location update"))
 		c.Assert(updatedTool.Location.Coordinates, qt.DeepEquals, newLocation.Coordinates, qt.Commentf("Tool location not updated"))
-		c.Assert(updatedTool.ObfuscatedLocation.Coordinates, qt.DeepEquals, newObfuscatedLocation.Coordinates, qt.Commentf("Tool obfuscated location not updated"))
+		c.Assert(updatedTool.ObfuscatedLocation.Coordinates, qt.DeepEquals, newObfuscatedLocation.Coordinates,
+			qt.Commentf("Tool obfuscated location not updated"))
 	})
 }
 
@@ -617,6 +625,8 @@ func TestLocationsEqual(t *testing.T) {
 
 	// Test with invalid coordinates
 	invalidLoc := DBLocation{Type: "Point", Coordinates: []float64{1.0}}
-	c.Assert(locationsEqual(loc1, invalidLoc), qt.Equals, false, qt.Commentf("Location with invalid coordinates should not be equal"))
-	c.Assert(locationsEqual(invalidLoc, loc1), qt.Equals, false, qt.Commentf("Invalid location should not be equal to valid location"))
+	c.Assert(locationsEqual(loc1, invalidLoc), qt.Equals, false,
+		qt.Commentf("Location with invalid coordinates should not be equal"))
+	c.Assert(locationsEqual(invalidLoc, loc1), qt.Equals, false,
+		qt.Commentf("Invalid location should not be equal to valid location"))
 }
