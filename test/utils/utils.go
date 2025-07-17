@@ -157,13 +157,23 @@ func (s *TestService) Request(method, jwt string, jsonBody any, urlPath ...strin
 }
 
 // RegisterAndLogin registers a new user and returns the JWT token
-func (s *TestService) RegisterAndLogin(email, name, password string) string {
-	jwt, _ := s.RegisterAndLoginWithID(email, name, password)
+func (s *TestService) RegisterAndLogin(email, name, password string, location ...*api.Location) string {
+	jwt, _ := s.RegisterAndLoginWithID(email, name, password, location...)
 	return jwt
 }
 
 // RegisterAndLoginWithID registers a new user and returns the JWT token and user ID
-func (s *TestService) RegisterAndLoginWithID(email, name, password string) (string, string) {
+func (s *TestService) RegisterAndLoginWithID(email, name, password string, location ...*api.Location) (string, string) {
+	// Set default location if none provided
+	defaultLocation := &api.Location{
+		Latitude:  41695384, // 41.695384 * 1e6
+		Longitude: 2492793,  // 2.492793 * 1e6
+	}
+	loc := defaultLocation
+	if len(location) > 0 && location[0] != nil {
+		loc = location[0]
+	}
+
 	// Register
 	_, code := s.Request(http.MethodPost, "",
 		&api.Register{
@@ -173,10 +183,7 @@ func (s *TestService) RegisterAndLoginWithID(email, name, password string) (stri
 				Name:      name,
 				Community: "testCommunity",
 				Password:  password,
-				Location: &api.Location{
-					Latitude:  41695384, // 41.695384 * 1e6
-					Longitude: 2492793,  // 2.492793 * 1e6
-				},
+				Location:  loc,
 			},
 		},
 		"register",

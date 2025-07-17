@@ -105,9 +105,16 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		return nil, ErrMalformedEmail
 	}
 
+	// Generate a random salt for the password
+	randomSalt, err := generateRandomSalt()
+	if err != nil {
+		return nil, ErrInternalServerError.WithErr(fmt.Errorf("failed to generate salt: %w", err))
+	}
+
 	user := db.User{
 		Email:                   userInfo.UserEmail,
-		Password:                hashPassword(userInfo.Password),
+		Password:                hashPassword(userInfo.Password, randomSalt),
+		Salt:                    randomSalt,
 		Name:                    userInfo.Name,
 		Active:                  true,
 		Rating:                  50,
@@ -134,7 +141,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	// Generate and update obfuscated location after user is created and ID is assigned
 	if userInfo.Location != nil {
 		// Update the user with obfuscated location
-		obfuscatedLocation := db.ObfuscateLocation(user.Location, id)
+		obfuscatedLocation := db.ObfuscateLocation(user.Location, id, randomSalt)
 		update := bson.M{"obfuscatedLocation": obfuscatedLocation}
 		_, err := a.database.UserService.UpdateUser(context.Background(), id, update)
 		if err != nil {
@@ -208,8 +215,16 @@ func (a *API) loginHandler(r *Request) (interface{}, error) {
 	// Check if password is empty (password recovery scenario)
 	if len(user.Password) == 0 {
 		// Password recovery: set the provided password as the new password
-		newPasswordHash := hashPassword(loginInfo.Password)
-		update := bson.M{"password": newPasswordHash}
+		// Use existing salt or set default salt if user doesn't have one
+		salt := user.Salt
+		if salt == "" {
+			salt = passwordSalt
+		}
+		newPasswordHash := hashPassword(loginInfo.Password, salt)
+		update := bson.M{
+			"password": newPasswordHash,
+			"salt":     salt,
+		}
 		_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
 		if err != nil {
 			log.Error().Err(err).Str("userId", user.ID.Hex()).Msg("Failed to update password during recovery")
@@ -220,7 +235,12 @@ func (a *API) loginHandler(r *Request) (interface{}, error) {
 		// Continue with normal login flow after setting password
 	} else {
 		// Normal login: compare passwords
-		if !bytes.Equal(user.Password, hashPassword(loginInfo.Password)) {
+		// Use existing salt or default salt for backward compatibility
+		salt := user.Salt
+		if salt == "" {
+			salt = passwordSalt
+		}
+		if !bytes.Equal(user.Password, hashPassword(loginInfo.Password, salt)) {
 			return nil, ErrWrongLogin
 		}
 	}
@@ -469,7 +489,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if newUserInfo.Location != nil {
 		user.Location = newUserInfo.Location.ToDBLocation()
 		// Generate obfuscated location
-		user.ObfuscatedLocation = db.ObfuscateLocation(user.Location, user.ID)
+		user.ObfuscatedLocation = db.ObfuscateLocation(user.Location, user.ID, user.Salt)
 	}
 
 	if newUserInfo.Active != nil {
@@ -482,12 +502,17 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 			return nil, ErrActualPasswordRequired
 		}
 
+		// Use existing salt or default salt for backward compatibility
+		if user.Salt == "" {
+			user.Salt = passwordSalt
+		}
+
 		// Verify the actual password matches the stored password
-		if !bytes.Equal(user.Password, hashPassword(newUserInfo.ActualPassword)) {
+		if !bytes.Equal(user.Password, hashPassword(newUserInfo.ActualPassword, user.Salt)) {
 			return nil, ErrInvalidActualPassword
 		}
 
-		user.Password = hashPassword(newUserInfo.Password)
+		user.Password = hashPassword(newUserInfo.Password, user.Salt)
 	}
 
 	update := bson.M{
@@ -497,6 +522,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		"obfuscatedLocation": user.ObfuscatedLocation,
 		"active":             user.Active,
 		"password":           user.Password,
+		"salt":               user.Salt,
 		"community":          user.Community,
 		"bio":                user.Bio,
 		"lastSeen":           time.Now(), // Update lastSeen when profile is updated
