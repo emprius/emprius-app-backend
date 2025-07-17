@@ -325,32 +325,32 @@ func TestUserLocationUpdates(t *testing.T) {
 		return toolResp.Data.ID
 	}
 
+	barcelonaLocation := api.Location{
+		Latitude:  41385063, // Barcelona coordinates in microdegrees
+		Longitude: 2173404,
+	}
+	madridLocation := api.Location{
+		Latitude:  40416775, // Madrid coordinates in microdegrees
+		Longitude: -3703790,
+	}
+	parisLocation := api.Location{
+		Latitude:  48856614, // Paris coordinates in microdegrees
+		Longitude: 2352222,
+	}
+
 	t.Run("Location Update Updates Owned Tools", func(t *testing.T) {
 		// Create user with Barcelona location
-		barcelonaLocation := api.Location{
-			Latitude:  41385063, // Barcelona coordinates in microdegrees
-			Longitude: 2173404,
-		}
-
-		userJWT := c.RegisterAndLogin("location-test1@test.com", "LocationUser1", "password")
+		userJWT := c.RegisterAndLogin(
+			"location-test1@test.com", "LocationUser1", "password", &barcelonaLocation)
 
 		// Create tools owned by the user with the same location
 		tool1ID := createToolWithLocation(userJWT, "Tool 1", barcelonaLocation)
 		tool2ID := createToolWithLocation(userJWT, "Tool 2", barcelonaLocation)
 
 		// Create a tool with different location (should not be updated)
-		madridLocation := api.Location{
-			Latitude:  40416775, // Madrid coordinates in microdegrees
-			Longitude: -3703790,
-		}
 		tool3ID := createToolWithLocation(userJWT, "Tool 3", madridLocation)
 
 		// Update user location to Paris
-		parisLocation := api.Location{
-			Latitude:  48856614, // Paris coordinates in microdegrees
-			Longitude: 2352222,
-		}
-
 		_, code := c.Request(http.MethodPost, userJWT,
 			api.UserProfile{
 				Location: &parisLocation,
@@ -376,13 +376,10 @@ func TestUserLocationUpdates(t *testing.T) {
 
 	t.Run("Location Update Updates Nomadic Tools Held By User", func(t *testing.T) {
 		// Create two users with Barcelona location
-		barcelonaLocation := api.Location{
-			Latitude:  41385063,
-			Longitude: 2173404,
-		}
-
-		ownerJWT, _ := c.RegisterAndLoginWithID("nomadic-owner@test.com", "NomadicOwner", "password")
-		holderJWT, holderID := c.RegisterAndLoginWithID("nomadic-holder@test.com", "NomadicHolder", "password")
+		ownerJWT, _ := c.RegisterAndLoginWithID(
+			"nomadic-owner@test.com", "NomadicOwner", "password", &barcelonaLocation)
+		holderJWT, holderID := c.RegisterAndLoginWithID(
+			"nomadic-holder@test.com", "NomadicHolder", "password", &barcelonaLocation)
 
 		// Create a nomadic tool owned by owner
 		nomadicToolID := createNomadicTool(ownerJWT, "Nomadic Tool", barcelonaLocation)
@@ -429,11 +426,6 @@ func TestUserLocationUpdates(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Now update holder's location to Paris
-		parisLocation := api.Location{
-			Latitude:  48856614,
-			Longitude: 2352222,
-		}
-
 		_, code = c.Request(http.MethodPost, holderJWT,
 			api.UserProfile{
 				Location: &parisLocation,
@@ -443,7 +435,7 @@ func TestUserLocationUpdates(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify that the nomadic tool location was updated to holder's new location
-		updatedTool := getTool(ownerJWT, nomadicToolID)
+		updatedTool := getTool(holderJWT, nomadicToolID)
 		qt.Assert(t, updatedTool.Location.Latitude, qt.Equals, parisLocation.Latitude)
 		qt.Assert(t, updatedTool.Location.Longitude, qt.Equals, parisLocation.Longitude)
 		qt.Assert(t, updatedTool.ActualUserID, qt.Equals, holderID)
@@ -451,13 +443,10 @@ func TestUserLocationUpdates(t *testing.T) {
 
 	t.Run("Nomadic Tool Owner Location Change Does Not Update Tool", func(t *testing.T) {
 		// Create two users with Barcelona location
-		barcelonaLocation := api.Location{
-			Latitude:  41385063,
-			Longitude: 2173404,
-		}
-
-		ownerJWT, ownerID := c.RegisterAndLoginWithID("nomadic-owner2@test.com", "NomadicOwner2", "password")
-		holderJWT, holderID := c.RegisterAndLoginWithID("nomadic-holder2@test.com", "NomadicHolder2", "password")
+		ownerJWT, ownerID := c.RegisterAndLoginWithID(
+			"nomadic-owner2@test.com", "NomadicOwner2", "password", &barcelonaLocation)
+		holderJWT, holderID := c.RegisterAndLoginWithID(
+			"nomadic-holder2@test.com", "NomadicHolder2", "password", &barcelonaLocation)
 
 		// Create a nomadic tool owned by owner
 		nomadicToolID := createNomadicTool(ownerJWT, "Nomadic Tool 2", barcelonaLocation)
@@ -499,16 +488,11 @@ func TestUserLocationUpdates(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Get tool location before owner location change
-		toolBeforeUpdate := getTool(ownerJWT, nomadicToolID)
+		toolBeforeUpdate := getTool(holderJWT, nomadicToolID)
 		originalLat := toolBeforeUpdate.Location.Latitude
 		originalLon := toolBeforeUpdate.Location.Longitude
 
 		// Now update OWNER's location to Paris (not the holder)
-		parisLocation := api.Location{
-			Latitude:  48856614,
-			Longitude: 2352222,
-		}
-
 		_, code = c.Request(http.MethodPost, ownerJWT,
 			api.UserProfile{
 				Location: &parisLocation,
@@ -518,7 +502,7 @@ func TestUserLocationUpdates(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify that the nomadic tool location DID NOT change (should remain at holder's location)
-		updatedTool := getTool(ownerJWT, nomadicToolID)
+		updatedTool := getTool(holderJWT, nomadicToolID)
 		qt.Assert(t, updatedTool.Location.Latitude, qt.Equals, originalLat,
 			qt.Commentf("Tool location should not change when owner moves"))
 		qt.Assert(t, updatedTool.Location.Longitude, qt.Equals, originalLon,
@@ -531,20 +515,12 @@ func TestUserLocationUpdates(t *testing.T) {
 
 	t.Run("Mixed Scenario - Owned and Nomadic Tools", func(t *testing.T) {
 		// Create users with Barcelona location
-		barcelonaLocation := api.Location{
-			Latitude:  41385063,
-			Longitude: 2173404,
-		}
-
-		user1JWT, user1ID := c.RegisterAndLoginWithID("mixed-user1@test.com", "MixedUser1", "password")
-		user2JWT, _ := c.RegisterAndLoginWithID("mixed-user2@test.com", "MixedUser2", "password")
+		user1JWT, user1ID := c.RegisterAndLoginWithID(
+			"mixed-user1@test.com", "MixedUser1", "password", &barcelonaLocation)
+		user2JWT, _ := c.RegisterAndLoginWithID(
+			"mixed-user2@test.com", "MixedUser2", "password", &barcelonaLocation)
 
 		// Create various tools
-		madridLocation := api.Location{
-			Latitude:  40416775,
-			Longitude: -3703790,
-		}
-
 		// Tool owned by user1 with matching location (should be updated)
 		ownedToolID := createToolWithLocation(user1JWT, "Owned Tool", barcelonaLocation)
 
@@ -594,11 +570,6 @@ func TestUserLocationUpdates(t *testing.T) {
 		otherUserToolID := createToolWithLocation(user2JWT, "Other User Tool", barcelonaLocation)
 
 		// Update user1's location to Paris
-		parisLocation := api.Location{
-			Latitude:  48856614,
-			Longitude: 2352222,
-		}
-
 		_, code = c.Request(http.MethodPost, user1JWT,
 			api.UserProfile{
 				Location: &parisLocation,
@@ -618,7 +589,7 @@ func TestUserLocationUpdates(t *testing.T) {
 		qt.Assert(t, updatedOwnedToolDifferent.Location.Longitude, qt.Equals, madridLocation.Longitude)
 
 		// Verify nomadic tool held by user1 was updated
-		updatedNomadicTool := getTool(user2JWT, nomadicToolID)
+		updatedNomadicTool := getTool(user1JWT, nomadicToolID)
 		qt.Assert(t, updatedNomadicTool.Location.Latitude, qt.Equals, parisLocation.Latitude)
 		qt.Assert(t, updatedNomadicTool.Location.Longitude, qt.Equals, parisLocation.Longitude)
 		qt.Assert(t, updatedNomadicTool.ActualUserID, qt.Equals, user1ID)
@@ -631,12 +602,8 @@ func TestUserLocationUpdates(t *testing.T) {
 
 	t.Run("Non-Location Update Does Not Affect Tools", func(t *testing.T) {
 		// Create user with Barcelona location
-		barcelonaLocation := api.Location{
-			Latitude:  41385063,
-			Longitude: 2173404,
-		}
-
-		userJWT := c.RegisterAndLogin("non-location-test@test.com", "NonLocationUser", "password")
+		userJWT := c.RegisterAndLogin(
+			"non-location-test@test.com", "NonLocationUser", "password", &barcelonaLocation)
 
 		// Create a tool owned by the user
 		toolID := createToolWithLocation(userJWT, "Test Tool", barcelonaLocation)

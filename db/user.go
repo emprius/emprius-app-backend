@@ -390,7 +390,10 @@ func locationsEqual(loc1, loc2 DBLocation) bool {
 }
 
 // updateToolsLocation updates the location of all tools that match the old user location
-// This includes tools owned by the user and nomadic tools currently held by the user
+// This includes:
+// - Non-nomadic tools owned by the user
+// - Nomadic tools currently held by the user (actualUserId matches)
+// - Nomadic tools owned by the user with no current holder
 func (s *UserService) updateToolsLocation(
 	ctx context.Context, userID primitive.ObjectID, oldLocation, newLocation DBLocation, userSalt string,
 ) error {
@@ -400,51 +403,49 @@ func (s *UserService) updateToolsLocation(
 	// Generate obfuscated location for tools
 	newObfuscatedLocation := ObfuscateLocation(newLocation, userID, userSalt)
 
-	// Update tools owned by the user with matching location
-	ownedToolsFilter := bson.M{
-		"userId":               userID,
+	// Build filter for tools that should be updated
+	filter := bson.M{
 		"location.coordinates": oldLocation.Coordinates,
+		"$or": []bson.M{
+			// Non-nomadic tools owned by user (not currently held by someone else)
+			{
+				"userId": userID,
+				"$or": []bson.M{
+					{"isNomadic": false},
+					{"isNomadic": bson.M{"$exists": false}}, // Default to non-nomadic
+				},
+				"actualUserId": bson.M{"$exists": false},
+			},
+			// Nomadic tools currently held by user
+			{
+				"actualUserId": userID,
+				"isNomadic":    true,
+			},
+			// Nomadic tools owned by user with no current holder
+			{
+				"userId":       userID,
+				"isNomadic":    true,
+				"actualUserId": bson.M{"$exists": false},
+			},
+		},
 	}
 
-	ownedToolsUpdate := bson.M{
+	update := bson.M{
 		"$set": bson.M{
 			"location":           newLocation,
 			"obfuscatedLocation": newObfuscatedLocation,
 		},
 	}
 
-	ownedResult, err := toolsCollection.UpdateMany(ctx, ownedToolsFilter, ownedToolsUpdate)
+	result, err := toolsCollection.UpdateMany(ctx, filter, update)
 	if err != nil {
-		return fmt.Errorf("failed to update owned tools location: %w", err)
+		return fmt.Errorf("failed to update tools location: %w", err)
 	}
 
 	log.Debug().
 		Str("userId", userID.Hex()).
-		Int64("ownedToolsUpdated", ownedResult.ModifiedCount).
-		Msg("Updated owned tools location")
-
-	// Update nomadic tools currently held by the user with matching location
-	nomadicToolsFilter := bson.M{
-		"actualUserId":         userID,
-		"location.coordinates": oldLocation.Coordinates,
-	}
-
-	nomadicToolsUpdate := bson.M{
-		"$set": bson.M{
-			"location":           newLocation,
-			"obfuscatedLocation": newObfuscatedLocation,
-		},
-	}
-
-	nomadicResult, err := toolsCollection.UpdateMany(ctx, nomadicToolsFilter, nomadicToolsUpdate)
-	if err != nil {
-		return fmt.Errorf("failed to update nomadic tools location: %w", err)
-	}
-
-	log.Debug().
-		Str("userId", userID.Hex()).
-		Int64("nomadicToolsUpdated", nomadicResult.ModifiedCount).
-		Msg("Updated nomadic tools location")
+		Int64("toolsUpdated", result.ModifiedCount).
+		Msg("Updated tools location")
 
 	return nil
 }
