@@ -17,6 +17,7 @@ var defaultToolCategories = []string{
 	"construction",
 	"agriculture",
 	"communication",
+	"livestock",
 }
 
 var defaultTransports = []string{
