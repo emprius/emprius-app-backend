@@ -18,7 +18,7 @@ type User struct {
 	ID                      primitive.ObjectID  `bson:"_id,omitempty" json:"id,omitempty"`
 	Email                   string              `bson:"email" json:"email"`
 	Name                    string              `bson:"name" json:"name"`
-	Community               string              `bson:"community,omitempty" json:"community,omitempty"`
+	Community               string              `bson:"community" json:"community"`
 	Password                []byte              `bson:"password" json:"-"` // Don't include password in JSON
 	Salt                    string              `bson:"salt" json:"-"`     // Don't include salt in JSON
 	Tokens                  uint64              `bson:"tokens" json:"tokens" default:"1000"`

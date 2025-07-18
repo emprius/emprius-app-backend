@@ -95,6 +95,11 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("name is empty"))
 	}
 
+	// check the name is not empty
+	if userInfo.Community == "" {
+		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("community is empty"))
+	}
+
 	// check the password is correct format
 	if len(userInfo.Password) < 8 {
 		return nil, ErrPasswordTooShort
@@ -103,6 +108,11 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 	// check the email is correct format
 	if !notifications.ValidEmail(userInfo.UserEmail) {
 		return nil, ErrMalformedEmail
+	}
+
+	// check the location is set
+	if userInfo.Location == nil {
+		return nil, ErrLocationNotSet
 	}
 
 	// Generate a random salt for the password
@@ -116,6 +126,8 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		Password:                hashPassword(userInfo.Password, randomSalt),
 		Salt:                    randomSalt,
 		Name:                    userInfo.Name,
+		Community:               userInfo.Community,
+		Location:                userInfo.Location.ToDBLocation(),
 		Active:                  true,
 		Rating:                  50,
 		Tokens:                  1000,
@@ -128,12 +140,6 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 			return nil, ErrInvalidImageFormat.WithErr(err)
 		}
 		user.AvatarHash = image.Hash
-	}
-
-	if userInfo.Location != nil {
-		user.Location = userInfo.Location.ToDBLocation()
-	} else {
-		return nil, ErrLocationNotSet
 	}
 
 	id, err := a.addUser(&user)

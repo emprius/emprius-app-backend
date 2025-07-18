@@ -62,8 +62,9 @@ func TestInviteCodes(t *testing.T) {
 				UserEmail:         "invited@test.com",
 				RegisterAuthToken: inviteCode,
 				UserProfile: api.UserProfile{
-					Name:     "Invited User",
-					Password: "invitedpass",
+					Name:      "Invited User",
+					Password:  "invitedpass",
+					Community: "test-community",
 					Location: &api.Location{
 						Latitude:  int64(0),
 						Longitude: int64(0),
@@ -96,8 +97,9 @@ func TestInviteCodes(t *testing.T) {
 				UserEmail:         "another@test.com",
 				RegisterAuthToken: inviteCode,
 				UserProfile: api.UserProfile{
-					Name:     "Another User",
-					Password: "anotherpass",
+					Name:      "Another User",
+					Community: "test-community",
+					Password:  "anotherpass",
 				},
 			},
 			"register",
@@ -121,8 +123,9 @@ func TestInviteCodes(t *testing.T) {
 				UserEmail:         "invalid@test.com",
 				RegisterAuthToken: "invalid-code",
 				UserProfile: api.UserProfile{
-					Name:     "Invalid User",
-					Password: "invalidpass",
+					Name:      "Invalid User",
+					Community: "test-community",
+					Password:  "invalidpass",
 				},
 			},
 			"register",
