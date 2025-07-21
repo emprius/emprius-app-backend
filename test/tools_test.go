@@ -759,6 +759,7 @@ func TestTools(t *testing.T) {
 	t.Run("Tool Cost Management", func(t *testing.T) {
 		// Create a user for this test
 		ownerJWT := c.RegisterAndLogin("cost-test-owner@test.com", "cost-test-owner", "ownerpass")
+		customCost := uint64(20000) / types.FactorCostToPrice // customCost is 20
 
 		// Test case 1: Create a tool with ToolValuation and verify Cost and EstimatedDailyCost are set correctly
 		resp, code := c.Request(http.MethodPost, ownerJWT,
@@ -771,6 +772,7 @@ func TestTools(t *testing.T) {
 					Latitude:  41695384,
 					Longitude: 2492793,
 				},
+				Cost: customCost,
 			},
 			"tools",
 		)
@@ -796,9 +798,9 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify Cost and EstimatedDailyCost are calculated correctly from ToolValuation
-		originalCost := uint64(10000) / types.FactorCostToPrice // FactorCostToPrice is 10
-		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, originalCost)
-		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, originalCost)
+		estimatedDailyCost := uint64(10000) / types.FactorCostToPrice // FactorCostToPrice is 10
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, customCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, estimatedDailyCost)
 
 		// Test case 2: Edit a tool to update ToolValuation and verify Cost and EstimatedDailyCost are updated
 		_, code = c.Request(http.MethodPut, ownerJWT,
@@ -817,11 +819,11 @@ func TestTools(t *testing.T) {
 
 		// Verify Cost and EstimatedDailyCost are updated correctly
 		expectedCost := uint64(20000) / types.FactorCostToPrice
-		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, originalCost) // Cost didn't change with valuation update
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, customCost) // Cost didn't change with valuation update
 		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
 
 		// Test case 3: Edit a tool to set a custom Cost that's less than EstimatedDailyCost
-		customCost := expectedCost - 50
+		customCost = expectedCost - 50
 		_, code = c.Request(http.MethodPut, ownerJWT,
 			api.Tool{
 				Cost: customCost,
