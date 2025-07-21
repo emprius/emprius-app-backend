@@ -174,6 +174,11 @@ components:
         active:
           type: boolean
           description: Whether the user is currently active
+        karma:
+          type: integer
+          format: int64
+          description: User's karma points (gained by loaning tools, lost by requesting tools)
+          readOnly: true
 
     User:
       type: object
@@ -284,6 +289,11 @@ components:
         ratingCount:
           type: integer
           description: "Number of ratings received by the user"
+        karma:
+          type: integer
+          format: int64
+          description: User's karma points (gained by loaning tools, lost by requesting tools)
+          readOnly: true
         communities:
           type: array
           items:

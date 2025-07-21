@@ -121,34 +121,24 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	// set default values
 	if t.MayBeFree == nil {
 		t.MayBeFree = new(bool)
-		*t.MayBeFree = true
+		*t.MayBeFree = t.Cost == 0
 	}
 	if t.AskWithFee == nil {
 		t.AskWithFee = new(bool)
+		*t.AskWithFee = false
 	}
-
-	// Set the cost based on the estimated value.
-	if *t.ToolValuation != 0 {
-		t.Cost = *t.ToolValuation / types.FactorCostToPrice
-		if t.Cost == 0 {
-			t.Cost = 1
-		}
-	} else {
-		t.Cost = 0
-	}
-	// Set the estimated daily cost to the same as the cost
-	t.EstimatedDailyCost = t.Cost
-
-	// Set the availability to true by default
 	if t.IsAvailable == nil {
 		t.IsAvailable = new(bool)
 		*t.IsAvailable = true
 	}
-
-	// Set the nomadic to false by default
 	if t.IsNomadic == nil {
 		t.IsNomadic = new(bool)
 		*t.IsNomadic = false
+	}
+
+	// Set the cost based on the estimated value.
+	if *t.ToolValuation != 0 {
+		t.EstimatedDailyCost = *t.ToolValuation / types.FactorCostToPrice
 	}
 
 	// Create the tool with real location
