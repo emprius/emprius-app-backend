@@ -796,9 +796,9 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify Cost and EstimatedDailyCost are calculated correctly from ToolValuation
-		expectedCost := uint64(10000) / types.FactorCostToPrice // FactorCostToPrice is 10
-		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, expectedCost)
-		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
+		originalCost := uint64(10000) / types.FactorCostToPrice // FactorCostToPrice is 10
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, originalCost)
+		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, originalCost)
 
 		// Test case 2: Edit a tool to update ToolValuation and verify Cost and EstimatedDailyCost are updated
 		_, code = c.Request(http.MethodPut, ownerJWT,
@@ -816,8 +816,8 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify Cost and EstimatedDailyCost are updated correctly
-		expectedCost = uint64(20000) / types.FactorCostToPrice
-		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, expectedCost)
+		expectedCost := uint64(20000) / types.FactorCostToPrice
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, originalCost) // Cost didn't change with valuation update
 		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
 
 		// Test case 3: Edit a tool to set a custom Cost that's less than EstimatedDailyCost
@@ -840,11 +840,11 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, customCost)
 		qt.Assert(t, getToolResp.Data.EstimatedDailyCost, qt.Equals, expectedCost)
 
-		// Test case 4: Attempt to set a Cost greater than EstimatedDailyCost and verify it's not applied
-		invalidCost := expectedCost + 500
+		// Test case 4: Attempt to set a Cost greater than EstimatedDailyCost and verify it is applied
+		newCost := expectedCost + 500
 		_, code = c.Request(http.MethodPut, ownerJWT,
 			api.Tool{
-				Cost: invalidCost,
+				Cost: newCost,
 			},
 			"tools", fmt.Sprint(toolID),
 		)
@@ -857,7 +857,7 @@ func TestTools(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 
 		// Verify Cost remains the same (not increased beyond EstimatedDailyCost)
-		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, getToolResp.Data.EstimatedDailyCost)
+		qt.Assert(t, getToolResp.Data.Cost, qt.Equals, newCost)
 	})
 
 	t.Run("Nomadic Tool History", func(t *testing.T) {

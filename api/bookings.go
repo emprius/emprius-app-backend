@@ -310,6 +310,40 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			return nil, ErrInternalServerError.WithErr(err)
 		}
 
+		// Update karma for non-nomadic tools only
+		if !tool.IsNomadic {
+			// Calculate days between booking dates
+			days := int64(booking.EndDate.Sub(booking.StartDate).Hours() / 24)
+			if days == 0 {
+				days = 1 // Minimum 1 day
+			}
+
+			// Owner gains karma (loaning)
+			ownerKarmaChange := days
+			// Requester loses karma (requesting)
+			requesterKarmaChange := -days
+
+			// Update owner's karma
+			err = a.database.UserService.UpdateUserKarma(r.Context.Request.Context(), booking.ToUserID, ownerKarmaChange)
+			if err != nil {
+				log.Error().Err(err).Str("userId",
+					booking.ToUserID.Hex()).Int64("karmaChange", ownerKarmaChange).Msg("Failed to update owner karma")
+				// Continue even if karma update fails
+			} else {
+				log.Debug().Str("userId", booking.ToUserID.Hex()).Int64("karmaChange", ownerKarmaChange).Msg("Updated owner karma")
+			}
+
+			// Update requester's karma
+			err = a.database.UserService.UpdateUserKarma(r.Context.Request.Context(), booking.FromUserID, requesterKarmaChange)
+			if err != nil {
+				log.Error().Err(err).Str("userId",
+					booking.FromUserID.Hex()).Int64("karmaChange", requesterKarmaChange).Msg("Failed to update requester karma")
+				// Continue even if karma update fails
+			} else {
+				log.Debug().Str("userId", booking.FromUserID.Hex()).Int64("karmaChange", requesterKarmaChange).Msg("Updated requester karma")
+			}
+		}
+
 		// Send the accepted notification to the requester
 		if renter.NotificationPreferences[string(types.NotificationBookingAccepted)] {
 			if err := a.sendMail(r.Context.Request.Context(), renter.Email, mailtemplates.BookingAcceptedMailNotification,

@@ -22,6 +22,7 @@ type User struct {
 	Password                []byte              `bson:"password" json:"-"` // Don't include password in JSON
 	Salt                    string              `bson:"salt" json:"-"`     // Don't include salt in JSON
 	Tokens                  uint64              `bson:"tokens" json:"tokens" default:"1000"`
+	Karma                   int64               `bson:"karma" json:"karma" default:"200"`
 	Active                  bool                `bson:"active" json:"active" default:"true"`
 	Rating                  int32               `bson:"rating" json:"rating" default:"50"`
 	RatingCount             int                 `bson:"ratingCount" json:"ratingCount" default:"0"`
@@ -379,6 +380,16 @@ func (s *UserService) GetNotificationPreferences(ctx context.Context, userID pri
 	}
 
 	return user.NotificationPreferences, nil
+}
+
+// UpdateUserKarma updates a user's karma by the specified amount
+func (s *UserService) UpdateUserKarma(ctx context.Context, userID primitive.ObjectID, karmaChange int64) error {
+	_, err := s.Collection.UpdateOne(
+		ctx,
+		bson.M{"_id": userID},
+		bson.M{"$inc": bson.M{"karma": karmaChange}},
+	)
+	return err
 }
 
 // locationsEqual compares two DBLocation objects for exact coordinate equality
