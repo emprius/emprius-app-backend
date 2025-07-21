@@ -130,6 +130,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		Location:                userInfo.Location.ToDBLocation(),
 		Active:                  true,
 		Rating:                  50,
+		Karma:                   200,
 		Tokens:                  1000,
 		NotificationPreferences: db.GetDefaultNotificationPreferences(),
 	}

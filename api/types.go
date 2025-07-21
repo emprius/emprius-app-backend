@@ -102,6 +102,7 @@ type UserPreview struct {
 	RatingCount int            `json:"ratingCount"`
 	Rating      int            `json:"rating"`
 	Active      bool           `json:"active"`
+	Karma       int64          `json:"karma"`
 }
 
 // User represents the user type
@@ -159,6 +160,7 @@ func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
 	up.Rating = int(dbu.Rating)
 	up.RatingCount = dbu.RatingCount
 	up.Active = dbu.Active
+	up.Karma = dbu.Karma
 	return up
 }
 
