@@ -1528,34 +1528,6 @@ func TestBookings(t *testing.T) {
 			"bookings",
 		)
 		qt.Assert(t, code, qt.Equals, 400, qt.Commentf("Response: %s", string(resp)))
-
-		// Try to create a new booking for the same nomadic tool with non-overlapping dates
-		// This should also fail because the tool is nomadic and already has an accepted booking
-		nextWeek := time.Now().Add(7 * 24 * time.Hour)
-		weekAfterNext := time.Now().Add(14 * 24 * time.Hour)
-
-		resp, code = c.Request(http.MethodPost, renter2JWT,
-			api.CreateBookingRequest{
-				ToolID:    fmt.Sprint(nomadicToolID),
-				StartDate: nextWeek.Unix(),
-				EndDate:   weekAfterNext.Unix(),
-				Contact:   "test2@example.com",
-				Comments:  "Third booking for nomadic tool test (should fail)",
-			},
-			"bookings",
-		)
-		qt.Assert(t, code, qt.Equals, 400, qt.Commentf("Response: %s", string(resp)))
-
-		// Verify the error message indicates the tool is already booked
-		var errorResp struct {
-			Header api.ResponseHeader `json:"header"`
-		}
-		err = json.Unmarshal(resp, &errorResp)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, errorResp.Header.Success, qt.Equals, false)
-		qt.Assert(t, errorResp.Header.Message, qt.Contains,
-			"nomadic tool cannot be booked when there is a booking planned or in process",
-		)
 	})
 }
 

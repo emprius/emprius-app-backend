@@ -499,6 +499,112 @@ func (s *BookingService) SetPickupPlace(ctx context.Context, id primitive.Object
 	return nil
 }
 
+// UpdateFutureBookingsResult represents the result of updating future bookings
+type UpdateFutureBookingsResult struct {
+	ModifiedCount int64                `json:"modifiedCount"`
+	FromUserIDs   []primitive.ObjectID `json:"fromUserIds"`
+}
+
+// UpdateFutureBookingsActualHolder gets all future bookings for a tool and updates their actual holder in one operation.
+// It excludes the specified booking ID to avoid updating the booking that was just marked as PICKED.
+func (s *BookingService) UpdateFutureBookingsActualHolder(
+	ctx context.Context,
+	toolID string,
+	fromDate time.Time,
+	newToUserID primitive.ObjectID,
+	excludeBookingID primitive.ObjectID,
+) (*UpdateFutureBookingsResult, error) {
+	// First, get the fromUserIds of bookings that will be updated
+	filter := bson.M{
+		"toolId": toolID,
+		"bookingStatus": bson.M{
+			"$in": []BookingStatus{BookingStatusPending, BookingStatusAccepted},
+		},
+		"startDate": bson.M{"$gte": fromDate},
+	}
+
+	// Exclude the booking that was just marked as PICKED
+	if excludeBookingID != primitive.NilObjectID {
+		filter["_id"] = bson.M{"$ne": excludeBookingID}
+	}
+
+	// Use aggregation to get the fromUserIds before updating
+	pipeline := mongo.Pipeline{
+		{{Key: "$match", Value: filter}},
+		{{Key: "$group", Value: bson.M{
+			"_id":         nil,
+			"fromUserIds": bson.M{"$addToSet": "$fromUserId"},
+			"count":       bson.M{"$sum": 1},
+		}}},
+	}
+
+	cursor, err := s.collection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var aggregationResult []struct {
+		FromUserIDs []primitive.ObjectID `bson:"fromUserIds"`
+		Count       int64                `bson:"count"`
+	}
+
+	if err := cursor.All(ctx, &aggregationResult); err != nil {
+		return nil, err
+	}
+
+	var fromUserIDs []primitive.ObjectID
+	var expectedCount int64
+
+	if len(aggregationResult) > 0 {
+		fromUserIDs = aggregationResult[0].FromUserIDs
+		expectedCount = aggregationResult[0].Count
+	}
+
+	// If no bookings to update, return early
+	if expectedCount == 0 {
+		log.Debug().
+			Str("toolId", toolID).
+			Str("excludeBookingId", excludeBookingID.Hex()).
+			Msg("No future bookings to update")
+
+		return &UpdateFutureBookingsResult{
+			ModifiedCount: 0,
+			FromUserIDs:   []primitive.ObjectID{},
+		}, nil
+	}
+
+	// Now perform the update
+	update := bson.M{
+		"$set": bson.M{
+			"toUserId":  newToUserID,
+			"updatedAt": time.Now(),
+		},
+	}
+
+	result, err := s.collection.UpdateMany(ctx, filter, update)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug().
+		Str("toolId", toolID).
+		Str("excludeBookingId", excludeBookingID.Hex()).
+		Int64("modifiedCount", result.ModifiedCount).
+		Str("newToUserId", newToUserID.Hex()).
+		Interface("fromUserIds", fromUserIDs).
+		Msg("Updated future bookings actual holder")
+
+	return &UpdateFutureBookingsResult{
+		ModifiedCount: result.ModifiedCount,
+		FromUserIDs:   fromUserIDs,
+	}, nil
+}
+
 // checkDateConflicts checks if there are any conflicting bookings for the given tool and dates.
 // It takes a tool ID, start and end times, and an optional booking ID to exclude from the check.
 func (s *BookingService) CheckDateConflicts(

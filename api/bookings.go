@@ -527,6 +527,27 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			// Continue even if history entry fails
 		}
 
+		// Update all future bookings (pending and accepted) for this nomadic tool
+		// Exclude the current booking that was just marked as PICKED
+		updateResult, err := a.database.BookingService.UpdateFutureBookingsActualHolder(
+			r.Context.Request.Context(),
+			booking.ToolID,
+			time.Now(),
+			booking.FromUserID, // The person who picked up the tool becomes the new holder
+			bookingID,          // Exclude the current booking that was just marked as PICKED
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to update future bookings actual holder")
+			// Continue even if this fails
+		} else {
+			log.Info().
+				Int64("count", updateResult.ModifiedCount).
+				Str("toolId", booking.ToolID).
+				Str("newHolderId", booking.FromUserID.Hex()).
+				Interface("affectedFromUserIds", updateResult.FromUserIDs).
+				Msg("updated future bookings actual holder")
+		}
+
 	default:
 		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("invalid status: %s", statusUpdate.Status))
 	}
