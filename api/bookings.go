@@ -527,6 +527,58 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 			// Continue even if history entry fails
 		}
 
+		// Update all future bookings (pending and accepted) for this nomadic tool
+		// Exclude the current booking that was just marked as PICKED
+		updateResult, err := a.database.BookingService.UpdateFutureBookingsActualHolder(
+			r.Context.Request.Context(),
+			booking.ToolID,
+			time.Now(),
+			booking.FromUserID, // The person who picked up the tool becomes the new holder
+			bookingID,          // Exclude the current booking that was just marked as PICKED
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to update future bookings actual holder")
+			// Continue even if this fails
+		} else {
+			log.Info().
+				Int64("count", updateResult.ModifiedCount).
+				Str("toolId", booking.ToolID).
+				Str("newHolderId", booking.FromUserID.Hex()).
+				Msg("updated future bookings actual holder")
+		}
+
+		for _, modifiedBooking := range updateResult.ModifiedBookings {
+			// Send notification to the new actual user
+			affectedUser, err := a.getUserByID(modifiedBooking.FromUserID.Hex())
+			if err != nil {
+				log.Error().Err(err).Str("userId", modifiedBooking.FromUserID.Hex()).Msg("failed to get affected user")
+				continue // Continue even if we can't get the user
+			}
+
+			if affectedUser.NotificationPreferences[string(types.NotificationNomadicToolHolderChanged)] {
+				if err := a.sendMail(
+					r.Context.Request.Context(),
+					affectedUser.Email,
+					mailtemplates.NomadicToolHolderIsChangedMailNotification,
+					struct {
+						AppName   string
+						LogoURL   string
+						ToolName  string
+						UserName  string
+						ButtonUrl string
+					}{
+						mailtemplates.AppName,
+						mailtemplates.LogoURL,
+						tool.Title,
+						renter.Name,
+						fmt.Sprintf(mailtemplates.BookingUrl, modifiedBooking.ID.Hex()),
+					},
+				); err != nil {
+					log.Warn().Err(err).Msg("could not send nomadic tool holder changed notification")
+				}
+			}
+		}
+
 	default:
 		return nil, ErrInvalidBookingStatus.WithErr(fmt.Errorf("invalid status: %s", statusUpdate.Status))
 	}
@@ -731,27 +783,6 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		if !withinDistance {
 			return nil, ErrToolLocationTooFar.WithErr(
 				fmt.Errorf("tool is too far away (max distance: %d km)", tool.MaxDistance),
-			)
-		}
-	}
-
-	// Check if the tool is nomadic with past bookings
-	if tool.IsNomadic && len(tool.ReservedDates) > 0 {
-		// Find the last reserved date
-		lastReservedDate := time.Time{}
-		now := time.Now()
-
-		for _, dateRange := range tool.ReservedDates {
-			endDate := time.Unix(int64(dateRange.To), 0)
-			if endDate.After(lastReservedDate) {
-				lastReservedDate = endDate
-			}
-		}
-
-		// If the last reserved date is before today, return an error
-		if !lastReservedDate.IsZero() && lastReservedDate.After(now) {
-			return nil, ErrNomadicToolWithPastBooking.WithErr(
-				fmt.Errorf("nomadic tool cannot be booked when there is a booking planned or in process"),
 			)
 		}
 	}

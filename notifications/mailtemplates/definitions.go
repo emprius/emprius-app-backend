@@ -44,3 +44,13 @@ Check your booking on {{.ButtonUrl}}.
 	},
 	WebAppURI: "/bookings/requests",
 }
+
+var NomadicToolHolderIsChangedMailNotification = MailTemplate{
+	File: "nomadic_holder_is_changed",
+	Placeholder: notifications.Notification{
+		Subject: "Nomadic tool holder has been changed",
+		PlainBody: `The holder for nomadic tool {{.ToolName}} has been changed to {{.UserName}}.
+Check new pick up location on {{.ButtonUrl}}.`,
+	},
+	WebAppURI: "/bookings",
+}

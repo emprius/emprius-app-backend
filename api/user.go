@@ -382,6 +382,16 @@ func (a *API) userProfileHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidUserID.WithErr(err)
 	}
 
+	// Get notification preferences with proper merging of defaults
+	// This ensures that new notifications types are included for existing users that has not set them yet
+	notificationPrefs, err := a.database.UserService.GetNotificationPreferences(context.Background(), objID)
+	if err != nil {
+		log.Error().Err(err).Str("userId", r.UserID).Msg("Failed to get notification preferences")
+		// Continue with default preferences rather than failing
+		notificationPrefs = db.GetDefaultNotificationPreferences()
+	}
+	user.NotificationPreferences = notificationPrefs
+
 	inviteCodes, err := a.database.InviteCodeService.GetUnusedInviteCodesByOwnerID(context.Background(), objID)
 	if err != nil {
 		log.Error().Err(err).Str("userId", r.UserID).Msg("Failed to get invite codes")

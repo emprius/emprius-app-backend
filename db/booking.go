@@ -499,6 +499,93 @@ func (s *BookingService) SetPickupPlace(ctx context.Context, id primitive.Object
 	return nil
 }
 
+// UpdateFutureBookingsResult represents the result of updating future bookings
+type UpdateFutureBookingsResult struct {
+	ModifiedCount    int64      `json:"modifiedCount"`
+	ModifiedBookings []*Booking `json:"modifiedBookings"`
+}
+
+// UpdateFutureBookingsActualHolder gets all future bookings for a tool and updates their actual holder in one operation.
+// It excludes the specified booking ID to avoid updating the booking that was just marked as PICKED.
+func (s *BookingService) UpdateFutureBookingsActualHolder(
+	ctx context.Context,
+	toolID string,
+	fromDate time.Time,
+	newToUserID primitive.ObjectID,
+	excludeBookingID primitive.ObjectID,
+) (*UpdateFutureBookingsResult, error) {
+	// Build filter for future bookings that need to be updated
+	filter := bson.M{
+		"toolId": toolID,
+		"bookingStatus": bson.M{
+			"$in": []BookingStatus{BookingStatusPending, BookingStatusAccepted},
+		},
+		"startDate": bson.M{"$gte": fromDate},
+		"_id":       bson.M{"$ne": excludeBookingID}, // Exclude the booking that was just marked as PICKED
+	}
+
+	// First, get all the bookings that will be updated
+	cursor, err := s.collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var bookingsToUpdate []Booking
+	if err := cursor.All(ctx, &bookingsToUpdate); err != nil {
+		return nil, err
+	}
+
+	// If no bookings to update, return early
+	if len(bookingsToUpdate) == 0 {
+		log.Debug().
+			Str("toolId", toolID).
+			Str("excludeBookingId", excludeBookingID.Hex()).
+			Msg("No future bookings to update")
+
+		return &UpdateFutureBookingsResult{
+			ModifiedCount:    0,
+			ModifiedBookings: []*Booking{},
+		}, nil
+	}
+
+	// Now perform the update
+	update := bson.M{
+		"$set": bson.M{
+			"toUserId":  newToUserID,
+			"updatedAt": time.Now(),
+		},
+	}
+
+	result, err := s.collection.UpdateMany(ctx, filter, update)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert bookings to pointers for the result
+	modifiedBookings := make([]*Booking, len(bookingsToUpdate))
+	for i := range bookingsToUpdate {
+		modifiedBookings[i] = &bookingsToUpdate[i]
+	}
+
+	log.Debug().
+		Str("toolId", toolID).
+		Str("excludeBookingId", excludeBookingID.Hex()).
+		Int64("modifiedCount", result.ModifiedCount).
+		Str("newToUserId", newToUserID.Hex()).
+		Int("bookingsCount", len(modifiedBookings)).
+		Msg("Updated future bookings actual holder")
+
+	return &UpdateFutureBookingsResult{
+		ModifiedCount:    result.ModifiedCount,
+		ModifiedBookings: modifiedBookings,
+	}, nil
+}
+
 // checkDateConflicts checks if there are any conflicting bookings for the given tool and dates.
 // It takes a tool ID, start and end times, and an optional booking ID to exclude from the check.
 func (s *BookingService) CheckDateConflicts(
