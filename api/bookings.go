@@ -735,27 +735,6 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		}
 	}
 
-	// Check if the tool is nomadic with past bookings
-	if tool.IsNomadic && len(tool.ReservedDates) > 0 {
-		// Find the last reserved date
-		lastReservedDate := time.Time{}
-		now := time.Now()
-
-		for _, dateRange := range tool.ReservedDates {
-			endDate := time.Unix(int64(dateRange.To), 0)
-			if endDate.After(lastReservedDate) {
-				lastReservedDate = endDate
-			}
-		}
-
-		// If the last reserved date is before today, return an error
-		if !lastReservedDate.IsZero() && lastReservedDate.After(now) {
-			return nil, ErrNomadicToolWithPastBooking.WithErr(
-				fmt.Errorf("nomadic tool cannot be booked when there is a booking planned or in process"),
-			)
-		}
-	}
-
 	// Validate booking dates against existing bookings and reserved dates
 	if err := a.validateBookingDates(
 		r.Context.Request.Context(), req.ToolID, startDate, endDate, primitive.NilObjectID,
