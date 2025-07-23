@@ -456,8 +456,29 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 
 	searchTerm := *r.Context.GetSearchTerm()
 
+	// Default both to true for backward compatibility
+	showOwnTools := true
+	showHeldTools := true
+
+	// Parse query parameters for filtering owned vs held tools
+	ownToolsParam := r.Context.URLParam("ownTools")
+	heldToolsParam := r.Context.URLParam("heldTools")
+
+	if ownToolsParam != nil {
+		if parsed, err := strconv.ParseBool(ownToolsParam[0]); err == nil {
+			showOwnTools = parsed
+		}
+	}
+	if heldToolsParam != nil {
+		if parsed, err := strconv.ParseBool(heldToolsParam[0]); err == nil {
+			showHeldTools = parsed
+		}
+	}
+
 	// Get paginated tools with access control
-	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(context.Background(), id, page, pageSize, searchTerm)
+	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(
+		context.Background(), id, page, pageSize, searchTerm, showOwnTools, showHeldTools,
+	)
 	if err != nil {
 		return nil, err
 	}
