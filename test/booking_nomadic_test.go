@@ -1,11 +1,14 @@
 package test
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 
 	"github.com/emprius/emprius-app-backend/api"
 	"github.com/emprius/emprius-app-backend/test/utils"
@@ -417,8 +420,8 @@ func TestUpdateFutureBookingsActualHolder(t *testing.T) {
 
 		err = json.Unmarshal(resp, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
-		futurePendingID := bookingResp.Data.ID
 		originalToUserID := bookingResp.Data.ToUserID
+		renter1BookingID := bookingResp.Data.ID
 
 		// Create future accepted booking
 		resp, code = c.Request(http.MethodPost, renter2JWT,
@@ -435,13 +438,13 @@ func TestUpdateFutureBookingsActualHolder(t *testing.T) {
 
 		err = json.Unmarshal(resp, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
-		futureAcceptedID := bookingResp.Data.ID
+		renter2BookingID := bookingResp.Data.ID
 
 		// Accept the future booking
 		_, code = c.Request(http.MethodPut, ownerJWT,
 			&api.BookingStatusUpdate{
 				Status: "ACCEPTED",
-			}, "bookings", futureAcceptedID)
+			}, "bookings", renter2BookingID)
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Mark current booking as picked - this should trigger the unified function
@@ -452,19 +455,30 @@ func TestUpdateFutureBookingsActualHolder(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Verify that future bookings were updated to the new holder (current holder)
-		resp, code = c.Request(http.MethodGet, renter1JWT, nil, "bookings", futurePendingID)
+		resp, code = c.Request(http.MethodGet, renter1JWT, nil, "bookings", renter1BookingID)
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, bookingResp.Data.ToUserID != originalToUserID, qt.IsTrue,
 			qt.Commentf("Future pending booking should have new holder"))
 
-		resp, code = c.Request(http.MethodGet, renter2JWT, nil, "bookings", futureAcceptedID)
+		resp, code = c.Request(http.MethodGet, renter2JWT, nil, "bookings", renter2BookingID)
 		qt.Assert(t, code, qt.Equals, 200)
 		err = json.Unmarshal(resp, &bookingResp)
 		qt.Assert(t, err, qt.IsNil)
 		qt.Assert(t, bookingResp.Data.ToUserID != originalToUserID, qt.IsTrue,
 			qt.Commentf("Future accepted booking should have new holder"))
+
+		// Verify mails was sent to the new holder
+		// Check that email notification was sent to tool owner
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		mailBody, err := c.MailService().FindEmail(ctx, "unified-renter1@test.com")
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, mailBody, qt.Contains, "Unified Current Holder")    // UserName
+		qt.Assert(t, mailBody, qt.Contains, "Unified Test Nomadic Tool") // ToolName
+		qt.Assert(t, mailBody, qt.Contains, renter1BookingID)            // BookingId
+		qt.Assert(t, mailBody, qt.Contains, mailtemplates.AppName)       // App name
 
 		t.Logf("✓ UpdateFutureBookingsActualHolder integration test passed - future bookings updated correctly")
 	})

@@ -544,8 +544,39 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 				Int64("count", updateResult.ModifiedCount).
 				Str("toolId", booking.ToolID).
 				Str("newHolderId", booking.FromUserID.Hex()).
-				Interface("affectedFromUserIds", updateResult.FromUserIDs).
 				Msg("updated future bookings actual holder")
+		}
+
+		for _, modifiedBooking := range updateResult.ModifiedBookings {
+			// Send notification to the new actual user
+			affectedUser, err := a.getUserByID(modifiedBooking.FromUserID.Hex())
+			if err != nil {
+				log.Error().Err(err).Str("userId", modifiedBooking.FromUserID.Hex()).Msg("failed to get affected user")
+				continue // Continue even if we can't get the user
+			}
+
+			if affectedUser.NotificationPreferences[string(types.NotificationNomadicToolHolderChanged)] {
+				if err := a.sendMail(
+					r.Context.Request.Context(),
+					affectedUser.Email,
+					mailtemplates.NomadicToolHolderIsChangedMailNotification,
+					struct {
+						AppName   string
+						LogoURL   string
+						ToolName  string
+						UserName  string
+						ButtonUrl string
+					}{
+						mailtemplates.AppName,
+						mailtemplates.LogoURL,
+						tool.Title,
+						renter.Name,
+						fmt.Sprintf(mailtemplates.BookingUrl, modifiedBooking.ID.Hex()),
+					},
+				); err != nil {
+					log.Warn().Err(err).Msg("could not send nomadic tool holder changed notification")
+				}
+			}
 		}
 
 	default:

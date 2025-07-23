@@ -5,8 +5,9 @@ type NotificationType string
 
 // Notification type constants
 const (
-	NotificationNewIncomingRequest NotificationType = "incoming_requests"
-	NotificationBookingAccepted    NotificationType = "booking_accepted"
+	NotificationNewIncomingRequest       NotificationType = "incoming_requests"
+	NotificationBookingAccepted          NotificationType = "booking_accepted"
+	NotificationNomadicToolHolderChanged NotificationType = "tool_holder_changed"
 )
 
 // GetAllNotificationTypes returns all available notification types
@@ -14,6 +15,7 @@ func GetAllNotificationTypes() []NotificationType {
 	return []NotificationType{
 		NotificationNewIncomingRequest,
 		NotificationBookingAccepted,
+		NotificationNomadicToolHolderChanged,
 	}
 }
 
