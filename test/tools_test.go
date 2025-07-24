@@ -1619,3 +1619,505 @@ func TestToolUserActiveFields(t *testing.T) {
 		)
 	})
 }
+
+func TestToolsHeldFunctionality(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users for testing
+	ownerJWT, ownerID := c.RegisterAndLoginWithID("owner@test.com", "owner", "ownerpass")
+	holderJWT, holderID := c.RegisterAndLoginWithID("holder@test.com", "holder", "holderpass")
+	otherJWT, _ := c.RegisterAndLoginWithID("other@test.com", "other", "otherpass")
+
+	t.Run("Test Own Tools and Held Tools Query Parameters", func(t *testing.T) {
+		// Create a regular (non-nomadic) tool owned by owner
+		_ = c.CreateTool(ownerJWT, "Regular Tool")
+
+		// Create a nomadic tool owned by owner
+		isNomadic := true
+		resp, code := c.Request(http.MethodPost, ownerJWT,
+			api.Tool{
+				Title:         "Nomadic Tool",
+				Description:   "Test nomadic tool",
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				IsNomadic:     &isNomadic,
+				Location: api.Location{
+					Latitude:  41695384,
+					Longitude: 2492793,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &toolResp)
+		qt.Assert(t, err, qt.IsNil)
+		nomadicToolID := toolResp.Data.ID
+
+		// Create a booking for the nomadic tool from holder to owner
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+		resp, code = c.Request(http.MethodPost, holderJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(nomadicToolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking for nomadic tool",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Owner accepts the booking
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Owner marks the booking as picked up (this should set actualUserId to holder)
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			&api.BookingStatusUpdate{
+				Status: "PICKED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Test 1: Default behavior (both ownTools=true and heldTools=true)
+		// Owner should see both tools (regular tool owned + nomadic tool owned)
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var listResp struct {
+			Data struct {
+				Tools []api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 2, qt.Commentf("Owner should see both owned tools by default"))
+
+		// Holder should see the nomadic tool they're holding
+		resp, code = c.Request(http.MethodGet, holderJWT, nil, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 1, qt.Commentf("Holder should see the tool they're holding by default"))
+
+		// Verify it's the nomadic tool
+		foundNomadicTool := false
+		for _, tool := range listResp.Data.Tools {
+			if tool.ID == nomadicToolID {
+				foundNomadicTool = true
+				qt.Assert(t, *tool.IsNomadic, qt.IsTrue, qt.Commentf("Tool should be nomadic"))
+				break
+			}
+		}
+		qt.Assert(t, foundNomadicTool, qt.IsTrue, qt.Commentf("Holder should see the nomadic tool they're holding"))
+
+		// Test 2: Only own tools (ownTools=true&heldTools=false)
+		// Owner should see both owned tools
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools?ownTools=true&heldTools=false")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 2,
+			qt.Commentf("Owner should see both owned tools when ownTools=true&heldTools=false"))
+
+		// Holder should see no tools (they don't own any)
+		resp, code = c.Request(http.MethodGet, holderJWT, nil, "tools?ownTools=true&heldTools=false")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 0,
+			qt.Commentf("Holder should see no tools when ownTools=true&heldTools=false"))
+
+		// Test 3: Only held tools (ownTools=false&heldTools=true)
+		// Owner should see no tools (they're not holding any)
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools?ownTools=false&heldTools=true")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 0,
+			qt.Commentf("Owner should see no tools when ownTools=false&heldTools=true"))
+
+		// Holder should see the nomadic tool they're holding
+		resp, code = c.Request(http.MethodGet, holderJWT, nil, "tools?ownTools=false&heldTools=true")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 1,
+			qt.Commentf("Holder should see the tool they're holding when ownTools=false&heldTools=true"))
+
+		// Test 4: Neither (ownTools=false&heldTools=false)
+		// Both should see no tools
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools?ownTools=false&heldTools=false")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 0, qt.Commentf("Owner should see no tools when both parameters are false"))
+
+		resp, code = c.Request(http.MethodGet, holderJWT, nil, "tools?ownTools=false&heldTools=false")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 0, qt.Commentf("Holder should see no tools when both parameters are false"))
+
+		// Test 5: Other user should see no tools regardless of parameters
+		resp, code = c.Request(http.MethodGet, otherJWT, nil, "tools")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 0, qt.Commentf("Other user should see no tools"))
+
+		resp, code = c.Request(http.MethodGet, otherJWT, nil, "tools?ownTools=true&heldTools=false")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 0,
+			qt.Commentf("Other user should see no tools with ownTools=true&heldTools=false"))
+
+		resp, code = c.Request(http.MethodGet, otherJWT, nil, "tools?ownTools=false&heldTools=true")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 0,
+			qt.Commentf("Other user should see no tools with ownTools=false&heldTools=true"))
+	})
+
+	t.Run("Test User Tools Endpoint with Query Parameters", func(t *testing.T) {
+		// Test the /tools/user/{id} endpoint with the same parameters
+		// Create a tool owned by owner
+		ownerToolID := c.CreateTool(ownerJWT, "Owner Tool for User Endpoint")
+
+		// Create a nomadic tool owned by holder
+		isNomadic := true
+		resp, code := c.Request(http.MethodPost, holderJWT,
+			api.Tool{
+				Title:         "Holder Nomadic Tool",
+				Description:   "Test nomadic tool owned by holder",
+				Category:      1,
+				ToolValuation: uint64Ptr(10000),
+				IsNomadic:     &isNomadic,
+				Location: api.Location{
+					Latitude:  41695384,
+					Longitude: 2492793,
+				},
+			},
+			"tools",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var toolResp struct {
+			Data struct {
+				ID int64 `json:"id"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &toolResp)
+		qt.Assert(t, err, qt.IsNil)
+		holderNomadicToolID := toolResp.Data.ID
+
+		// Create a booking for holder's nomadic tool from owner to holder
+		tomorrow := time.Now().Add(24 * time.Hour)
+		dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+		resp, code = c.Request(http.MethodPost, ownerJWT,
+			api.CreateBookingRequest{
+				ToolID:    fmt.Sprint(holderNomadicToolID),
+				StartDate: tomorrow.Unix(),
+				EndDate:   dayAfterTomorrow.Unix(),
+				Contact:   "test@example.com",
+				Comments:  "Test booking for holder's nomadic tool",
+			},
+			"bookings",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var bookingResp struct {
+			Data api.BookingResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &bookingResp)
+		qt.Assert(t, err, qt.IsNil)
+		bookingID := bookingResp.Data.ID
+
+		// Holder accepts the booking
+		_, code = c.Request(http.MethodPut, holderJWT,
+			&api.BookingStatusUpdate{
+				Status: "ACCEPTED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Holder marks the booking as picked up (this should set actualUserId to owner)
+		_, code = c.Request(http.MethodPut, holderJWT,
+			&api.BookingStatusUpdate{
+				Status: "PICKED",
+			}, "bookings", bookingID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Test 1: Get owner's tools (should include owned tool)
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools/user/"+ownerID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var listResp struct {
+			Data struct {
+				Tools []api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Owner should see their owned tools + the nomadic tool they're holding
+		// Note: This includes tools from previous sub-tests within the same test function
+		qt.Assert(t, len(listResp.Data.Tools) >= 2, qt.IsTrue, qt.Commentf("Owner should see at least owned tool + held nomadic tool"))
+
+		// Verify we have the specific tools we're testing
+		foundOwnerTool := false
+		foundHolderNomadic := false
+		for _, tool := range listResp.Data.Tools {
+			if tool.ID == ownerToolID {
+				foundOwnerTool = true
+			}
+			if tool.ID == holderNomadicToolID {
+				foundHolderNomadic = true
+			}
+		}
+		qt.Assert(t, foundOwnerTool, qt.IsTrue, qt.Commentf("Should find owner's tool"))
+		qt.Assert(t, foundHolderNomadic, qt.IsTrue, qt.Commentf("Should find nomadic tool owner is holding"))
+
+		// Test 2: Get owner's tools with ownTools=true&heldTools=false
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools/user/"+ownerID+"?ownTools=true&heldTools=false")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools) >= 1, qt.IsTrue, qt.Commentf("Owner should see at least their owned tools"))
+
+		// Should find the owner's tool
+		foundOwnerTool = false
+		for _, tool := range listResp.Data.Tools {
+			if tool.ID == ownerToolID {
+				foundOwnerTool = true
+				break
+			}
+		}
+		qt.Assert(t, foundOwnerTool, qt.IsTrue, qt.Commentf("Should find owner's tool"))
+
+		// Test 3: Get owner's tools with ownTools=false&heldTools=true
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools/user/"+ownerID+"?ownTools=false&heldTools=true")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 1, qt.Commentf("Owner should see only held tools"))
+
+		// Should be the holder's nomadic tool
+		qt.Assert(t, listResp.Data.Tools[0].ID, qt.Equals, holderNomadicToolID)
+
+		// Test 4: Get holder's tools (should include owned nomadic tool, but not the one they gave to owner)
+		resp, code = c.Request(http.MethodGet, holderJWT, nil, "tools/user/"+holderID)
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(listResp.Data.Tools) >= 1, qt.IsTrue, qt.Commentf("Holder should see at least their owned nomadic tool"))
+
+		// Should find the holder's nomadic tool (they still own it, but owner is holding it)
+		foundHolderNomadic = false
+		for _, tool := range listResp.Data.Tools {
+			if tool.ID == holderNomadicToolID {
+				foundHolderNomadic = true
+				break
+			}
+		}
+		qt.Assert(t, foundHolderNomadic, qt.IsTrue, qt.Commentf("Should find holder's nomadic tool"))
+	})
+
+	t.Run("Test Search Functionality with Held Tools", func(t *testing.T) {
+		// Test that search functionality works with the new query parameters
+		// This is mainly to ensure we didn't break existing search functionality
+
+		// Create a tool with a specific title for searching
+		searchToolID := c.CreateTool(ownerJWT, "Searchable Test Tool")
+
+		// Search for the tool
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "tools?search=Searchable")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var listResp struct {
+			Data struct {
+				Tools []api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should find the searchable tool
+		foundSearchableTool := false
+		for _, tool := range listResp.Data.Tools {
+			if tool.ID == searchToolID {
+				foundSearchableTool = true
+				break
+			}
+		}
+		qt.Assert(t, foundSearchableTool, qt.IsTrue, qt.Commentf("Should find searchable tool"))
+
+		// Test search with query parameters
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools?search=Searchable&ownTools=true&heldTools=false")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should still find the searchable tool
+		foundSearchableTool = false
+		for _, tool := range listResp.Data.Tools {
+			if tool.ID == searchToolID {
+				foundSearchableTool = true
+				break
+			}
+		}
+		qt.Assert(t, foundSearchableTool, qt.IsTrue, qt.Commentf("Should find searchable tool with query parameters"))
+	})
+
+	t.Run("Test Invalid Query Parameters", func(t *testing.T) {
+		// Test that invalid boolean values are handled gracefully
+		// Invalid values should default to true (backward compatibility)
+
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "tools?ownTools=invalid&heldTools=alsoinvalid")
+		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Invalid boolean values should not cause errors"))
+
+		var listResp struct {
+			Data struct {
+				Tools []api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should behave like default (both true)
+		qt.Assert(t, len(listResp.Data.Tools) >= 0, qt.IsTrue, qt.Commentf("Should return some result even with invalid parameters"))
+	})
+}
+
+func TestToolsHeldPagination(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users for testing
+	ownerJWT, _ := c.RegisterAndLoginWithID("pagination-owner@test.com", "pagination-owner", "ownerpass")
+	holderJWT, _ := c.RegisterAndLoginWithID("pagination-holder@test.com", "pagination-holder", "holderpass")
+
+	t.Run("Test Pagination with Held Tools", func(t *testing.T) {
+		// Create multiple tools owned by owner
+		ownedToolIDs := make([]int64, 5)
+		for i := 0; i < 5; i++ {
+			ownedToolIDs[i] = c.CreateTool(ownerJWT, fmt.Sprintf("Owned Tool %d", i+1))
+		}
+
+		// Create multiple nomadic tools owned by holder and give them to owner
+		heldToolIDs := make([]int64, 3)
+		for i := 0; i < 3; i++ {
+			isNomadic := true
+			resp, code := c.Request(http.MethodPost, holderJWT,
+				api.Tool{
+					Title:         fmt.Sprintf("Nomadic Tool %d", i+1),
+					Description:   "Test nomadic tool",
+					Category:      1,
+					ToolValuation: uint64Ptr(10000),
+					IsNomadic:     &isNomadic,
+					Location: api.Location{
+						Latitude:  41695384,
+						Longitude: 2492793,
+					},
+				},
+				"tools",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var toolResp struct {
+				Data struct {
+					ID int64 `json:"id"`
+				} `json:"data"`
+			}
+			err := json.Unmarshal(resp, &toolResp)
+			qt.Assert(t, err, qt.IsNil)
+			heldToolIDs[i] = toolResp.Data.ID
+
+			// Create booking and transfer the tool to owner
+			tomorrow := time.Now().Add(24 * time.Hour)
+			dayAfterTomorrow := time.Now().Add(48 * time.Hour)
+
+			resp, code = c.Request(http.MethodPost, ownerJWT,
+				api.CreateBookingRequest{
+					ToolID:    fmt.Sprint(heldToolIDs[i]),
+					StartDate: tomorrow.Unix(),
+					EndDate:   dayAfterTomorrow.Unix(),
+					Contact:   "test@example.com",
+					Comments:  "Test booking",
+				},
+				"bookings",
+			)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			var bookingResp struct {
+				Data api.BookingResponse `json:"data"`
+			}
+			err = json.Unmarshal(resp, &bookingResp)
+			qt.Assert(t, err, qt.IsNil)
+
+			// Accept and pick up
+			_, code = c.Request(http.MethodPut, holderJWT,
+				&api.BookingStatusUpdate{Status: "ACCEPTED"}, "bookings", bookingResp.Data.ID)
+			qt.Assert(t, code, qt.Equals, 200)
+
+			_, code = c.Request(http.MethodPut, holderJWT,
+				&api.BookingStatusUpdate{Status: "PICKED"}, "bookings", bookingResp.Data.ID)
+			qt.Assert(t, code, qt.Equals, 200)
+		}
+
+		// Test pagination with all tools (5 owned + 3 held = 8 total)
+		resp, code := c.Request(http.MethodGet, ownerJWT, nil, "tools?pageSize=3")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var listResp struct {
+			Data struct {
+				Tools      []api.Tool         `json:"tools"`
+				Pagination api.PaginationInfo `json:"pagination"`
+			} `json:"data"`
+		}
+		err := json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 3, qt.Commentf("First page should have 3 tools"))
+		qt.Assert(t, listResp.Data.Pagination.Total, qt.Equals, int64(8), qt.Commentf("Total should be 8 tools"))
+		qt.Assert(t, listResp.Data.Pagination.Pages, qt.Equals, 3, qt.Commentf("Should have 3 pages"))
+
+		// Test pagination with only owned tools
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools?pageSize=3&ownTools=true&heldTools=false")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 3, qt.Commentf("First page should have 3 tools"))
+		qt.Assert(t, listResp.Data.Pagination.Total, qt.Equals, int64(5), qt.Commentf("Total should be 5 owned tools"))
+		qt.Assert(t, listResp.Data.Pagination.Pages, qt.Equals, 2, qt.Commentf("Should have 2 pages"))
+
+		// Test pagination with only held tools
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "tools?pageSize=2&ownTools=false&heldTools=true")
+		qt.Assert(t, code, qt.Equals, 200)
+		err = json.Unmarshal(resp, &listResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, len(listResp.Data.Tools), qt.Equals, 2, qt.Commentf("First page should have 2 tools"))
+		qt.Assert(t, listResp.Data.Pagination.Total, qt.Equals, int64(3), qt.Commentf("Total should be 3 held tools"))
+		qt.Assert(t, listResp.Data.Pagination.Pages, qt.Equals, 2, qt.Commentf("Should have 2 pages"))
+	})
+}

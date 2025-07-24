@@ -275,24 +275,53 @@ func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
 	return tools, nil
 }
 
-// GetToolsByUserIDPaginated retrieves tools owned by a user with pagination and optional search term filtering
+// GetToolsByUserIDPaginated retrieves tools owned and/or held by a user with pagination and optional search term filtering
 func (s *ToolService) GetToolsByUserIDPaginated(
 	ctx context.Context,
 	userID primitive.ObjectID,
 	page int,
 	pageSize int,
 	searchTerm string,
+	showOwnTools bool,
+	showHeldTools bool,
 ) ([]*Tool, int64, error) {
-	// Build the filter
-	filter := bson.M{"userId": userID}
+	// Build the base filter for user tools
+	var userConditions []bson.M
+
+	if showOwnTools {
+		userConditions = append(userConditions, bson.M{"userId": userID})
+	}
+	if showHeldTools {
+		userConditions = append(userConditions, bson.M{"actualUserId": userID})
+	}
+
+	// If neither condition is specified, return empty results
+	if len(userConditions) == 0 {
+		return []*Tool{}, 0, nil
+	}
+
+	// Build the main filter
+	var filter bson.M
+	if len(userConditions) == 1 {
+		filter = userConditions[0]
+	} else {
+		filter = bson.M{"$or": userConditions}
+	}
 
 	// Add search term filter if provided
-	// Add search filter if search term is provided
 	if searchTerm != "" {
 		searchTerm = SanitizeString(searchTerm)
-		filter["$or"] = []bson.M{
+		searchConditions := []bson.M{
 			{"title": bson.M{"$regex": searchTerm, "$options": "i"}},
 			{"description": bson.M{"$regex": searchTerm, "$options": "i"}},
+		}
+
+		// Combine user filter with search filter
+		filter = bson.M{
+			"$and": []bson.M{
+				filter,
+				{"$or": searchConditions},
+			},
 		}
 	}
 

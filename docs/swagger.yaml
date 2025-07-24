@@ -884,6 +884,7 @@ paths:
       tags:
         - Tools
       summary: Get tools by user ID
+      description: Get tools owned by a user and/or tools they are currently holding (for nomadic tools)
       security:
         - bearerAuth: []
       parameters:
@@ -896,6 +897,20 @@ paths:
             description: MongoDB ObjectID of the user
         - $ref: '#/components/parameters/PageParam'
         - $ref: '#/components/parameters/SearchTermParam'
+        - name: ownTools
+          in: query
+          description: Include tools owned by the user
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: heldTools
+          in: query
+          description: Include nomadic tools currently held by the user
+          required: false
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: List of tools
@@ -1008,11 +1023,26 @@ paths:
       tags:
         - Tools
       summary: Get user's own tools
+      description: Get tools owned by the authenticated user and/or tools they are currently holding (for nomadic tools)
       security:
         - bearerAuth: [ ]
       parameters:
         - $ref: '#/components/parameters/PageParam'
         - $ref: '#/components/parameters/SearchTermParam'
+        - name: ownTools
+          in: query
+          description: Include tools owned by the user
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: heldTools
+          in: query
+          description: Include nomadic tools currently held by the user
+          required: false
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: List of tools
@@ -1047,6 +1077,7 @@ paths:
       tags:
         - Tools
       summary: Search tools
+      description: Search for tools with various filters, including the ability to filter by owned vs held tools
       security:
         - bearerAuth: [ ]
       parameters:
@@ -1082,6 +1113,20 @@ paths:
               type: integer
           description: Array of transport option IDs to filter by
           example: [1, 2]
+        - name: ownTools
+          in: query
+          description: Include tools owned by the user
+          required: false
+          schema:
+            type: boolean
+            default: true
+        - name: heldTools
+          in: query
+          description: Include nomadic tools currently held by the user
+          required: false
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: Search results
