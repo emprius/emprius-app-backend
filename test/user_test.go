@@ -634,3 +634,414 @@ func TestUserLocationUpdates(t *testing.T) {
 		qt.Assert(t, profileResp.Data.Name, qt.Equals, "Updated Name")
 	})
 }
+
+func TestAdditionalContactsVisibility(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create test users with additional contacts
+	user1JWT, user1ID := registerUserWithContacts(c, "user1@test.com", "User One", map[string]string{
+		"telegram": "@user1_telegram",
+		"whatsapp": "+34123456789",
+	})
+
+	user2JWT, user2ID := registerUserWithContacts(c, "user2@test.com", "User Two", map[string]string{
+		"signal":  "+34987654321",
+		"discord": "user2#1234",
+	})
+
+	user3JWT, _ := registerUserWithContacts(c, "user3@test.com", "User Three", map[string]string{
+		"email": "user3_alt@test.com",
+	})
+
+	// Test Case 1: User accessing their own profile should see additional contacts
+	t.Run("Own profile includes additional contacts", func(t *testing.T) {
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "profile")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var profileResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &profileResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, profileResp.Data.AdditionalContacts, qt.Not(qt.IsNil))
+		qt.Assert(t, profileResp.Data.AdditionalContacts["telegram"], qt.Equals, "@user1_telegram")
+		qt.Assert(t, profileResp.Data.AdditionalContacts["whatsapp"], qt.Equals, "+34123456789")
+	})
+
+	// Test Case 2: User accessing another user without accepted bookings should NOT see additional contacts
+	t.Run("Other user without bookings does not see additional contacts", func(t *testing.T) {
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user2ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var userResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should not include additional contacts
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.IsNil)
+	})
+
+	// Test Case 3: Create an accepted booking between users and verify additional contacts are visible
+	t.Run("Users with accepted bookings see each other's additional contacts", func(t *testing.T) {
+		// Create a tool for user2
+		toolID := c.CreateTool(user2JWT, "Test Tool")
+
+		// Create a booking from user1 to user2
+		bookingID := createBooking(c, user1JWT, toolID)
+
+		// Accept the booking
+		acceptBooking(c, user2JWT, bookingID)
+
+		// Now user1 should see user2's additional contacts
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user2ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var userResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.Not(qt.IsNil))
+		qt.Assert(t, userResp.Data.AdditionalContacts["signal"], qt.Equals, "+34987654321")
+		qt.Assert(t, userResp.Data.AdditionalContacts["discord"], qt.Equals, "user2#1234")
+
+		// And user2 should see user1's additional contacts
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "users", user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.Not(qt.IsNil))
+		qt.Assert(t, userResp.Data.AdditionalContacts["telegram"], qt.Equals, "@user1_telegram")
+		qt.Assert(t, userResp.Data.AdditionalContacts["whatsapp"], qt.Equals, "+34123456789")
+	})
+
+	// Test Case 4: User3 (no bookings with user1 or user2) should not see additional contacts
+	t.Run("Third user without bookings does not see additional contacts", func(t *testing.T) {
+		resp, code := c.Request(http.MethodGet, user3JWT, nil, "users", user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var userResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.IsNil)
+
+		resp, code = c.Request(http.MethodGet, user3JWT, nil, "users", user2ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.IsNil)
+	})
+}
+
+func TestBookingBasedAdditionalContactsVisibility(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create users with additional contacts using API
+	user1JWT, user1ID := registerUserWithContacts(c, "bookingtest1@test.com", "Booking Test User 1", map[string]string{
+		"telegram": "@bookinguser1",
+		"whatsapp": "+34111111111",
+	})
+
+	user2JWT, user2ID := registerUserWithContacts(c, "bookingtest2@test.com", "Booking Test User 2", map[string]string{
+		"signal":  "+34222222222",
+		"discord": "bookinguser2#1234",
+	})
+
+	user3JWT, user3ID := registerUserWithContacts(c, "bookingtest3@test.com", "Booking Test User 3", map[string]string{
+		"email": "bookinguser3_alt@test.com",
+	})
+
+	// Test Case 1: No bookings between users - additional contacts should not be visible
+	t.Run("No bookings - additional contacts not visible", func(t *testing.T) {
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user2ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var userResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should not include additional contacts
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.IsNil)
+	})
+
+	// Test Case 2: Same user accessing themselves should see additional contacts via users endpoint
+	t.Run("Same user via users endpoint - additional contacts visible", func(t *testing.T) {
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var userResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should include additional contacts when accessing own profile via users endpoint
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.Not(qt.IsNil))
+		qt.Assert(t, userResp.Data.AdditionalContacts["telegram"], qt.Equals, "@bookinguser1")
+		qt.Assert(t, userResp.Data.AdditionalContacts["whatsapp"], qt.Equals, "+34111111111")
+	})
+
+	// Test Case 3: Create a pending booking - additional contacts should still not be visible
+	t.Run("Pending booking - additional contacts not visible", func(t *testing.T) {
+		// Create a tool for user2
+		toolID := c.CreateTool(user2JWT, "Booking Test Tool")
+
+		// Create a booking from user1 to user2
+		bookingID := createBooking(c, user1JWT, toolID)
+
+		// Verify booking was created but additional contacts still not visible
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user2ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var userResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Should still not include additional contacts for pending booking
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.IsNil)
+
+		// Accept the booking
+		acceptBooking(c, user2JWT, bookingID)
+
+		// Now user1 should see user2's additional contacts
+		resp, code = c.Request(http.MethodGet, user1JWT, nil, "users", user2ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.Not(qt.IsNil))
+		qt.Assert(t, userResp.Data.AdditionalContacts["signal"], qt.Equals, "+34222222222")
+		qt.Assert(t, userResp.Data.AdditionalContacts["discord"], qt.Equals, "bookinguser2#1234")
+
+		// And user2 should see user1's additional contacts
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "users", user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.Not(qt.IsNil))
+		qt.Assert(t, userResp.Data.AdditionalContacts["telegram"], qt.Equals, "@bookinguser1")
+		qt.Assert(t, userResp.Data.AdditionalContacts["whatsapp"], qt.Equals, "+34111111111")
+	})
+
+	// Test Case 4: User without bookings should not see additional contacts
+	t.Run("User without bookings does not see additional contacts", func(t *testing.T) {
+		// User3 should not see additional contacts from user1 or user2 (no bookings between them)
+		resp, code := c.Request(http.MethodGet, user3JWT, nil, "users", user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var userResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.IsNil)
+
+		resp, code = c.Request(http.MethodGet, user3JWT, nil, "users", user2ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.IsNil)
+	})
+
+	// Test Case 4: Bidirectional visibility after accepted booking
+	t.Run("Bidirectional visibility after accepted booking", func(t *testing.T) {
+		// Create another tool for user3
+		toolID := c.CreateTool(user3JWT, "Another Test Tool")
+
+		// Create a booking from user1 to user3
+		bookingID := createBooking(c, user1JWT, toolID)
+
+		// Accept the booking
+		acceptBooking(c, user3JWT, bookingID)
+
+		// Now user1 should see user3's additional contacts
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user3ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var userResp struct {
+			Data *api.User `json:"data"`
+		}
+		err := json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.Not(qt.IsNil))
+		qt.Assert(t, userResp.Data.AdditionalContacts["email"], qt.Equals, "bookinguser3_alt@test.com")
+
+		// And user3 should see user1's additional contacts
+		resp, code = c.Request(http.MethodGet, user3JWT, nil, "users", user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &userResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		qt.Assert(t, userResp.Data.AdditionalContacts, qt.Not(qt.IsNil))
+		qt.Assert(t, userResp.Data.AdditionalContacts["telegram"], qt.Equals, "@bookinguser1")
+		qt.Assert(t, userResp.Data.AdditionalContacts["whatsapp"], qt.Equals, "+34111111111")
+	})
+}
+
+func TestAdditionalContactsValidation(t *testing.T) {
+	// Test Case 1: Valid additional contacts
+	t.Run("Valid additional contacts", func(t *testing.T) {
+		contacts := api.AdditionalContacts{
+			"telegram": "@validuser",
+			"whatsapp": "+34123456789",
+		}
+		err := contacts.Validate()
+		qt.Assert(t, err, qt.IsNil)
+	})
+
+	// Test Case 2: Empty additional contacts (should fail)
+	t.Run("Empty additional contacts fails validation", func(t *testing.T) {
+		contacts := api.AdditionalContacts{}
+		err := contacts.Validate()
+		qt.Assert(t, err, qt.Not(qt.IsNil))
+		qt.Assert(t, err.Error(), qt.Contains, "at least one additional contact is required")
+	})
+
+	// Test Case 3: Empty key (should fail)
+	t.Run("Empty key fails validation", func(t *testing.T) {
+		contacts := api.AdditionalContacts{
+			"": "somevalue",
+		}
+		err := contacts.Validate()
+		qt.Assert(t, err, qt.Not(qt.IsNil))
+		qt.Assert(t, err.Error(), qt.Contains, "contact key '' is invalid")
+	})
+
+	// Test Case 4: Empty value (should fail)
+	t.Run("Empty value fails validation", func(t *testing.T) {
+		contacts := api.AdditionalContacts{
+			"telegram": "",
+		}
+		err := contacts.Validate()
+		qt.Assert(t, err, qt.Not(qt.IsNil))
+		qt.Assert(t, err.Error(), qt.Contains, "value for key 'telegram' is invalid")
+	})
+
+	// Test Case 5: Key too long (should fail)
+	t.Run("Key too long fails validation", func(t *testing.T) {
+		longKey := string(make([]byte, 51)) // 51 characters
+		for i := range longKey {
+			longKey = longKey[:i] + "a" + longKey[i+1:]
+		}
+		contacts := api.AdditionalContacts{
+			longKey: "value",
+		}
+		err := contacts.Validate()
+		qt.Assert(t, err, qt.Not(qt.IsNil))
+		qt.Assert(t, err.Error(), qt.Contains, "contact key")
+		qt.Assert(t, err.Error(), qt.Contains, "is invalid")
+	})
+
+	// Test Case 6: Value too long (should fail)
+	t.Run("Value too long fails validation", func(t *testing.T) {
+		longValue := string(make([]byte, 51)) // 51 characters
+		for i := range longValue {
+			longValue = longValue[:i] + "a" + longValue[i+1:]
+		}
+		contacts := api.AdditionalContacts{
+			"telegram": longValue,
+		}
+		err := contacts.Validate()
+		qt.Assert(t, err, qt.Not(qt.IsNil))
+		qt.Assert(t, err.Error(), qt.Contains, "value for key 'telegram' is invalid")
+	})
+}
+
+// Helper functions
+
+func registerUserWithContacts(c *utils.TestService, email, name string, contacts map[string]string) (string, string) {
+	// Register user with additional contacts
+	_, code := c.Request(http.MethodPost, "",
+		map[string]interface{}{
+			"email":              email,
+			"invitationToken":    utils.RegisterToken,
+			"name":               name,
+			"community":          "testCommunity",
+			"password":           "testpassword123",
+			"location":           map[string]int64{"latitude": 41385064, "longitude": 2173403},
+			"additionalContacts": contacts,
+		},
+		"register",
+	)
+	qt.Assert(c.GetT(), code, qt.Equals, 200)
+
+	// Login to get JWT
+	resp, code := c.Request(http.MethodPost, "",
+		&api.Login{
+			Email:    email,
+			Password: "testpassword123",
+		},
+		"login",
+	)
+	qt.Assert(c.GetT(), code, qt.Equals, 200)
+
+	var loginResponse struct {
+		Data api.LoginResponse `json:"data"`
+	}
+	err := json.Unmarshal(resp, &loginResponse)
+	qt.Assert(c.GetT(), err, qt.IsNil)
+	jwt := loginResponse.Data.Token
+
+	// Get profile to get user ID
+	resp, code = c.Request(http.MethodGet, jwt, nil, "profile")
+	qt.Assert(c.GetT(), code, qt.Equals, 200)
+
+	var profileResponse struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(resp, &profileResponse)
+	qt.Assert(c.GetT(), err, qt.IsNil)
+
+	return jwt, profileResponse.Data.ID
+}
+
+func createBooking(c *utils.TestService, jwt string, toolID int64) string {
+	bookingData := map[string]interface{}{
+		"toolId":    fmt.Sprintf("%d", toolID),
+		"startDate": time.Now().Add(24 * time.Hour).Unix(),
+		"endDate":   time.Now().Add(48 * time.Hour).Unix(),
+		"contact":   "test@test.com",
+		"comments":  "Test booking",
+	}
+
+	resp, code := c.Request(http.MethodPost, jwt, bookingData, "bookings")
+	qt.Assert(c.GetT(), code, qt.Equals, 200)
+
+	var bookingResp struct {
+		Data api.BookingResponse `json:"data"`
+	}
+	err := json.Unmarshal(resp, &bookingResp)
+	qt.Assert(c.GetT(), err, qt.IsNil)
+
+	return bookingResp.Data.ID
+}
+
+func acceptBooking(c *utils.TestService, jwt string, bookingID string) {
+	statusData := map[string]interface{}{
+		"status": "ACCEPTED",
+	}
+
+	_, code := c.Request(http.MethodPut, jwt, statusData, "bookings", bookingID)
+	qt.Assert(c.GetT(), code, qt.Equals, 200)
+}

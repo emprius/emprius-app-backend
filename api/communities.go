@@ -593,7 +593,7 @@ func (a *API) getUserCommunitiesHandler(r *Request) (interface{}, error) {
 	}
 
 	// Use access control method to check if user can be accessed
-	_, err = a.GetUserByIDWithAccessControl(r, userID)
+	_, _, err = a.GetUserByIDWithAccessControl(r, userID)
 	if err != nil {
 		return nil, err
 	}

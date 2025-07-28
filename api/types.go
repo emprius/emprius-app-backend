@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -50,6 +51,25 @@ type LoginResponse struct {
 // NotificationPreferences represents user notification settings
 type NotificationPreferences map[string]bool
 
+type AdditionalContacts map[string]string
+
+func (ac AdditionalContacts) Validate() error {
+	if len(ac) == 0 {
+		return fmt.Errorf("at least one additional contact is required")
+	}
+
+	for key, value := range ac {
+		if len(key) == 0 || len(key) > 50 {
+			return fmt.Errorf("contact key '%s' is invalid: must be non-empty and under 50 characters", key)
+		}
+		if len(value) == 0 || len(value) > 50 {
+			return fmt.Errorf("value for key '%s' is invalid: must be non-empty and under 50 characters", key)
+		}
+	}
+
+	return nil
+}
+
 // Location represents a geographical location
 type Location struct {
 	Latitude  int64 `json:"latitude"`  // Latitude in microdegrees
@@ -86,6 +106,7 @@ type UserProfile struct {
 	Bio                     string                  `json:"bio,omitempty"`
 	NotificationPreferences NotificationPreferences `json:"notificationPreferences,omitempty"`
 	InviteCodes             []*SimpleInviteCode     `json:"inviteCodes,omitempty"`
+	AdditionalContacts      AdditionalContacts      `json:"additionalContacts,omitempty"`
 }
 
 // UserCommunityInfo represents a user's role in a community
@@ -119,6 +140,7 @@ type User struct {
 	InviteCodes             []*SimpleInviteCode     `json:"inviteCodes,omitempty"`
 	Communities             []UserCommunityInfo     `json:"communities,omitempty"`
 	NotificationPreferences NotificationPreferences `json:"notificationPreferences,omitempty"`
+	AdditionalContacts      AdditionalContacts      `json:"additionalContacts,omitempty"`
 }
 
 // SimpleInviteCode represents a simplified invitation code with only essential fields
@@ -166,7 +188,7 @@ func (up *UserPreview) FromDBUserPreview(dbu *db.User) *UserPreview {
 
 // FromDBUser converts a DB User to an API User (full version)
 // If includePrivateData is true, private data like notification preferences and useRealLocation will be included
-func (u *User) FromDBUser(dbu *db.User, includePrivateData bool) *User {
+func (u *User) FromDBUser(dbu *db.User, includePrivateData bool, includeAdditionalContacts bool) *User {
 	// First fill UserPreview fields
 	u.FromDBUserPreview(dbu)
 
@@ -178,9 +200,13 @@ func (u *User) FromDBUser(dbu *db.User, includePrivateData bool) *User {
 	// Use real location if explicitly requested, otherwise use obfuscated location
 	if includePrivateData {
 		u.Location.FromDBLocation(dbu.Location)
-		u.NotificationPreferences = NotificationPreferences(dbu.NotificationPreferences)
+		u.NotificationPreferences = dbu.NotificationPreferences
 	} else {
 		u.Location.FromDBLocation(dbu.ObfuscatedLocation)
+	}
+
+	if includeAdditionalContacts {
+		u.AdditionalContacts = dbu.AdditionalContacts
 	}
 
 	u.Verified = dbu.Verified
