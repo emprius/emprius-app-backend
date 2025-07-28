@@ -54,10 +54,6 @@ type NotificationPreferences map[string]bool
 type AdditionalContacts map[string]string
 
 func (ac AdditionalContacts) Validate() error {
-	if len(ac) == 0 {
-		return fmt.Errorf("at least one additional contact is required")
-	}
-
 	for key, value := range ac {
 		if len(key) == 0 || len(key) > 50 {
 			return fmt.Errorf("contact key '%s' is invalid: must be non-empty and under 50 characters", key)
