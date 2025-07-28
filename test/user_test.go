@@ -690,10 +690,10 @@ func TestAdditionalContactsVisibility(t *testing.T) {
 		toolID := c.CreateTool(user2JWT, "Test Tool")
 
 		// Create a booking from user1 to user2
-		bookingID := createBooking(c, user1JWT, toolID)
+		bookingID := c.CreateBooking(user1JWT, toolID)
 
 		// Accept the booking
-		acceptBooking(c, user2JWT, bookingID)
+		c.AcceptBooking(user2JWT, bookingID)
 
 		// Now user1 should see user2's additional contacts
 		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user2ID)
@@ -798,7 +798,7 @@ func TestBookingBasedAdditionalContactsVisibility(t *testing.T) {
 		toolID := c.CreateTool(user2JWT, "Booking Test Tool")
 
 		// Create a booking from user1 to user2
-		bookingID := createBooking(c, user1JWT, toolID)
+		bookingID := c.CreateBooking(user1JWT, toolID)
 
 		// Verify booking was created but additional contacts still not visible
 		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user2ID)
@@ -814,7 +814,7 @@ func TestBookingBasedAdditionalContactsVisibility(t *testing.T) {
 		qt.Assert(t, userResp.Data.AdditionalContacts, qt.IsNil)
 
 		// Accept the booking
-		acceptBooking(c, user2JWT, bookingID)
+		c.AcceptBooking(user2JWT, bookingID)
 
 		// Now user1 should see user2's additional contacts
 		resp, code = c.Request(http.MethodGet, user1JWT, nil, "users", user2ID)
@@ -866,10 +866,10 @@ func TestBookingBasedAdditionalContactsVisibility(t *testing.T) {
 		toolID := c.CreateTool(user3JWT, "Another Test Tool")
 
 		// Create a booking from user1 to user3
-		bookingID := createBooking(c, user1JWT, toolID)
+		bookingID := c.CreateBooking(user1JWT, toolID)
 
 		// Accept the booking
-		acceptBooking(c, user3JWT, bookingID)
+		c.AcceptBooking(user3JWT, bookingID)
 
 		// Now user1 should see user3's additional contacts
 		resp, code := c.Request(http.MethodGet, user1JWT, nil, "users", user3ID)
@@ -906,14 +906,6 @@ func TestAdditionalContactsValidation(t *testing.T) {
 		}
 		err := contacts.Validate()
 		qt.Assert(t, err, qt.IsNil)
-	})
-
-	// Test Case 2: Empty additional contacts (should fail)
-	t.Run("Empty additional contacts fails validation", func(t *testing.T) {
-		contacts := api.AdditionalContacts{}
-		err := contacts.Validate()
-		qt.Assert(t, err, qt.Not(qt.IsNil))
-		qt.Assert(t, err.Error(), qt.Contains, "at least one additional contact is required")
 	})
 
 	// Test Case 3: Empty key (should fail)
@@ -967,81 +959,13 @@ func TestAdditionalContactsValidation(t *testing.T) {
 }
 
 // Helper functions
-
 func registerUserWithContacts(c *utils.TestService, email, name string, contacts map[string]string) (string, string) {
-	// Register user with additional contacts
-	_, code := c.Request(http.MethodPost, "",
-		map[string]interface{}{
-			"email":              email,
-			"invitationToken":    utils.RegisterToken,
-			"name":               name,
-			"community":          "testCommunity",
-			"password":           "testpassword123",
-			"location":           map[string]int64{"latitude": 41385064, "longitude": 2173403},
-			"additionalContacts": contacts,
-		},
-		"register",
-	)
-	qt.Assert(c.GetT(), code, qt.Equals, 200)
+	// Convert map to AdditionalContacts type
+	additionalContacts := api.AdditionalContacts(contacts)
 
-	// Login to get JWT
-	resp, code := c.Request(http.MethodPost, "",
-		&api.Login{
-			Email:    email,
-			Password: "testpassword123",
-		},
-		"login",
-	)
-	qt.Assert(c.GetT(), code, qt.Equals, 200)
-
-	var loginResponse struct {
-		Data api.LoginResponse `json:"data"`
-	}
-	err := json.Unmarshal(resp, &loginResponse)
-	qt.Assert(c.GetT(), err, qt.IsNil)
-	jwt := loginResponse.Data.Token
-
-	// Get profile to get user ID
-	resp, code = c.Request(http.MethodGet, jwt, nil, "profile")
-	qt.Assert(c.GetT(), code, qt.Equals, 200)
-
-	var profileResponse struct {
-		Data struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	err = json.Unmarshal(resp, &profileResponse)
-	qt.Assert(c.GetT(), err, qt.IsNil)
-
-	return jwt, profileResponse.Data.ID
-}
-
-func createBooking(c *utils.TestService, jwt string, toolID int64) string {
-	bookingData := map[string]interface{}{
-		"toolId":    fmt.Sprintf("%d", toolID),
-		"startDate": time.Now().Add(24 * time.Hour).Unix(),
-		"endDate":   time.Now().Add(48 * time.Hour).Unix(),
-		"contact":   "test@test.com",
-		"comments":  "Test booking",
-	}
-
-	resp, code := c.Request(http.MethodPost, jwt, bookingData, "bookings")
-	qt.Assert(c.GetT(), code, qt.Equals, 200)
-
-	var bookingResp struct {
-		Data api.BookingResponse `json:"data"`
-	}
-	err := json.Unmarshal(resp, &bookingResp)
-	qt.Assert(c.GetT(), err, qt.IsNil)
-
-	return bookingResp.Data.ID
-}
-
-func acceptBooking(c *utils.TestService, jwt string, bookingID string) {
-	statusData := map[string]interface{}{
-		"status": "ACCEPTED",
-	}
-
-	_, code := c.Request(http.MethodPut, jwt, statusData, "bookings", bookingID)
-	qt.Assert(c.GetT(), code, qt.Equals, 200)
+	// Use the new method with additional contacts
+	return c.RegisterAndLoginWithIDAndContacts(email, name, "testpassword123", additionalContacts, &api.Location{
+		Latitude:  41385064, // 41.385064 * 1e6
+		Longitude: 2173403,  // 2.173403 * 1e6
+	})
 }

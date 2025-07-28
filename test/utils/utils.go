@@ -164,6 +164,13 @@ func (s *TestService) RegisterAndLogin(email, name, password string, location ..
 
 // RegisterAndLoginWithID registers a new user and returns the JWT token and user ID
 func (s *TestService) RegisterAndLoginWithID(email, name, password string, location ...*api.Location) (string, string) {
+	return s.RegisterAndLoginWithIDAndContacts(email, name, password, nil, location...)
+}
+
+// RegisterAndLoginWithIDAndContacts registers a new user with additional contacts and returns the JWT token and user ID
+func (s *TestService) RegisterAndLoginWithIDAndContacts(
+	email, name, password string, additionalContacts api.AdditionalContacts, location ...*api.Location,
+) (string, string) {
 	// Set default location if none provided
 	defaultLocation := &api.Location{
 		Latitude:  41695384, // 41.695384 * 1e6
@@ -180,10 +187,11 @@ func (s *TestService) RegisterAndLoginWithID(email, name, password string, locat
 			UserEmail:         email,
 			RegisterAuthToken: RegisterToken,
 			UserProfile: api.UserProfile{
-				Name:      name,
-				Community: "testCommunity",
-				Password:  password,
-				Location:  loc,
+				Name:               name,
+				Community:          "testCommunity",
+				Password:           password,
+				Location:           loc,
+				AdditionalContacts: additionalContacts,
 			},
 		},
 		"register",
@@ -254,6 +262,41 @@ func (s *TestService) CreateTool(jwt string, title string) int64 {
 	return response.Data.ID
 }
 
+// GetT returns the testing.T instance
+func (s *TestService) GetT() *testing.T {
+	return s.t
+}
+
 func (s *TestService) MailService() *smtp.Email {
 	return s.m
+}
+
+func (s *TestService) CreateBooking(jwt string, toolID int64) string {
+	bookingData := map[string]interface{}{
+		"toolId":    fmt.Sprintf("%d", toolID),
+		"startDate": time.Now().Add(24 * time.Hour).Unix(),
+		"endDate":   time.Now().Add(48 * time.Hour).Unix(),
+		"contact":   "test@test.com",
+		"comments":  "Test booking",
+	}
+
+	resp, code := s.Request(http.MethodPost, jwt, bookingData, "bookings")
+	qt.Assert(s.GetT(), code, qt.Equals, 200)
+
+	var bookingResp struct {
+		Data api.BookingResponse `json:"data"`
+	}
+	err := json.Unmarshal(resp, &bookingResp)
+	qt.Assert(s.GetT(), err, qt.IsNil)
+
+	return bookingResp.Data.ID
+}
+
+func (s *TestService) AcceptBooking(jwt string, bookingID string) {
+	statusData := map[string]interface{}{
+		"status": "ACCEPTED",
+	}
+
+	_, code := s.Request(http.MethodPut, jwt, statusData, "bookings", bookingID)
+	qt.Assert(s.GetT(), code, qt.Equals, 200)
 }
