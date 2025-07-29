@@ -1016,3 +1016,124 @@ func TestGetUserBookings_PendingDatePriority(t *testing.T) {
 		qt.Assert(t, foundNowBooking, qt.IsTrue, qt.Commentf("Should find the booking starting now"))
 	})
 }
+
+func TestBookingService_HasAcceptedBookingBetweenUsers_FutureDateFilter(t *testing.T) {
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	t.Cleanup(func() { _ = container.Terminate(ctx) })
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	db := client.Database(dbName)
+
+	bookingService := NewBookingService(db)
+
+	// Create test users
+	user1 := &User{
+		ID: primitive.NewObjectID(),
+	}
+	user2 := &User{
+		ID: primitive.NewObjectID(),
+	}
+
+	now := time.Now()
+	yesterday := now.Add(-24 * time.Hour)
+	tomorrow := now.Add(24 * time.Hour)
+
+	t.Run("Past accepted booking - should return false", func(t *testing.T) {
+		// Clean up any existing bookings
+		_, err = bookingService.collection.DeleteMany(ctx, bson.M{})
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to clear bookings"))
+
+		// Create a booking with start date in the past
+		pastBooking := &Booking{
+			ID:            primitive.NewObjectID(),
+			ToolID:        "1",
+			FromUserID:    user1.ID,
+			ToUserID:      user2.ID,
+			StartDate:     yesterday,
+			EndDate:       yesterday.Add(2 * time.Hour),
+			Contact:       "test contact",
+			Comments:      "Past booking",
+			BookingStatus: BookingStatusAccepted,
+			CreatedAt:     yesterday,
+			UpdatedAt:     yesterday,
+		}
+		_, err = bookingService.collection.InsertOne(ctx, pastBooking)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert past booking"))
+
+		// Test that HasAcceptedBookingBetweenUsers returns false for past booking
+		hasBooking, err := bookingService.HasAcceptedBookingBetweenUsers(ctx, user1.ID, user2.ID)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to check accepted booking between users"))
+		qt.Assert(t, hasBooking, qt.Equals, false, qt.Commentf("Should return false for past accepted booking"))
+	})
+
+	t.Run("Future accepted booking - should return true", func(t *testing.T) {
+		// Clean up any existing bookings
+		_, err = bookingService.collection.DeleteMany(ctx, bson.M{})
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to clear bookings"))
+
+		// Create a booking with start date in the future
+		futureBooking := &Booking{
+			ID:            primitive.NewObjectID(),
+			ToolID:        "1",
+			FromUserID:    user1.ID,
+			ToUserID:      user2.ID,
+			StartDate:     tomorrow,
+			EndDate:       tomorrow.Add(2 * time.Hour),
+			Contact:       "test contact",
+			Comments:      "Future booking",
+			BookingStatus: BookingStatusAccepted,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+		_, err = bookingService.collection.InsertOne(ctx, futureBooking)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert future booking"))
+
+		// Test that HasAcceptedBookingBetweenUsers returns true for future booking
+		hasBooking, err := bookingService.HasAcceptedBookingBetweenUsers(ctx, user1.ID, user2.ID)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to check accepted booking between users"))
+		qt.Assert(t, hasBooking, qt.Equals, true, qt.Commentf("Should return true for future accepted booking"))
+	})
+
+	t.Run("Present accepted booking - should return true", func(t *testing.T) {
+		// Clean up any existing bookings
+		_, err = bookingService.collection.DeleteMany(ctx, bson.M{})
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to clear bookings"))
+
+		// Create a booking with start date slightly in the future to account for execution time
+		presentTime := time.Now().Add(1 * time.Second)
+		presentBooking := &Booking{
+			ID:            primitive.NewObjectID(),
+			ToolID:        "1",
+			FromUserID:    user1.ID,
+			ToUserID:      user2.ID,
+			StartDate:     presentTime,
+			EndDate:       presentTime.Add(2 * time.Hour),
+			Contact:       "test contact",
+			Comments:      "Present booking",
+			BookingStatus: BookingStatusAccepted,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+		_, err = bookingService.collection.InsertOne(ctx, presentBooking)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to insert present booking"))
+
+		// Test that HasAcceptedBookingBetweenUsers returns true for present booking
+		hasBooking, err := bookingService.HasAcceptedBookingBetweenUsers(ctx, user1.ID, user2.ID)
+		qt.Assert(t, err, qt.IsNil, qt.Commentf("Failed to check accepted booking between users"))
+		qt.Assert(t, hasBooking, qt.Equals, true, qt.Commentf("Should return true for present accepted booking"))
+	})
+}

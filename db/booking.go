@@ -500,6 +500,7 @@ func (s *BookingService) HasAcceptedBookingBetweenUsers(ctx context.Context, use
 				"toUserId":   userID1,
 			},
 		},
+		"endDate": bson.M{"$gte": time.Now()},
 	}
 
 	count, err := s.collection.CountDocuments(ctx, filter)
