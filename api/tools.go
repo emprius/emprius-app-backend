@@ -443,7 +443,7 @@ func (a *API) ownToolsHandler(r *Request) (interface{}, error) {
 // Util function to DRY to get tools from a user with pagination and search term
 func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, error) {
 	// Use access control method to check if user can be accessed
-	_, err := a.GetUserByIDWithAccessControl(r, id)
+	_, _, err := a.GetUserByIDWithAccessControl(r, id)
 	if err != nil {
 		return nil, err
 	}

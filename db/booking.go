@@ -480,6 +480,37 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 	return nil
 }
 
+// HasAcceptedBookingBetweenUsers checks if two users have any ACCEPTED bookings together
+// Returns true if userID1 and userID2 have at least one ACCEPTED booking where one is fromUserId and the other is toUserId
+func (s *BookingService) HasAcceptedBookingBetweenUsers(ctx context.Context, userID1, userID2 primitive.ObjectID) (bool, error) {
+	// Check if userID1 and userID2 are the same (no need to check bookings with yourself)
+	if userID1 == userID2 {
+		return false, nil
+	}
+
+	filter := bson.M{
+		"bookingStatus": BookingStatusAccepted,
+		"$or": []bson.M{
+			{
+				"fromUserId": userID1,
+				"toUserId":   userID2,
+			},
+			{
+				"fromUserId": userID2,
+				"toUserId":   userID1,
+			},
+		},
+		"endDate": bson.M{"$gte": time.Now()},
+	}
+
+	count, err := s.collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
 // SetPickupPlace sets the pickup place for a booking
 func (s *BookingService) SetPickupPlace(ctx context.Context, id primitive.ObjectID, location DBLocation) error {
 	update := bson.M{

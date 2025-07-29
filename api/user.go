@@ -24,6 +24,9 @@ func (a *API) RegisterUserRoutes(r chi.Router) {
 	// GET /profile
 	log.Info().Msg("register route GET /profile")
 	r.Get("/profile", a.routerHandler(a.userProfileHandler))
+	// POST /profile
+	log.Info().Msg("register route POST /profile")
+	r.Post("/profile", a.routerHandler(a.userProfileUpdateHandler))
 	// POST /profile/invites
 	log.Info().Msg("register route POST /profile/invites")
 	r.Post("/profile/invites", a.routerHandler(a.userInviteCodesHandler))
@@ -33,12 +36,6 @@ func (a *API) RegisterUserRoutes(r chi.Router) {
 	// POST /profile/notifications
 	log.Info().Msg("register route POST /profile/notifications")
 	r.Post("/profile/notifications", a.routerHandler(a.userNotificationPreferencesUpdateHandler))
-	// GET /refresh
-	log.Info().Msg("register route GET /refresh")
-	r.Get("/refresh", a.routerHandler(a.refreshHandler))
-	// POST /profile
-	log.Info().Msg("register route POST /profile")
-	r.Post("/profile", a.routerHandler(a.userProfileUpdateHandler))
 	// GET /users
 	log.Info().Msg("register route GET /users")
 	r.Get("/users", a.routerHandler(a.usersHandler))
@@ -51,6 +48,9 @@ func (a *API) RegisterUserRoutes(r chi.Router) {
 	// GET /users/{userId}/communities
 	log.Info().Msg("register route GET /users/{userId}/communities")
 	r.Get("/users/{userId}/communities", a.routerHandler(a.getUserCommunitiesHandler))
+	// GET /refresh
+	log.Info().Msg("register route GET /refresh")
+	r.Get("/refresh", a.routerHandler(a.refreshHandler))
 }
 
 // RegisterPublicUserRoutes registers all public user-related routes to the provided router group
@@ -115,6 +115,14 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		return nil, ErrLocationNotSet
 	}
 
+	// Add additional contacts if provided
+	if userInfo.AdditionalContacts != nil {
+		err := userInfo.AdditionalContacts.Validate()
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Generate a random salt for the password
 	randomSalt, err := generateRandomSalt()
 	if err != nil {
@@ -133,6 +141,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		Karma:                   200,
 		Tokens:                  1000,
 		NotificationPreferences: db.GetDefaultNotificationPreferences(),
+		AdditionalContacts:      userInfo.AdditionalContacts,
 	}
 
 	if userInfo.Avatar != nil {
@@ -302,7 +311,7 @@ func (a *API) usersHandler(r *Request) (interface{}, error) {
 
 	userList := []*User{}
 	for _, u := range users {
-		userList = append(userList, new(User).FromDBUser(u, false))
+		userList = append(userList, new(User).FromDBUser(u, false, false))
 	}
 
 	// Return users with pagination info
@@ -326,12 +335,36 @@ func (a *API) getUserHandler(r *Request) (interface{}, error) {
 	}
 
 	// Use access control method to check if user can be accessed
-	u, err := a.GetUserByIDWithAccessControl(r, userID)
+	u, requestingUserID, err := a.GetUserByIDWithAccessControl(r, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return new(User).FromDBUser(u, false), nil
+	// Determine if we should include private data (including AdditionalContacts)
+	includeAdditionalContacts := false
+
+	// Case 1: Requesting user is the same as queried user (profile case)
+	if *requestingUserID == userID {
+		includeAdditionalContacts = true
+	} else {
+		// Case 2: Check if users have accepted bookings together
+		hasAcceptedBooking, err := a.database.BookingService.HasAcceptedBookingBetweenUsers(
+			r.Context.Request.Context(),
+			*requestingUserID,
+			userID,
+		)
+		if err != nil {
+			log.Error().Err(err).
+				Str("requestingUserId", requestingUserID.Hex()).
+				Str("queriedUserId", userID.Hex()).
+				Msg("Failed to check accepted bookings between users")
+			// Continue without private data rather than failing
+		} else {
+			includeAdditionalContacts = hasAcceptedBooking
+		}
+	}
+
+	return new(User).FromDBUser(u, false, includeAdditionalContacts), nil
 }
 
 // validateObjectID checks if a string is a valid MongoDB ObjectID
@@ -374,7 +407,7 @@ func (a *API) userProfileHandler(r *Request) (interface{}, error) {
 	}
 
 	// Create API user from DB user with real location and private data (true parameters)
-	user := new(User).FromDBUser(dbUser, true)
+	user := new(User).FromDBUser(dbUser, true, true)
 
 	// Get user's unused invite codes
 	objID, err := primitive.ObjectIDFromHex(r.UserID)
@@ -532,6 +565,14 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		user.Password = hashPassword(newUserInfo.Password, user.Salt)
 	}
 
+	if newUserInfo.AdditionalContacts != nil {
+		err := newUserInfo.AdditionalContacts.Validate()
+		if err != nil {
+			return nil, err
+		}
+		user.AdditionalContacts = newUserInfo.AdditionalContacts
+	}
+
 	update := bson.M{
 		"name":               user.Name,
 		"avatarHash":         user.AvatarHash,
@@ -543,6 +584,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		"community":          user.Community,
 		"bio":                user.Bio,
 		"lastSeen":           time.Now(), // Update lastSeen when profile is updated
+		"additionalContacts": user.AdditionalContacts,
 	}
 
 	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
@@ -605,7 +647,7 @@ func (a *API) HandleGetUserRatings(r *Request) (interface{}, error) {
 	}
 
 	// Use access control method to check if user can be accessed
-	_, err = a.GetUserByIDWithAccessControl(r, userID)
+	_, _, err = a.GetUserByIDWithAccessControl(r, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -674,22 +716,22 @@ func (a *API) userNotificationPreferencesUpdateHandler(r *Request) (interface{},
 
 // GetUserByIDWithAccessControl Get user by ID with access control
 // This method checks if the requesting user has access to the user being requested.
-func (a *API) GetUserByIDWithAccessControl(r *Request, userID primitive.ObjectID) (*db.User, error) {
+func (a *API) GetUserByIDWithAccessControl(r *Request, userID primitive.ObjectID) (*db.User, *primitive.ObjectID, error) {
 	// Get requesting user ID for access control
 	var requestingUserID primitive.ObjectID
 	var err error
 	if r.UserID != "" {
 		requestingUserID, err = primitive.ObjectIDFromHex(r.UserID)
 		if err != nil {
-			return nil, ErrInvalidUserID.WithErr(err)
+			return nil, nil, ErrInvalidUserID.WithErr(err)
 		}
 	}
 
 	// Use access control method to check if user can be accessed
 	user, err := a.database.UserService.GetUserByIDWithAccessControl(r.Context.Request.Context(), userID, requestingUserID)
 	if err != nil {
-		return nil, ErrUserNotFound.WithErr(err)
+		return nil, nil, ErrUserNotFound.WithErr(err)
 	}
 
-	return user, nil
+	return user, &requestingUserID, nil
 }
