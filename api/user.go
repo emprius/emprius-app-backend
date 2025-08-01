@@ -123,6 +123,10 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		}
 	}
 
+	if userInfo.LanguageCode == "" {
+		userInfo.LanguageCode = "en"
+	}
+
 	// Generate a random salt for the password
 	randomSalt, err := generateRandomSalt()
 	if err != nil {
@@ -142,6 +146,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		Tokens:                  1000,
 		NotificationPreferences: db.GetDefaultNotificationPreferences(),
 		AdditionalContacts:      userInfo.AdditionalContacts,
+		LanguageCode:            userInfo.LanguageCode,
 	}
 
 	if userInfo.Avatar != nil {
@@ -522,9 +527,11 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if newUserInfo.Community != "" {
 		user.Community = newUserInfo.Community
 	}
-	// Update bio if provided
 	if newUserInfo.Bio != "" {
 		user.Bio = newUserInfo.Bio
+	}
+	if newUserInfo.LanguageCode != "" {
+		user.LanguageCode = newUserInfo.LanguageCode
 	}
 
 	var avatar *db.Image
@@ -585,6 +592,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		"bio":                user.Bio,
 		"lastSeen":           time.Now(), // Update lastSeen when profile is updated
 		"additionalContacts": user.AdditionalContacts,
+		"languageCode":       user.LanguageCode,
 	}
 
 	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)
