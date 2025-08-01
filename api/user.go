@@ -204,6 +204,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 			AppUrl  string
 			LogoURL string
 		}{mailtemplates.AppName, mailtemplates.AppUrl, mailtemplates.LogoURL},
+		user.LanguageCode,
 	); err != nil {
 		log.Warn().Err(err).Msg("could not send welcome email")
 		// Continue even if email cannot be sent
