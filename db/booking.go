@@ -387,14 +387,22 @@ func (s *BookingService) UpdateStatus(ctx context.Context, id primitive.ObjectID
 
 			tokenCost := s.calculateTokenCost(booking, tool)
 			if fromUser.Tokens < tokenCost {
-				return fmt.Errorf("insufficient tokens: user has %d, needs %d", fromUser.Tokens, tokenCost)
+				log.Debug().Msgf("insufficient tokens: user has %d, needs %d", fromUser.Tokens, tokenCost)
 			}
 
 			// Deduct tokens from renting user
 			_, err = userService.UpdateOne(ctx,
 				bson.M{"_id": booking.FromUserID},
-				bson.M{"$inc": bson.M{"tokens": -int64(tokenCost)}},
-			)
+				bson.A{
+					bson.M{"$set": bson.M{
+						"tokens": bson.M{
+							"$max": bson.A{
+								bson.M{"$subtract": bson.A{"$tokens", int64(tokenCost)}},
+								0,
+							},
+						},
+					}},
+				})
 			if err != nil {
 				return fmt.Errorf("error updating user tokens: %w", err)
 			}
