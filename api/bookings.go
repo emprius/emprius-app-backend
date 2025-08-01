@@ -370,6 +370,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 					fmt.Sprintf(mailtemplates.UserUrl, user.ID.Hex()),
 					notifications.Stars(user.Rating),
 				},
+				renter.LanguageCode,
 			); err != nil {
 				log.Warn().Err(err).Msg("could not send booking accepted notification")
 				// Continue even if email cannot be sent
@@ -573,6 +574,7 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 						renter.Name,
 						fmt.Sprintf(mailtemplates.BookingUrl, modifiedBooking.ID.Hex()),
 					},
+					affectedUser.LanguageCode,
 				); err != nil {
 					log.Warn().Err(err).Msg("could not send nomadic tool holder changed notification")
 				}
@@ -841,6 +843,7 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 				req.Contact,
 				mailtemplates.IncomingUrl,
 			},
+			toUser.LanguageCode,
 		); err != nil {
 			log.Warn().Err(err).Msg("could not send new request notification")
 			// Continue even if email cannot be sent

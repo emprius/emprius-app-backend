@@ -15,7 +15,8 @@ import (
 // address provided. It returns an error if the mail service is available and
 // the notification could not be sent or the email address is invalid. If the
 // mail service is not available, it does nothing.
-func (a *API) sendMail(ctx context.Context, to string, mail mailtemplates.MailTemplate, data any) error {
+// The lang parameter specifies the language code for the email template.
+func (a *API) sendMail(ctx context.Context, to string, mail mailtemplates.MailTemplate, data any, lang string) error {
 	if a.mail != nil {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 		defer cancel()
@@ -24,7 +25,7 @@ func (a *API) sendMail(ctx context.Context, to string, mail mailtemplates.MailTe
 			return fmt.Errorf("invalid email address")
 		}
 		// execute the mail template to get the notification
-		notification, err := mail.ExecTemplate(data)
+		notification, err := mail.ExecTemplate(data, lang)
 		if err != nil {
 			return err
 		}

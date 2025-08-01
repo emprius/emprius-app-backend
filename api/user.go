@@ -123,6 +123,10 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		}
 	}
 
+	if userInfo.LanguageCode == "" {
+		userInfo.LanguageCode = "en"
+	}
+
 	// Generate a random salt for the password
 	randomSalt, err := generateRandomSalt()
 	if err != nil {
@@ -142,6 +146,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 		Tokens:                  1000,
 		NotificationPreferences: db.GetDefaultNotificationPreferences(),
 		AdditionalContacts:      userInfo.AdditionalContacts,
+		LanguageCode:            userInfo.LanguageCode,
 	}
 
 	if userInfo.Avatar != nil {
@@ -199,6 +204,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 			AppUrl  string
 			LogoURL string
 		}{mailtemplates.AppName, mailtemplates.AppUrl, mailtemplates.LogoURL},
+		user.LanguageCode,
 	); err != nil {
 		log.Warn().Err(err).Msg("could not send welcome email")
 		// Continue even if email cannot be sent
@@ -522,9 +528,11 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 	if newUserInfo.Community != "" {
 		user.Community = newUserInfo.Community
 	}
-	// Update bio if provided
 	if newUserInfo.Bio != "" {
 		user.Bio = newUserInfo.Bio
+	}
+	if newUserInfo.LanguageCode != "" {
+		user.LanguageCode = newUserInfo.LanguageCode
 	}
 
 	var avatar *db.Image
@@ -585,6 +593,7 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		"bio":                user.Bio,
 		"lastSeen":           time.Now(), // Update lastSeen when profile is updated
 		"additionalContacts": user.AdditionalContacts,
+		"languageCode":       user.LanguageCode,
 	}
 
 	_, err = a.database.UserService.UpdateUser(context.Background(), user.ID, update)

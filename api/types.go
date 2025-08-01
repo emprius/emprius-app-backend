@@ -103,6 +103,7 @@ type UserProfile struct {
 	NotificationPreferences NotificationPreferences `json:"notificationPreferences,omitempty"`
 	InviteCodes             []*SimpleInviteCode     `json:"inviteCodes,omitempty"`
 	AdditionalContacts      AdditionalContacts      `json:"additionalContacts,omitempty"`
+	LanguageCode            string                  `json:"lang,omitempty"`
 }
 
 // UserCommunityInfo represents a user's role in a community
@@ -137,6 +138,7 @@ type User struct {
 	Communities             []UserCommunityInfo     `json:"communities,omitempty"`
 	NotificationPreferences NotificationPreferences `json:"notificationPreferences,omitempty"`
 	AdditionalContacts      AdditionalContacts      `json:"additionalContacts,omitempty"`
+	LanguageCode            string                  `json:"lang,omitempty"`
 }
 
 // SimpleInviteCode represents a simplified invitation code with only essential fields
@@ -197,6 +199,7 @@ func (u *User) FromDBUser(dbu *db.User, includePrivateData bool, includeAddition
 	if includePrivateData {
 		u.Location.FromDBLocation(dbu.Location)
 		u.NotificationPreferences = dbu.NotificationPreferences
+		u.LanguageCode = dbu.LanguageCode
 	} else {
 		u.Location.FromDBLocation(dbu.ObfuscatedLocation)
 	}

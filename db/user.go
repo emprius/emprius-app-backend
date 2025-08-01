@@ -36,6 +36,7 @@ type User struct {
 	Communities             []UserCommunityRole `bson:"communities,omitempty" json:"communities,omitempty"`
 	NotificationPreferences map[string]bool     `bson:"notificationPreferences,omitempty" json:"notificationPreferences,omitempty"`
 	AdditionalContacts      map[string]string   `bson:"additionalContacts,omitempty" json:"additionalContacts,omitempty"`
+	LanguageCode            string              `bson:"languageCode,omitempty" json:"lang,omitempty"`
 }
 
 // UserCommunityRole represents a user's role in a community
