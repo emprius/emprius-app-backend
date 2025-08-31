@@ -264,6 +264,100 @@ func createUniqueIndexes(db *Database, ctx context.Context) error {
 		return err
 	}
 
+	// Message collection indexes
+	messageColl := db.Database.Collection("messages")
+	_, err = messageColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "senderId", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "recipientId", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "communityId", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "conversationKey", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "type", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "createdAt", Value: 1}},
+			Options: options.Index().SetExpireAfterSeconds(31536000), // TTL: 1 year
+		},
+		{
+			Keys: bson.D{
+				{Key: "content", Value: "text"},
+			},
+			Options: options.Index().SetDefaultLanguage("none").SetLanguageOverride("none"),
+		},
+	})
+	if err != nil {
+		log.Printf("Error creating message indexes: %v\n", err)
+		return err
+	}
+
+	// Message read status collection indexes
+	messageReadStatusColl := db.Database.Collection("message_read_status")
+	_, err = messageReadStatusColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "userId", Value: 1},
+				{Key: "conversationKey", Value: 1},
+			},
+			Options: options.Index().SetUnique(true),
+		},
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}},
+			Options: options.Index(),
+		},
+	})
+	if err != nil {
+		log.Printf("Error creating message read status indexes: %v\n", err)
+		return err
+	}
+
+	// Conversation collection indexes
+	conversationColl := db.Database.Collection("conversations")
+	_, err = conversationColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "participants", Value: 1}, {Key: "lastMessageTime", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "communityId", Value: 1}, {Key: "lastMessageTime", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "type", Value: 1}, {Key: "lastMessageTime", Value: -1}},
+			Options: options.Index(),
+		},
+		{
+			Keys: bson.D{
+				{Key: "type", Value: 1},
+				{Key: "participants", Value: 1},
+			},
+			Options: options.Index().SetPartialFilterExpression(bson.D{{Key: "type", Value: "private"}}),
+		},
+		{
+			Keys: bson.D{
+				{Key: "type", Value: 1},
+				{Key: "communityId", Value: 1},
+			},
+			Options: options.Index().SetPartialFilterExpression(bson.D{{Key: "type", Value: "community"}}),
+		},
+	})
+	if err != nil {
+		log.Printf("Error creating conversation indexes: %v\n", err)
+		return err
+	}
+
 	log.Println("All indexes created successfully")
 	return nil
 }

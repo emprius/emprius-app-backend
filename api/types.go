@@ -31,6 +31,12 @@ type BinaryResponse struct {
 	Data        []byte
 }
 
+// StatusResponse represents a response with a custom HTTP status code
+type StatusResponse struct {
+	StatusCode int
+	Data       interface{}
+}
+
 type Register struct {
 	UserEmail         string `json:"email"`
 	RegisterAuthToken string `json:"invitationToken"`
@@ -139,6 +145,7 @@ type User struct {
 	NotificationPreferences NotificationPreferences `json:"notificationPreferences,omitempty"`
 	AdditionalContacts      AdditionalContacts      `json:"additionalContacts,omitempty"`
 	LanguageCode            string                  `json:"lang,omitempty"`
+	UnreadMessageCount      *UnreadMessageSummary   `json:"unreadMessageCount,omitempty"`
 }
 
 // SimpleInviteCode represents a simplified invitation code with only essential fields
@@ -485,4 +492,182 @@ type PendingActionsResponse struct {
 	PendingRatingsCount  int64 `json:"pendingRatingsCount"`
 	PendingRequestsCount int64 `json:"pendingRequestsCount"`
 	PendingInvitesCount  int64 `json:"pendingInvitesCount"`
+}
+
+// Message-related request/response types
+
+// Message type constants
+const (
+	MessageTypePrivate   = "private"
+	MessageTypeCommunity = "community"
+	MessageTypeGeneral   = "general"
+	MessageTypeAll       = "all"
+)
+
+// SendMessageRequest represents a request to send a message
+type SendMessageRequest struct {
+	Type        string   `json:"type"` // private|community|general
+	RecipientID string   `json:"recipientId,omitempty"`
+	CommunityID string   `json:"communityId,omitempty"`
+	Content     string   `json:"content,omitempty"`
+	ImageHashes []string `json:"imageHashes,omitempty"` // Hashes from image upload
+	Images      []string `json:"images,omitempty"`      // Alternative field name for compatibility
+	ReplyToID   string   `json:"replyToId,omitempty"`
+}
+
+// Validate validates the send message request
+func (r *SendMessageRequest) Validate() error {
+	if r.Type != "private" && r.Type != "community" && r.Type != "general" {
+		return fmt.Errorf("invalid message type")
+	}
+
+	// Check if we have content or images (support both field names)
+	totalImages := len(r.ImageHashes) + len(r.Images)
+	if len(r.Content) == 0 && totalImages == 0 {
+		return fmt.Errorf("message must have either content or images")
+	}
+
+	if len(r.Content) > 5000 {
+		return fmt.Errorf("message content cannot exceed 5000 characters")
+	}
+
+	if r.Type == "private" && r.RecipientID == "" {
+		return fmt.Errorf("recipient ID is required for private messages")
+	}
+
+	if r.Type == "community" && r.CommunityID == "" {
+		return fmt.Errorf("community ID is required for community messages")
+	}
+
+	return nil
+}
+
+// MessageResponse represents a message in API responses
+type MessageResponse struct {
+	ID          string           `json:"id"`
+	Type        string           `json:"type"`
+	SenderID    string           `json:"senderId"`
+	SenderName  string           `json:"senderName"`
+	RecipientID string           `json:"recipientId,omitempty"`
+	CommunityID string           `json:"communityId,omitempty"`
+	Content     string           `json:"content,omitempty"`
+	Images      []types.HexBytes `json:"images,omitempty"`
+	CreatedAt   int64            `json:"createdAt"`
+	IsRead      bool             `json:"isRead"`
+	ReplyToID   string           `json:"replyToId,omitempty"`
+}
+
+// FromDB converts a database message to API response
+func (m *MessageResponse) FromDB(dbMessage *db.Message, database *db.Database) *MessageResponse {
+	m.ID = dbMessage.ID.Hex()
+	m.Type = string(dbMessage.Type)
+	m.SenderID = dbMessage.SenderID.Hex()
+	m.Content = dbMessage.Content
+	m.Images = dbMessage.Images
+	m.CreatedAt = dbMessage.CreatedAt.Unix()
+
+	// Get sender name
+	if sender, err := database.UserService.GetUserByID(context.Background(), dbMessage.SenderID); err == nil {
+		m.SenderName = sender.Name
+	}
+
+	if dbMessage.RecipientID != nil {
+		m.RecipientID = dbMessage.RecipientID.Hex()
+	}
+
+	if dbMessage.CommunityID != nil {
+		m.CommunityID = dbMessage.CommunityID.Hex()
+	}
+
+	if dbMessage.ReplyToID != nil {
+		m.ReplyToID = dbMessage.ReplyToID.Hex()
+	}
+
+	return m
+}
+
+// ConversationResponse represents a conversation in API responses
+type ConversationResponse struct {
+	ID              string          `json:"id"`
+	Type            string          `json:"type"`
+	Participants    []UserPreview   `json:"participants,omitempty"`
+	Community       *CommunityInfo  `json:"community,omitempty"`
+	LastMessage     MessageResponse `json:"lastMessage"`
+	UnreadCount     int64           `json:"unreadCount"`
+	MessageCount    int64           `json:"messageCount"`
+	LastMessageTime int64           `json:"lastMessageTime"`
+}
+
+// CommunityInfo represents basic community information
+type CommunityInfo struct {
+	ID    string         `json:"id"`
+	Name  string         `json:"name"`
+	Image types.HexBytes `json:"image,omitempty"`
+}
+
+// FromDB converts a database conversation to API response
+func (c *ConversationResponse) FromDB(dbConv *db.Conversation, database *db.Database) *ConversationResponse {
+	c.ID = dbConv.ID.Hex()
+	c.Type = string(dbConv.Type)
+	c.MessageCount = dbConv.MessageCount
+	c.LastMessageTime = dbConv.LastMessageTime.Unix()
+
+	// Get participants for private conversations
+	if dbConv.Type == db.MessageTypePrivate && len(dbConv.Participants) > 0 {
+		c.Participants = make([]UserPreview, len(dbConv.Participants))
+		for i, participantID := range dbConv.Participants {
+			if user, err := database.UserService.GetUserByID(context.Background(), participantID); err == nil {
+				c.Participants[i].FromDBUserPreview(user)
+			}
+		}
+	}
+
+	// Get community info for community conversations
+	if dbConv.Type == db.MessageTypeCommunity && dbConv.CommunityID != nil {
+		if community, err := database.CommunityService.GetCommunity(context.Background(), *dbConv.CommunityID); err == nil {
+			c.Community = &CommunityInfo{
+				ID:    community.ID.Hex(),
+				Name:  community.Name,
+				Image: community.Image,
+			}
+		}
+	}
+
+	// Get last message
+	var lastMessage db.Message
+	if err := database.MessageService.Collection.FindOne(
+		context.Background(),
+		map[string]interface{}{"_id": dbConv.LastMessageID},
+	).Decode(&lastMessage); err == nil {
+		c.LastMessage.FromDB(&lastMessage, database)
+	}
+
+	return c
+}
+
+// UnreadMessageSummary represents unread message counts
+type UnreadMessageSummary struct {
+	Total        int64            `json:"total"`
+	Private      int64            `json:"private"`
+	Communities  map[string]int64 `json:"communities,omitempty"`
+	GeneralForum int64            `json:"generalForum"`
+}
+
+// PaginatedMessagesResponse wraps messages with pagination info
+type PaginatedMessagesResponse struct {
+	Messages   []*MessageResponse `json:"messages"`
+	Pagination PaginationInfo     `json:"pagination"`
+}
+
+// PaginatedConversationsResponse wraps conversations with pagination info
+type PaginatedConversationsResponse struct {
+	Conversations []*ConversationResponse `json:"conversations"`
+	Pagination    PaginationInfo          `json:"pagination"`
+}
+
+// MarkMessagesReadRequest represents a request to mark messages as read
+type MarkMessagesReadRequest struct {
+	Type             string `json:"type,omitempty"`
+	ConversationWith string `json:"conversationWith,omitempty"`
+	CommunityID      string `json:"communityId,omitempty"`
 }

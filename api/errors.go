@@ -246,6 +246,10 @@ var (
 		Code:    http.StatusInternalServerError,
 		Message: "internal server error",
 	}
+	ErrTooManyRequests = &HTTPError{
+		Code:    http.StatusTooManyRequests,
+		Message: "too many requests",
+	}
 )
 
 // Tool validation errors

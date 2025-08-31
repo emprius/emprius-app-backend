@@ -46,6 +46,7 @@ type API struct {
 	webappdir          string
 	maxInviteCodes     int
 	inviteCodeCooldown int
+	rateLimiter        *MessageRateLimiter
 }
 
 // New creates a new API HTTP server. It does not start the server. Use Start() for that.
@@ -73,6 +74,7 @@ func New(conf *APIConfig) (*API, error) {
 		maxInviteCodes:     conf.MaxInviteCodes,
 		inviteCodeCooldown: conf.InviteCodeCooldown,
 		mail:               conf.MailService,
+		rateLimiter:        NewMessageRateLimiter(),
 	}, nil
 }
 
@@ -124,6 +126,7 @@ func (a *API) router() http.Handler {
 		a.RegisterBookingRoutes(r)
 		a.RegisterCommunityRoutes(r)
 		a.RegisterImageRoutes(r)
+		a.RegisterMessageRoutes(r)
 	})
 
 	// Public routes

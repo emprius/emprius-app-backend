@@ -26,6 +26,7 @@ type Database struct {
 	BookingService      *BookingService
 	InviteCodeService   *InviteCodeService
 	CommunityService    *CommunityService
+	MessageService      *MessageService
 }
 
 // New initializes a new MongoDB connection.
@@ -56,6 +57,7 @@ func New(uri string, secret ...string) (*Database, error) {
 	database.BookingService = NewBookingService(database.Database)
 	database.InviteCodeService = NewInviteCodeService(database)
 	database.CommunityService = NewCommunityService(database)
+	database.MessageService = NewMessageService(database)
 
 	if err := database.CreateTables(); err != nil {
 		return nil, fmt.Errorf("failed to create tables: %w", err)

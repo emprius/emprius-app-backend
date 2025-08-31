@@ -203,9 +203,17 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 			return
 		}
 
+		// Check if response has custom status code
+		statusCode := http.StatusOK
+		responseData := handlerResp
+		if statusResp, ok := handlerResp.(*StatusResponse); ok {
+			statusCode = statusResp.StatusCode
+			responseData = statusResp.Data
+		}
+
 		// Handle normal JSON response
 		resp.Header.Success = true
-		resp.Data = handlerResp
+		resp.Data = responseData
 		data, err := json.Marshal(resp)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to marshal response")
@@ -225,7 +233,7 @@ func (a *API) routerHandler(handlerFunc RouterHandlerFn) func(w http.ResponseWri
 		}
 		log.Debug().Msgf("response: %s", data)
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(statusCode)
 		if _, err := w.Write(data); err != nil {
 			log.Error().Err(err).Msg("failed to write response")
 		}

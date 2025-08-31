@@ -8,6 +8,12 @@ const (
 	NotificationNewIncomingRequest       NotificationType = "incoming_requests"
 	NotificationBookingAccepted          NotificationType = "booking_accepted"
 	NotificationNomadicToolHolderChanged NotificationType = "tool_holder_changed"
+
+	// Message notifications
+	NotificationPrivateMessages      NotificationType = "private_messages"
+	NotificationCommunityMessages    NotificationType = "community_messages"
+	NotificationGeneralForumMessages NotificationType = "general_forum_messages"
+	NotificationDailyMessageDigest   NotificationType = "daily_message_digest"
 )
 
 // GetAllNotificationTypes returns all available notification types
@@ -16,6 +22,10 @@ func GetAllNotificationTypes() []NotificationType {
 		NotificationNewIncomingRequest,
 		NotificationBookingAccepted,
 		NotificationNomadicToolHolderChanged,
+		NotificationPrivateMessages,
+		NotificationCommunityMessages,
+		NotificationGeneralForumMessages,
+		NotificationDailyMessageDigest,
 	}
 }
 

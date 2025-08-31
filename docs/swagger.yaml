@@ -19,6 +19,8 @@ tags:
     description: Booking management and rating operations
   - name: Communities
     description: Community management and member operations
+  - name: Messages
+    description: Messaging system operations for private, community, and general forum messages
 
 servers:
   - url: http://localhost:8080
@@ -612,6 +614,189 @@ components:
           enum: [ACCEPTED, REJECTED, CANCELLED, RETURNED, PICKED]
           description: New status for the booking
 
+    # Messaging schemas
+    SendMessageRequest:
+      type: object
+      required:
+        - type
+        - content
+      properties:
+        type:
+          type: string
+          enum: [private, community, general]
+          description: Type of message
+        recipientId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the recipient (required for private messages)
+        communityId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the community (required for community messages)
+        content:
+          type: string
+          maxLength: 5000
+          description: Message content (required if no images)
+        images:
+          type: array
+          items:
+            type: string
+          maxItems: 10
+          description: Array of image hashes (required if no content)
+
+    MessageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the message
+        type:
+          type: string
+          enum: [private, community, general]
+          description: Type of message
+        senderId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the sender
+        senderName:
+          type: string
+          description: Name of the sender
+        senderAvatarHash:
+          type: string
+          format: byte
+          description: Avatar hash of the sender
+        recipientId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the recipient (for private messages)
+        communityId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the community (for community messages)
+        content:
+          type: string
+          description: Message content
+        images:
+          type: array
+          items:
+            type: string
+          description: Array of image hashes
+        createdAt:
+          type: string
+          format: date-time
+          description: When the message was created
+        isRead:
+          type: boolean
+          description: Whether the message has been read by the current user
+
+    ConversationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the conversation
+        type:
+          type: string
+          enum: [private, community, general]
+          description: Type of conversation
+        participants:
+          type: array
+          items:
+            type: string
+            format: objectid
+          description: MongoDB ObjectIDs of participants (for private conversations)
+        communityId:
+          type: string
+          format: objectid
+          description: MongoDB ObjectID of the community (for community conversations)
+        lastMessage:
+          $ref: '#/components/schemas/MessageResponse'
+          description: Last message in the conversation
+        unreadCount:
+          type: integer
+          format: int64
+          description: Number of unread messages in this conversation
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the conversation was last updated
+
+    UnreadMessageSummary:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: Total number of unread messages
+        private:
+          type: integer
+          format: int64
+          description: Number of unread private messages
+        communities:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+          description: Number of unread messages per community (community ID as key)
+        generalForum:
+          type: integer
+          format: int64
+          description: Number of unread general forum messages
+
+    MarkMessagesReadRequest:
+      type: object
+      required:
+        - messageIds
+      properties:
+        messageIds:
+          type: array
+          items:
+            type: string
+            format: objectid
+          description: Array of message IDs to mark as read
+
+    PaginatedMessagesResponse:
+      type: object
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageResponse'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+              format: int64
+            totalPages:
+              type: integer
+
+    PaginatedConversationsResponse:
+      type: object
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationResponse'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            pageSize:
+              type: integer
+            total:
+              type: integer
+              format: int64
+            totalPages:
+              type: integer
+
 paths:
   /ping:
     get:
@@ -780,6 +965,334 @@ paths:
                   $ref: '#/components/schemas/UnifiedRating'
         '400':
           description: Invalid user ID
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  # Messaging endpoints
+  /messages:
+    post:
+      tags:
+        - Messages
+      summary: Send a message
+      description: Send a private, community, or general forum message
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+            examples:
+              private_message:
+                summary: Private message
+                value:
+                  type: "private"
+                  recipientId: "507f1f77bcf86cd799439011"
+                  content: "Hello! How are you?"
+              community_message:
+                summary: Community message
+                value:
+                  type: "community"
+                  communityId: "507f1f77bcf86cd799439012"
+                  content: "Welcome to our community!"
+              general_message:
+                summary: General forum message
+                value:
+                  type: "general"
+                  content: "This is a public message for everyone"
+              message_with_images:
+                summary: Message with images
+                value:
+                  type: "private"
+                  recipientId: "507f1f77bcf86cd799439011"
+                  content: "Check out these photos!"
+                  images: ["abc123def456", "789ghi012jkl"]
+      responses:
+        '201':
+          description: Message sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          description: |
+            Bad request. Possible reasons:
+            - Invalid message type
+            - Missing required fields (recipientId for private, communityId for community)
+            - Message too long (>5000 characters)
+            - Too many images (>10)
+            - No content and no images
+        '401':
+          description: Unauthorized
+        '403':
+          description: |
+            Forbidden. Possible reasons:
+            - Recipient is inactive (for private messages)
+            - User is not a member of the community (for community messages)
+        '404':
+          description: Recipient or community not found
+        '429':
+          description: Too many requests - rate limit exceeded (30/min for private, 20/min for community, 10/min for general)
+        '500':
+          description: Internal server error
+    get:
+      tags:
+        - Messages
+      summary: Get messages
+      description: Get messages with filtering and pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - name: pageSize
+          in: query
+          description: Number of messages per page (max 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: type
+          in: query
+          description: Filter by message type
+          required: false
+          schema:
+            type: string
+            enum: [private, community, general]
+        - name: conversationWith
+          in: query
+          description: Get private conversation with specific user (ObjectID)
+          required: false
+          schema:
+            type: string
+            format: objectid
+        - name: communityId
+          in: query
+          description: Get messages from specific community (ObjectID)
+          required: false
+          schema:
+            type: string
+            format: objectid
+        - name: unreadOnly
+          in: query
+          description: Only return unread messages
+          required: false
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessagesResponse'
+        '400':
+          description: Invalid query parameters
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /messages/read:
+    post:
+      tags:
+        - Messages
+      summary: Mark messages as read
+      description: Mark one or more messages as read by the authenticated user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MarkMessagesReadRequest'
+            example:
+              messageIds: ["507f1f77bcf86cd799439011", "507f1f77bcf86cd799439012"]
+      responses:
+        '200':
+          description: Messages marked as read successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  markedCount:
+                    type: integer
+                    description: Number of messages successfully marked as read
+        '400':
+          description: Invalid request body or message IDs
+        '401':
+          description: Unauthorized
+        '403':
+          description: User does not have permission to mark these messages as read
+        '500':
+          description: Internal server error
+
+  /messages/read/conversation:
+    post:
+      tags:
+        - Messages
+      summary: Mark all messages in a conversation as read
+      description: Mark all messages in a specific conversation as read
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - conversationKey
+              properties:
+                conversationKey:
+                  type: string
+                  description: |
+                    Conversation key in format:
+                    - For private: "private:userId1:userId2" (sorted)
+                    - For community: "community:communityId"
+                    - For general: "general"
+                  example: "private:507f1f77bcf86cd799439011:507f1f77bcf86cd799439012"
+      responses:
+        '200':
+          description: All messages in conversation marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '400':
+          description: Invalid conversation key
+        '401':
+          description: Unauthorized
+        '403':
+          description: User does not have permission to access this conversation
+        '500':
+          description: Internal server error
+
+  /messages/search:
+    get:
+      tags:
+        - Messages
+      summary: Search messages
+      description: Search through messages using full-text search with permission-based filtering
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Search query string
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+          example: "tool repair"
+        - name: type
+          in: query
+          description: Filter search results by message type
+          required: false
+          schema:
+            type: string
+            enum: [private, community, general]
+        - $ref: '#/components/parameters/PageParam'
+        - name: pageSize
+          in: query
+          description: Number of messages per page (max 50)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 50
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedMessagesResponse'
+        '400':
+          description: Invalid search query or parameters
+        '401':
+          description: Unauthorized
+        '429':
+          description: Too many requests - rate limit exceeded
+        '500':
+          description: Internal server error
+
+  /messages/unread:
+    get:
+      tags:
+        - Messages
+      summary: Get unread message counts
+      description: Get summary of unread messages by type for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Unread message summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnreadMessageSummary'
+              example:
+                total: 15
+                private: 8
+                communities:
+                  "507f1f77bcf86cd799439011": 5
+                  "507f1f77bcf86cd799439012": 1
+                generalForum: 1
+        '401':
+          description: Unauthorized
+        '500':
+          description: Internal server error
+
+  /conversations:
+    get:
+      tags:
+        - Messages
+      summary: Get user conversations
+      description: Get list of conversations for the authenticated user with pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - name: pageSize
+          in: query
+          description: Number of conversations per page (max 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: type
+          in: query
+          description: Filter conversations by type
+          required: false
+          schema:
+            type: string
+            enum: [private, community, general, all]
+            default: all
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedConversationsResponse'
+        '400':
+          description: Invalid query parameters
         '401':
           description: Unauthorized
         '500':

@@ -331,6 +331,26 @@ func (s *UserService) GetUserCommunities(ctx context.Context, userID primitive.O
 	return user.Communities, nil
 }
 
+// GetAllActiveUsers retrieves all active users
+func (s *UserService) GetAllActiveUsers(ctx context.Context) ([]*User, error) {
+	cursor, err := s.Collection.Find(ctx, bson.M{"active": true})
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("Error closing cursor")
+		}
+	}()
+
+	var users []*User
+	if err := cursor.All(ctx, &users); err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
 // GetDefaultNotificationPreferences returns the default notification preferences for new users
 func GetDefaultNotificationPreferences() map[string]bool {
 	return types.GetDefaultNotificationPreferences()

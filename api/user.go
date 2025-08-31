@@ -431,6 +431,21 @@ func (a *API) userProfileHandler(r *Request) (interface{}, error) {
 	}
 	user.NotificationPreferences = notificationPrefs
 
+	// Get unread message counts
+	unreadCounts, err := a.database.MessageService.GetUnreadCounts(context.Background(), objID)
+	if err != nil {
+		log.Error().Err(err).Str("userId", r.UserID).Msg("Failed to get unread message counts")
+		// Continue without unread counts rather than failing
+	} else {
+		// Convert db.UnreadMessageSummary to api.UnreadMessageSummary
+		user.UnreadMessageCount = &UnreadMessageSummary{
+			Total:        unreadCounts.Total,
+			Private:      unreadCounts.Private,
+			Communities:  unreadCounts.Communities,
+			GeneralForum: unreadCounts.GeneralForum,
+		}
+	}
+
 	inviteCodes, err := a.database.InviteCodeService.GetUnusedInviteCodesByOwnerID(context.Background(), objID)
 	if err != nil {
 		log.Error().Err(err).Str("userId", r.UserID).Msg("Failed to get invite codes")
