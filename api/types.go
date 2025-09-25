@@ -544,17 +544,18 @@ func (r *SendMessageRequest) Validate() error {
 
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
-	ID          string           `json:"id"`
-	Type        string           `json:"type"`
-	SenderID    string           `json:"senderId"`
-	SenderName  string           `json:"senderName"`
-	RecipientID string           `json:"recipientId,omitempty"`
-	CommunityID string           `json:"communityId,omitempty"`
-	Content     string           `json:"content,omitempty"`
-	Images      []types.HexBytes `json:"images,omitempty"`
-	CreatedAt   int64            `json:"createdAt"`
-	IsRead      bool             `json:"isRead"`
-	ReplyToID   string           `json:"replyToId,omitempty"`
+	ID            string           `json:"id"`
+	Type          string           `json:"type"`
+	SenderID      string           `json:"senderId"`
+	SenderName    string           `json:"senderName"`
+	RecipientID   string           `json:"recipientId,omitempty"`
+	RecipientName string           `json:"recipientName"`
+	CommunityID   string           `json:"communityId,omitempty"`
+	Content       string           `json:"content,omitempty"`
+	Images        []types.HexBytes `json:"images,omitempty"`
+	CreatedAt     int64            `json:"createdAt"`
+	IsRead        bool             `json:"isRead"`
+	ReplyToID     string           `json:"replyToId,omitempty"`
 }
 
 // FromDB converts a database message to API response
@@ -569,6 +570,10 @@ func (m *MessageResponse) FromDB(dbMessage *db.Message, database *db.Database) *
 	// Get sender name
 	if sender, err := database.UserService.GetUserByID(context.Background(), dbMessage.SenderID); err == nil {
 		m.SenderName = sender.Name
+	}
+
+	if recipient, err := database.UserService.GetUserByID(context.Background(), *dbMessage.RecipientID); err == nil {
+		m.RecipientName = recipient.Name
 	}
 
 	if dbMessage.RecipientID != nil {
