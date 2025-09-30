@@ -611,7 +611,7 @@ type CommunityInfo struct {
 }
 
 // FromDB converts a database conversation to API response
-func (c *ConversationResponse) FromDB(dbConv *db.Conversation, database *db.Database) *ConversationResponse {
+func (c *ConversationResponse) FromDB(dbConv *db.Conversation, database *db.Database, userID primitive.ObjectID) *ConversationResponse {
 	c.ID = dbConv.ID.Hex()
 	c.Type = string(dbConv.Type)
 	c.MessageCount = dbConv.MessageCount
@@ -645,6 +645,31 @@ func (c *ConversationResponse) FromDB(dbConv *db.Conversation, database *db.Data
 		map[string]interface{}{"_id": dbConv.LastMessageID},
 	).Decode(&lastMessage); err == nil {
 		c.LastMessage.FromDB(&lastMessage, database)
+	}
+
+	// Get unread count for this user
+	// Prepare parameters for conversation key generation
+	var senderID, recipientID primitive.ObjectID
+	if len(dbConv.Participants) > 0 {
+		senderID = dbConv.Participants[0]
+		if len(dbConv.Participants) > 1 {
+			recipientID = dbConv.Participants[1]
+		}
+	}
+	conversationKey := db.GenerateConversationKeyFromData(dbConv.Type, senderID, recipientID, dbConv.CommunityID)
+
+	var readStatus db.MessageReadStatus
+	if err := database.MessageService.ReadStatusCollection.FindOne(
+		context.Background(),
+		map[string]interface{}{
+			"userId":          userID,
+			"conversationKey": conversationKey,
+		},
+	).Decode(&readStatus); err == nil {
+		c.UnreadCount = readStatus.UnreadCount
+	} else {
+		// If no read status exists, all messages are unread
+		c.UnreadCount = dbConv.MessageCount
 	}
 
 	return c

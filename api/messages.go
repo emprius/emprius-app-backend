@@ -431,7 +431,7 @@ func (a *API) getConversationsHandler(r *Request) (interface{}, error) {
 	apiConversations := make([]*ConversationResponse, len(conversations))
 	for i, conv := range conversations {
 		apiConversations[i] = &ConversationResponse{}
-		apiConversations[i].FromDB(conv, a.database)
+		apiConversations[i].FromDB(conv, a.database, userID)
 	}
 
 	return PaginatedConversationsResponse{

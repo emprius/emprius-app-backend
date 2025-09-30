@@ -387,3 +387,122 @@ func maxString(a, b string) string {
 	}
 	return b
 }
+
+// TestConversationUnreadCount tests that unread counts are properly tracked per conversation
+func TestConversationUnreadCount(t *testing.T) {
+	c := qt.New(t)
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	defer func() { _ = container.Terminate(ctx) }()
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+
+	// Initialize all required services
+	db.UserService = NewUserService(db)
+	db.MessageService = NewMessageService(db)
+
+	// Create test users
+	user1ID, err := CreateTestUser(ctx, db.UserService, "unreadconv1@test.com", "Unread Conv User One")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create user1"))
+
+	user2ID, err := CreateTestUser(ctx, db.UserService, "unreadconv2@test.com", "Unread Conv User Two")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create user2"))
+
+	// Send messages from user1 to user2
+	for i := 0; i < 3; i++ {
+		message := &Message{
+			Type:        MessageTypePrivate,
+			SenderID:    user1ID,
+			RecipientID: &user2ID,
+			Content:     "Test message",
+			CreatedAt:   time.Now(),
+		}
+
+		_, err = db.MessageService.SendMessage(ctx, message)
+		c.Assert(err, qt.IsNil, qt.Commentf("Failed to send message"))
+	}
+
+	// Get conversations for user2 - should have 3 unread messages
+	conversations, _, err := db.MessageService.GetConversations(ctx, user2ID, MessageTypeAll, 0, 10)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get conversations"))
+	c.Assert(len(conversations), qt.Equals, 1, qt.Commentf("Expected 1 conversation"))
+
+	// Verify unread count before reading
+	conversationKey := (&Message{
+		Type:        MessageTypePrivate,
+		SenderID:    user1ID,
+		RecipientID: &user2ID,
+	}).GenerateConversationKey()
+
+	readStatus := &MessageReadStatus{}
+	err = db.MessageService.ReadStatusCollection.FindOne(
+		ctx,
+		map[string]interface{}{
+			"userId":          user2ID,
+			"conversationKey": conversationKey,
+		},
+	).Decode(readStatus)
+
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get read status"))
+	c.Assert(readStatus.UnreadCount, qt.Equals, int64(3), qt.Commentf("Expected unread count to be 3"))
+
+	// Mark conversation as read
+	err = db.MessageService.MarkConversationAsRead(ctx, user2ID, conversationKey)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to mark conversation as read"))
+
+	// Verify unread count is now 0
+	err = db.MessageService.ReadStatusCollection.FindOne(
+		ctx,
+		map[string]interface{}{
+			"userId":          user2ID,
+			"conversationKey": conversationKey,
+		},
+	).Decode(readStatus)
+
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get read status after marking as read"))
+	c.Assert(readStatus.UnreadCount, qt.Equals, int64(0), qt.Commentf("Expected unread count to be 0 after marking as read"))
+
+	// Send another message - should increment unread count to 1
+	message := &Message{
+		Type:        MessageTypePrivate,
+		SenderID:    user1ID,
+		RecipientID: &user2ID,
+		Content:     "New message after read",
+		CreatedAt:   time.Now(),
+	}
+
+	_, err = db.MessageService.SendMessage(ctx, message)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to send message after read"))
+
+	// Verify unread count is now 1
+	err = db.MessageService.ReadStatusCollection.FindOne(
+		ctx,
+		map[string]interface{}{
+			"userId":          user2ID,
+			"conversationKey": conversationKey,
+		},
+	).Decode(readStatus)
+
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get read status after new message"))
+	c.Assert(readStatus.UnreadCount, qt.Equals, int64(1), qt.Commentf("Expected unread count to be 1 after new message"))
+}
