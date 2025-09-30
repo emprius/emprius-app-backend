@@ -153,27 +153,38 @@ func (m *Message) Validate() error {
 	return nil
 }
 
-// GenerateConversationKey generates a deterministic key for conversation lookups
-func (m *Message) GenerateConversationKey() string {
-	switch m.Type {
+// GenerateConversationKeyFromData generates a conversation key from the given parameters
+// This is a utility function that can be used by both Message objects and other code that needs
+// to generate conversation keys without creating a Message object.
+func GenerateConversationKeyFromData(msgType MessageType, senderID, recipientID primitive.ObjectID, communityID *primitive.ObjectID) string {
+	switch msgType {
 	case MessageTypePrivate:
-		if m.RecipientID == nil {
+		if recipientID.IsZero() {
 			return ""
 		}
 		// Sort IDs to ensure consistent key regardless of sender/recipient order
-		ids := []string{m.SenderID.Hex(), m.RecipientID.Hex()}
+		ids := []string{senderID.Hex(), recipientID.Hex()}
 		sort.Strings(ids)
 		return fmt.Sprintf("private:%s:%s", ids[0], ids[1])
 	case MessageTypeCommunity:
-		if m.CommunityID == nil {
+		if communityID == nil || communityID.IsZero() {
 			return ""
 		}
-		return fmt.Sprintf("community:%s", m.CommunityID.Hex())
+		return fmt.Sprintf("community:%s", communityID.Hex())
 	case MessageTypeGeneral:
 		return "general"
 	default:
 		return ""
 	}
+}
+
+// GenerateConversationKey generates a deterministic key for conversation lookups
+func (m *Message) GenerateConversationKey() string {
+	recipientID := primitive.NilObjectID
+	if m.RecipientID != nil {
+		recipientID = *m.RecipientID
+	}
+	return GenerateConversationKeyFromData(m.Type, m.SenderID, recipientID, m.CommunityID)
 }
 
 // SendMessage sends a new message
