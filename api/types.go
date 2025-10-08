@@ -544,21 +544,23 @@ func (r *SendMessageRequest) Validate() error {
 
 // MessageResponse represents a message in API responses
 type MessageResponse struct {
-	ID          string           `json:"id"`
-	Type        string           `json:"type"`
-	SenderID    string           `json:"senderId"`
-	SenderName  string           `json:"senderName"`
-	RecipientID string           `json:"recipientId,omitempty"`
-	CommunityID string           `json:"communityId,omitempty"`
-	Content     string           `json:"content,omitempty"`
-	Images      []types.HexBytes `json:"images,omitempty"`
-	CreatedAt   int64            `json:"createdAt"`
-	IsRead      bool             `json:"isRead"`
-	ReplyToID   string           `json:"replyToId,omitempty"`
+	ID            string           `json:"id"`
+	Type          string           `json:"type"`
+	SenderID      string           `json:"senderId"`
+	SenderName    string           `json:"senderName"`
+	RecipientID   string           `json:"recipientId,omitempty"`
+	RecipientName string           `json:"recipientName"`
+	CommunityID   string           `json:"communityId,omitempty"`
+	Content       string           `json:"content,omitempty"`
+	Images        []types.HexBytes `json:"images,omitempty"`
+	CreatedAt     int64            `json:"createdAt"`
+	IsRead        bool             `json:"isRead"`
+	ReplyToID     string           `json:"replyToId,omitempty"`
 }
 
 // FromDB converts a database message to API response
-func (m *MessageResponse) FromDB(dbMessage *db.Message, database *db.Database) *MessageResponse {
+// If userID is provided, it will determine the read status for that user
+func (m *MessageResponse) FromDB(dbMessage *db.Message, database *db.Database, userID ...primitive.ObjectID) *MessageResponse {
 	m.ID = dbMessage.ID.Hex()
 	m.Type = string(dbMessage.Type)
 	m.SenderID = dbMessage.SenderID.Hex()
@@ -571,8 +573,12 @@ func (m *MessageResponse) FromDB(dbMessage *db.Message, database *db.Database) *
 		m.SenderName = sender.Name
 	}
 
+	// Get recipient name only if recipient exists
 	if dbMessage.RecipientID != nil {
 		m.RecipientID = dbMessage.RecipientID.Hex()
+		if recipient, err := database.UserService.GetUserByID(context.Background(), *dbMessage.RecipientID); err == nil {
+			m.RecipientName = recipient.Name
+		}
 	}
 
 	if dbMessage.CommunityID != nil {
@@ -581,6 +587,51 @@ func (m *MessageResponse) FromDB(dbMessage *db.Message, database *db.Database) *
 
 	if dbMessage.ReplyToID != nil {
 		m.ReplyToID = dbMessage.ReplyToID.Hex()
+	}
+
+	// Determine read status if userID is provided
+	// isRead indicates whether the OTHER user (recipient) has read the message
+	if len(userID) > 0 && !userID[0].IsZero() {
+		currentUserID := userID[0]
+
+		// Determine which user's read status to check
+		var userToCheck primitive.ObjectID
+
+		if dbMessage.SenderID == currentUserID {
+			// Current user is the sender - check if RECIPIENT has read it
+			if dbMessage.RecipientID != nil && !dbMessage.RecipientID.IsZero() {
+				userToCheck = *dbMessage.RecipientID
+			} else {
+				// For general/community messages, sender cannot know if others read it
+				m.IsRead = false
+				return m
+			}
+		} else {
+			// Current user is the recipient/viewer - check if THEY have read it
+			userToCheck = currentUserID
+		}
+
+		// Check the read status in the database
+		var readStatus db.MessageReadStatus
+		err := database.MessageService.ReadStatusCollection.FindOne(
+			context.Background(),
+			map[string]interface{}{
+				"userId":          userToCheck,
+				"conversationKey": dbMessage.ConversationKey,
+			},
+		).Decode(&readStatus)
+
+		if err == nil {
+			// Message is read if its ID is <= lastReadId
+			// MongoDB ObjectIDs are chronologically ordered, so we can compare them directly
+			m.IsRead = dbMessage.ID.Hex() <= readStatus.LastReadID.Hex()
+		} else {
+			// No read status found, message is unread
+			m.IsRead = false
+		}
+	} else {
+		// No user context provided, default to false
+		m.IsRead = false
 	}
 
 	return m
@@ -606,7 +657,7 @@ type CommunityInfo struct {
 }
 
 // FromDB converts a database conversation to API response
-func (c *ConversationResponse) FromDB(dbConv *db.Conversation, database *db.Database) *ConversationResponse {
+func (c *ConversationResponse) FromDB(dbConv *db.Conversation, database *db.Database, userID primitive.ObjectID) *ConversationResponse {
 	c.ID = dbConv.ID.Hex()
 	c.Type = string(dbConv.Type)
 	c.MessageCount = dbConv.MessageCount
@@ -640,6 +691,31 @@ func (c *ConversationResponse) FromDB(dbConv *db.Conversation, database *db.Data
 		map[string]interface{}{"_id": dbConv.LastMessageID},
 	).Decode(&lastMessage); err == nil {
 		c.LastMessage.FromDB(&lastMessage, database)
+	}
+
+	// Get unread count for this user
+	// Prepare parameters for conversation key generation
+	var senderID, recipientID primitive.ObjectID
+	if len(dbConv.Participants) > 0 {
+		senderID = dbConv.Participants[0]
+		if len(dbConv.Participants) > 1 {
+			recipientID = dbConv.Participants[1]
+		}
+	}
+	conversationKey := db.GenerateConversationKeyFromData(dbConv.Type, senderID, recipientID, dbConv.CommunityID)
+
+	var readStatus db.MessageReadStatus
+	if err := database.MessageService.ReadStatusCollection.FindOne(
+		context.Background(),
+		map[string]interface{}{
+			"userId":          userID,
+			"conversationKey": conversationKey,
+		},
+	).Decode(&readStatus); err == nil {
+		c.UnreadCount = readStatus.UnreadCount
+	} else {
+		// If no read status exists, all messages are unread
+		c.UnreadCount = dbConv.MessageCount
 	}
 
 	return c
