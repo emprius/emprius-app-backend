@@ -490,3 +490,232 @@ func maxString(a, b string) string {
 	}
 	return b
 }
+
+func TestMessageIsReadStatus(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create test users
+	user1JWT, user1ID := c.RegisterAndLoginWithID("readtest1@test.com", "Read Test User One", "password1")
+	user2JWT, user2ID := c.RegisterAndLoginWithID("readtest2@test.com", "Read Test User Two", "password2")
+
+	t.Run("Message IsRead Status - Private Messages", func(t *testing.T) {
+		// Send a message from user1 to user2
+		messageData := map[string]interface{}{
+			"type":        "private",
+			"recipientId": user2ID,
+			"content":     "Test message for isRead status",
+		}
+
+		resp, code := c.Request(http.MethodPost, user1JWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		var sendResp struct {
+			Data api.MessageResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &sendResp)
+		qt.Assert(t, err, qt.IsNil)
+		messageID := sendResp.Data.ID
+
+		// Sender (user1) should see isRead: false (recipient hasn't read it yet)
+		qt.Assert(t, sendResp.Data.IsRead, qt.Equals, false, qt.Commentf("Sender should see isRead: false until recipient reads the message"))
+
+		// User2 retrieves messages - should see the message as unread
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "messages?type=private&conversationWith="+user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var messagesResp struct {
+			Data api.PaginatedMessagesResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(messagesResp.Data.Messages) > 0, qt.IsTrue)
+
+		// Find the message we just sent
+		var foundMessage *api.MessageResponse
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, false, qt.Commentf("Recipient should see unread message as isRead: false"))
+
+		// User2 marks the message as read
+		markReadData := map[string]interface{}{
+			"messageIds": []string{messageID},
+		}
+		resp, code = c.Request(http.MethodPost, user2JWT, markReadData, "messages/read")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// User2 retrieves messages again - should now see the message as read
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "messages?type=private&conversationWith="+user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find the message again
+		foundMessage = nil
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, true, qt.Commentf("After marking as read, message should have isRead: true"))
+
+		// User1 (sender) retrieves messages - should now see it as read (recipient has marked it as read)
+		resp, code = c.Request(http.MethodGet, user1JWT, nil, "messages?type=private&conversationWith="+user2ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundMessage = nil
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, true, qt.Commentf("Sender should see isRead: true after recipient marks message as read"))
+	})
+
+	t.Run("Message IsRead Status - General Messages", func(t *testing.T) {
+		// Send a general message from user1
+		messageData := map[string]interface{}{
+			"type":    "general",
+			"content": "General message for isRead test",
+		}
+
+		resp, code := c.Request(http.MethodPost, user1JWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		var sendResp struct {
+			Data api.MessageResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &sendResp)
+		qt.Assert(t, err, qt.IsNil)
+		messageID := sendResp.Data.ID
+
+		// Sender of general message should see isRead: false (cannot know if others read it)
+		qt.Assert(t, sendResp.Data.IsRead, qt.Equals, false)
+
+		// User2 retrieves general messages - should see as unread
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "messages?type=general")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var messagesResp struct {
+			Data api.PaginatedMessagesResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find the message
+		var foundMessage *api.MessageResponse
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, false, qt.Commentf("General message should be unread for non-sender"))
+
+		// Mark all general messages as read for user2
+		markConversationReadData := map[string]interface{}{
+			"type": "general",
+		}
+		resp, code = c.Request(http.MethodPost, user2JWT, markConversationReadData, "messages/read/conversation")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// User2 retrieves general messages again - should now see as read
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "messages?type=general")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundMessage = nil
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, true, qt.Commentf("After marking conversation as read, message should have isRead: true"))
+	})
+
+	t.Run("Message IsRead Status - Multiple Messages", func(t *testing.T) {
+		// Send multiple messages from user1 to user2
+		var messageIDs []string
+		for i := 0; i < 3; i++ {
+			messageData := map[string]interface{}{
+				"type":        "private",
+				"recipientId": user2ID,
+				"content":     fmt.Sprintf("Test message %d for batch read status", i+1),
+			}
+
+			resp, code := c.Request(http.MethodPost, user1JWT, messageData, "messages")
+			qt.Assert(t, code, qt.Equals, 201)
+
+			var sendResp struct {
+				Data api.MessageResponse `json:"data"`
+			}
+			err := json.Unmarshal(resp, &sendResp)
+			qt.Assert(t, err, qt.IsNil)
+			messageIDs = append(messageIDs, sendResp.Data.ID)
+		}
+
+		// User2 retrieves messages - all should be unread
+		resp, code := c.Request(http.MethodGet, user2JWT, nil, "messages?type=private&conversationWith="+user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var messagesResp struct {
+			Data api.PaginatedMessagesResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		unreadCount := 0
+		for _, msg := range messagesResp.Data.Messages {
+			for _, id := range messageIDs {
+				if msg.ID == id && !msg.IsRead {
+					unreadCount++
+					break
+				}
+			}
+		}
+		qt.Assert(t, unreadCount, qt.Equals, 3, qt.Commentf("All 3 new messages should be unread"))
+
+		// Mark entire conversation as read
+		conversationKey := fmt.Sprintf("private:%s:%s", minString(user1ID, user2ID), maxString(user1ID, user2ID))
+		markConversationReadData := map[string]interface{}{
+			"conversationKey": conversationKey,
+		}
+		resp, code = c.Request(http.MethodPost, user2JWT, markConversationReadData, "messages/read/conversation")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// User2 retrieves messages again - all should now be read
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "messages?type=private&conversationWith="+user1ID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		readCount := 0
+		for _, msg := range messagesResp.Data.Messages {
+			for _, id := range messageIDs {
+				if msg.ID == id && msg.IsRead {
+					readCount++
+					break
+				}
+			}
+		}
+		qt.Assert(t, readCount, qt.Equals, 3, qt.Commentf("All 3 messages should now be marked as read"))
+	})
+}

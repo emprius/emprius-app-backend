@@ -148,7 +148,7 @@ func (a *API) sendMessageHandler(r *Request) (interface{}, error) {
 
 	// Convert to API response
 	response := &MessageResponse{}
-	messageResponse := response.FromDB(sentMessage, a.database)
+	messageResponse := response.FromDB(sentMessage, a.database, userID)
 
 	// Return with 201 Created status
 	return &StatusResponse{
@@ -232,7 +232,7 @@ func (a *API) getMessagesHandler(r *Request) (interface{}, error) {
 	apiMessages := make([]*MessageResponse, len(messages))
 	for i, msg := range messages {
 		apiMessages[i] = &MessageResponse{}
-		apiMessages[i].FromDB(msg, a.database)
+		apiMessages[i].FromDB(msg, a.database, userID)
 	}
 
 	return PaginatedMessagesResponse{
@@ -494,7 +494,7 @@ func (a *API) searchMessagesHandler(r *Request) (interface{}, error) {
 	apiMessages := make([]*MessageResponse, len(messages))
 	for i, msg := range messages {
 		apiMessages[i] = &MessageResponse{}
-		apiMessages[i].FromDB(msg, a.database)
+		apiMessages[i].FromDB(msg, a.database, userID)
 	}
 
 	return PaginatedMessagesResponse{
