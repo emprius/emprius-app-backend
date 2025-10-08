@@ -545,7 +545,7 @@ func TestMessageIsReadStatus(t *testing.T) {
 		markReadData := map[string]interface{}{
 			"messageIds": []string{messageID},
 		}
-		resp, code = c.Request(http.MethodPost, user2JWT, markReadData, "messages/read")
+		_, code = c.Request(http.MethodPost, user2JWT, markReadData, "messages/read")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// User2 retrieves messages again - should now see the message as read
@@ -629,7 +629,7 @@ func TestMessageIsReadStatus(t *testing.T) {
 		markConversationReadData := map[string]interface{}{
 			"type": "general",
 		}
-		resp, code = c.Request(http.MethodPost, user2JWT, markConversationReadData, "messages/read/conversation")
+		_, code = c.Request(http.MethodPost, user2JWT, markConversationReadData, "messages/read/conversation")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// User2 retrieves general messages again - should now see as read
@@ -697,7 +697,7 @@ func TestMessageIsReadStatus(t *testing.T) {
 		markConversationReadData := map[string]interface{}{
 			"conversationKey": conversationKey,
 		}
-		resp, code = c.Request(http.MethodPost, user2JWT, markConversationReadData, "messages/read/conversation")
+		_, code = c.Request(http.MethodPost, user2JWT, markConversationReadData, "messages/read/conversation")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// User2 retrieves messages again - all should now be read
