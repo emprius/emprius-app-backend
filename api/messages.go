@@ -107,9 +107,9 @@ func (a *API) sendMessageHandler(r *Request) (interface{}, error) {
 		message.RecipientID = &recipientID
 
 	case MessageTypeCommunity:
-		communityID, err := primitive.ObjectIDFromHex(req.CommunityID)
+		communityID, err := primitive.ObjectIDFromHex(req.RecipientID)
 		if err != nil {
-			return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid community ID"))
+			return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid recipient ID (community ID)"))
 		}
 		message.CommunityID = &communityID
 
@@ -201,7 +201,7 @@ func (a *API) getMessagesHandler(r *Request) (interface{}, error) {
 
 	// Add community filter
 	if messageType[0] == MessageTypeCommunity {
-		if communityID := r.Context.URLParam("communityId"); communityID != nil {
+		if communityID := r.Context.URLParam("conversationWith"); communityID != nil {
 			cID, err := primitive.ObjectIDFromHex(communityID[0])
 			if err != nil {
 				return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid community ID"))
@@ -317,7 +317,6 @@ func (a *API) markAllMessagesAsReadHandler(r *Request) (interface{}, error) {
 	var req struct {
 		Type             string `json:"type,omitempty"`
 		ConversationWith string `json:"conversationWith,omitempty"`
-		CommunityID      string `json:"communityId,omitempty"`
 		ConversationKey  string `json:"conversationKey,omitempty"` // Legacy format
 	}
 	if err := json.Unmarshal(r.Data, &req); err != nil {
@@ -354,12 +353,12 @@ func (a *API) markAllMessagesAsReadHandler(r *Request) (interface{}, error) {
 			conversationKey = message.GenerateConversationKey()
 
 		case MessageTypeCommunity:
-			if req.CommunityID == "" {
-				return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("communityId is required for community messages"))
+			if req.ConversationWith == "" {
+				return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("conversationWith (community ID) is required for community messages"))
 			}
-			communityID, err := primitive.ObjectIDFromHex(req.CommunityID)
+			communityID, err := primitive.ObjectIDFromHex(req.ConversationWith)
 			if err != nil {
-				return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid community ID"))
+				return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("invalid conversationWith (community ID)"))
 			}
 			conversationKey = fmt.Sprintf("community:%s", communityID.Hex())
 
