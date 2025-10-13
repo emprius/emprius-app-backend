@@ -65,12 +65,10 @@ func (a *API) sendMessageHandler(r *Request) (interface{}, error) {
 	}
 
 	// Handle both imageHashes and images fields for compatibility
-	var allImageHashes []string
-	allImageHashes = append(allImageHashes, req.ImageHashes...)
-	allImageHashes = append(allImageHashes, req.Images...)
+	var images []string = req.Images
 
 	// Additional validation for image limits
-	if len(allImageHashes) > 10 {
+	if len(images) > 10 {
 		return nil, ErrInvalidRequestBodyData.WithErr(fmt.Errorf("message cannot have more than 10 images"))
 	}
 
@@ -82,9 +80,9 @@ func (a *API) sendMessageHandler(r *Request) (interface{}, error) {
 	}
 
 	// Convert image hashes - let the database layer handle validation
-	if len(allImageHashes) > 0 {
-		message.Images = make([]types.HexBytes, len(allImageHashes))
-		for i, hashStr := range allImageHashes {
+	if len(images) > 0 {
+		message.Images = make([]types.HexBytes, len(images))
+		for i, hashStr := range images {
 			// Try to convert hex string to bytes, but be lenient for testing
 			hashBytes, err := hex.DecodeString(hashStr)
 			if err != nil {
