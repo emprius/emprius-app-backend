@@ -506,3 +506,237 @@ func TestConversationUnreadCount(t *testing.T) {
 	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get read status after new message"))
 	c.Assert(readStatus.UnreadCount, qt.Equals, int64(1), qt.Commentf("Expected unread count to be 1 after new message"))
 }
+
+// TestCommunityMessageReadPermissions tests that only community members can read community messages
+func TestCommunityMessageReadPermissions(t *testing.T) {
+	c := qt.New(t)
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	defer func() { _ = container.Terminate(ctx) }()
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+
+	// Initialize all required services
+	db.UserService = NewUserService(db)
+	db.CommunityService = NewCommunityService(db)
+	db.MessageService = NewMessageService(db)
+
+	// Create test users
+	memberID, err := CreateTestUser(ctx, db.UserService, "member@test.com", "Community Member")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create member user"))
+
+	nonMemberID, err := CreateTestUser(ctx, db.UserService, "nonmember@test.com", "Non Member")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create non-member user"))
+
+	// Create a test community
+	community := &Community{
+		Name:      "Test Community",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		OwnerID:   memberID,
+	}
+
+	result, err := db.CommunityService.Collection.InsertOne(ctx, community)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create community"))
+	communityID := result.InsertedID.(primitive.ObjectID)
+
+	// Add member to community
+	err = db.UserService.AddUserToCommunity(ctx, memberID, communityID, CommunityRoleUser)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to add user to community"))
+
+	// Send a community message from member
+	message := &Message{
+		Type:        MessageTypeCommunity,
+		SenderID:    memberID,
+		CommunityID: &communityID,
+		Content:     "Hello community!",
+		CreatedAt:   time.Now(),
+	}
+
+	sentMessage, err := db.MessageService.SendMessage(ctx, message)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to send community message"))
+	messageID := sentMessage.ID
+
+	// Test 1: Community member CAN mark message as read
+	err = db.MessageService.MarkAsRead(ctx, memberID, messageID)
+	c.Assert(err, qt.IsNil, qt.Commentf("Community member should be able to mark message as read"))
+
+	// Test 2: Non-member CANNOT mark message as read
+	err = db.MessageService.MarkAsRead(ctx, nonMemberID, messageID)
+	c.Assert(err, qt.Not(qt.IsNil), qt.Commentf("Non-member should NOT be able to mark message as read"))
+	c.Assert(err.Error(), qt.Contains, "does not have permission", qt.Commentf("Error should indicate permission denied"))
+
+	// Test 3: Test canUserReadMessage directly for member
+	canRead := db.MessageService.canUserReadMessage(ctx, memberID, sentMessage)
+	c.Assert(canRead, qt.IsTrue, qt.Commentf("Member should be able to read community message"))
+
+	// Test 4: Test canUserReadMessage directly for non-member
+	canRead = db.MessageService.canUserReadMessage(ctx, nonMemberID, sentMessage)
+	c.Assert(canRead, qt.IsFalse, qt.Commentf("Non-member should NOT be able to read community message"))
+
+	// Test 5: Test MarkConversationAsRead for member
+	conversationKey := sentMessage.GenerateConversationKey()
+	err = db.MessageService.MarkConversationAsRead(ctx, memberID, conversationKey)
+	c.Assert(err, qt.IsNil, qt.Commentf("Community member should be able to mark conversation as read"))
+
+	// Test 6: Test MarkConversationAsRead for non-member
+	err = db.MessageService.MarkConversationAsRead(ctx, nonMemberID, conversationKey)
+	c.Assert(err, qt.Not(qt.IsNil), qt.Commentf("Non-member should NOT be able to mark conversation as read"))
+	c.Assert(err.Error(), qt.Contains, "does not have permission", qt.Commentf("Error should indicate permission denied"))
+}
+
+// TestCanUserReadMessage tests the canUserReadMessage function for all message types
+func TestCanUserReadMessage(t *testing.T) {
+	c := qt.New(t)
+	ctx := context.Background()
+
+	// Start MongoDB container
+	container, err := StartMongoContainer(ctx)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to start MongoDB container"))
+	defer func() { _ = container.Terminate(ctx) }()
+
+	// Get MongoDB connection string
+	mongoURI, err := container.Endpoint(ctx, "mongodb")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to get MongoDB connection string"))
+
+	// Create a MongoDB client
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create MongoDB client"))
+	defer func() { _ = client.Disconnect(ctx) }()
+
+	// Use a random database name for isolation
+	dbName := RandomDatabaseName()
+	database := client.Database(dbName)
+
+	// Initialize Database with all services
+	db := &Database{
+		Client:   client,
+		Database: database,
+	}
+
+	// Initialize all required services
+	db.UserService = NewUserService(db)
+	db.CommunityService = NewCommunityService(db)
+	db.MessageService = NewMessageService(db)
+
+	// Create test users
+	user1ID, err := CreateTestUser(ctx, db.UserService, "testread1@test.com", "Test User One")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create user1"))
+
+	user2ID, err := CreateTestUser(ctx, db.UserService, "testread2@test.com", "Test User Two")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create user2"))
+
+	user3ID, err := CreateTestUser(ctx, db.UserService, "testread3@test.com", "Test User Three")
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create user3"))
+
+	// Create a test community
+	community := &Community{
+		Name:      "Read Test Community",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		OwnerID:   user1ID,
+	}
+	result, err := db.CommunityService.Collection.InsertOne(ctx, community)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to create community"))
+	communityID := result.InsertedID.(primitive.ObjectID)
+
+	// Add user1 to community
+	err = db.UserService.AddUserToCommunity(ctx, user1ID, communityID, CommunityRoleUser)
+	c.Assert(err, qt.IsNil, qt.Commentf("Failed to add user1 to community"))
+
+	c.Run("Private Message", func(c *qt.C) {
+		// Test private message between user1 and user2
+		privateMsg := &Message{
+			Type:        MessageTypePrivate,
+			SenderID:    user1ID,
+			RecipientID: &user2ID,
+			Content:     "Private message",
+		}
+
+		// Sender can read
+		canRead := db.MessageService.canUserReadMessage(ctx, user1ID, privateMsg)
+		c.Assert(canRead, qt.IsTrue, qt.Commentf("Sender should be able to read private message"))
+
+		// Recipient can read
+		canRead = db.MessageService.canUserReadMessage(ctx, user2ID, privateMsg)
+		c.Assert(canRead, qt.IsTrue, qt.Commentf("Recipient should be able to read private message"))
+
+		// Other user cannot read
+		canRead = db.MessageService.canUserReadMessage(ctx, user3ID, privateMsg)
+		c.Assert(canRead, qt.IsFalse, qt.Commentf("Other user should NOT be able to read private message"))
+	})
+
+	c.Run("Community Message", func(c *qt.C) {
+		// Test community message
+		communityMsg := &Message{
+			Type:        MessageTypeCommunity,
+			SenderID:    user1ID,
+			CommunityID: &communityID,
+			Content:     "Community message",
+		}
+
+		// Community member can read
+		canRead := db.MessageService.canUserReadMessage(ctx, user1ID, communityMsg)
+		c.Assert(canRead, qt.IsTrue, qt.Commentf("Community member should be able to read community message"))
+
+		// Non-member cannot read
+		canRead = db.MessageService.canUserReadMessage(ctx, user2ID, communityMsg)
+		c.Assert(canRead, qt.IsFalse, qt.Commentf("Non-member should NOT be able to read community message"))
+
+		canRead = db.MessageService.canUserReadMessage(ctx, user3ID, communityMsg)
+		c.Assert(canRead, qt.IsFalse, qt.Commentf("Non-member should NOT be able to read community message"))
+	})
+
+	c.Run("General Message", func(c *qt.C) {
+		// Test general message
+		generalMsg := &Message{
+			Type:     MessageTypeGeneral,
+			SenderID: user1ID,
+			Content:  "General message",
+		}
+
+		// All users can read general messages
+		canRead := db.MessageService.canUserReadMessage(ctx, user1ID, generalMsg)
+		c.Assert(canRead, qt.IsTrue, qt.Commentf("User1 should be able to read general message"))
+
+		canRead = db.MessageService.canUserReadMessage(ctx, user2ID, generalMsg)
+		c.Assert(canRead, qt.IsTrue, qt.Commentf("User2 should be able to read general message"))
+
+		canRead = db.MessageService.canUserReadMessage(ctx, user3ID, generalMsg)
+		c.Assert(canRead, qt.IsTrue, qt.Commentf("User3 should be able to read general message"))
+	})
+
+	c.Run("Community Message with nil CommunityID", func(c *qt.C) {
+		// Test edge case: community message with nil community ID
+		invalidMsg := &Message{
+			Type:     MessageTypeCommunity,
+			SenderID: user1ID,
+			Content:  "Invalid community message",
+			// CommunityID is nil
+		}
+
+		// Should return false for any user
+		canRead := db.MessageService.canUserReadMessage(ctx, user1ID, invalidMsg)
+		c.Assert(canRead, qt.IsFalse, qt.Commentf("Should return false for community message with nil CommunityID"))
+	})
+}

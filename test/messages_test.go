@@ -491,6 +491,308 @@ func maxString(a, b string) string {
 	return b
 }
 
+func TestCommunityMessageIsReadStatus(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create test users
+	senderJWT, _ := c.RegisterAndLoginWithID("communityreadtest1@test.com", "Community Sender", "password1")
+	member1JWT, _ := c.RegisterAndLoginWithID("communityreadtest2@test.com", "Community Member 1", "password2")
+	member2JWT, _ := c.RegisterAndLoginWithID("communityreadtest3@test.com", "Community Member 2", "password3")
+
+	// Create a community
+	communityData := map[string]interface{}{
+		"name":  "Test Community for Read Status",
+		"image": "",
+	}
+
+	resp, code := c.Request(http.MethodPost, senderJWT, communityData, "communities")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var communityResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(resp, &communityResp)
+	qt.Assert(t, err, qt.IsNil)
+	communityID := communityResp.Data.ID
+
+	// Add member1 and member2 to the community
+	_, code = c.Request(http.MethodPost, senderJWT, nil, fmt.Sprintf("communities/%s/members/%s", communityID, "communityreadtest2@test.com"))
+	qt.Assert(t, code, qt.Equals, 200)
+
+	_, code = c.Request(http.MethodPost, senderJWT, nil, fmt.Sprintf("communities/%s/members/%s", communityID, "communityreadtest3@test.com"))
+	qt.Assert(t, code, qt.Equals, 200)
+
+	t.Run("Community Message IsRead - Shows unread when no members have read it", func(t *testing.T) {
+		// Send a community message
+		messageData := map[string]interface{}{
+			"type":        "community",
+			"recipientId": communityID, // Community ID as recipient
+			"content":     "Hello community! This message is unread.",
+		}
+
+		resp, code := c.Request(http.MethodPost, senderJWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		var sendResp struct {
+			Data api.MessageResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &sendResp)
+		qt.Assert(t, err, qt.IsNil)
+		messageID := sendResp.Data.ID
+
+		// Sender retrieves the message - should see isRead: false (no one has read it yet)
+		resp, code = c.Request(http.MethodGet, senderJWT, nil, "messages?type=community&conversationWith="+communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var messagesResp struct {
+			Data api.PaginatedMessagesResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find the message
+		var foundMessage *api.MessageResponse
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, false, qt.Commentf("Community message should be unread when no members have read it"))
+	})
+
+	t.Run("Community Message IsRead - Shows read when any member has read it", func(t *testing.T) {
+		// Send another community message
+		messageData := map[string]interface{}{
+			"type":        "community",
+			"recipientId": communityID,
+			"content":     "Hello community! Someone will read this.",
+		}
+
+		resp, code := c.Request(http.MethodPost, senderJWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		var sendResp struct {
+			Data api.MessageResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &sendResp)
+		qt.Assert(t, err, qt.IsNil)
+		messageID := sendResp.Data.ID
+
+		// Sender retrieves the message - should initially be unread
+		resp, code = c.Request(http.MethodGet, senderJWT, nil, "messages?type=community&conversationWith="+communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var messagesResp struct {
+			Data api.PaginatedMessagesResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		var foundMessage *api.MessageResponse
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, false, qt.Commentf("Initially, community message should be unread"))
+
+		// Member1 marks the message as read
+		markReadData := map[string]interface{}{
+			"messageIds": []string{messageID},
+		}
+		_, code = c.Request(http.MethodPost, member1JWT, markReadData, "messages/read")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Sender retrieves the message again - should now see it as read
+		resp, code = c.Request(http.MethodGet, senderJWT, nil, "messages?type=community&conversationWith="+communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundMessage = nil
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, true, qt.Commentf("Community message should be read after any member marks it as read"))
+	})
+
+	t.Run("Community Message IsRead - Members see their own read status", func(t *testing.T) {
+		// Send another community message
+		messageData := map[string]interface{}{
+			"type":        "community",
+			"recipientId": communityID,
+			"content":     "Testing member's individual read status.",
+		}
+
+		resp, code := c.Request(http.MethodPost, senderJWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		var sendResp struct {
+			Data api.MessageResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &sendResp)
+		qt.Assert(t, err, qt.IsNil)
+		messageID := sendResp.Data.ID
+
+		// Member1 retrieves messages - should see as unread
+		resp, code = c.Request(http.MethodGet, member1JWT, nil, "messages?type=community&conversationWith="+communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var messagesResp struct {
+			Data api.PaginatedMessagesResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		var foundMessage *api.MessageResponse
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, false, qt.Commentf("Member1 should see unread message as unread"))
+
+		// Member1 marks it as read
+		markReadData := map[string]interface{}{
+			"messageIds": []string{messageID},
+		}
+		_, code = c.Request(http.MethodPost, member1JWT, markReadData, "messages/read")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Member1 retrieves again - should now see as read
+		resp, code = c.Request(http.MethodGet, member1JWT, nil, "messages?type=community&conversationWith="+communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundMessage = nil
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, true, qt.Commentf("Member1 should see read message as read"))
+
+		// Member2 retrieves - should still see as unread
+		resp, code = c.Request(http.MethodGet, member2JWT, nil, "messages?type=community&conversationWith="+communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundMessage = nil
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, false, qt.Commentf("Member2 should still see message as unread"))
+
+		// But sender should see it as read (because member1 read it)
+		resp, code = c.Request(http.MethodGet, senderJWT, nil, "messages?type=community&conversationWith="+communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundMessage = nil
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID {
+				foundMessage = msg
+				break
+			}
+		}
+		qt.Assert(t, foundMessage, qt.Not(qt.IsNil))
+		qt.Assert(t, foundMessage.IsRead, qt.Equals, true, qt.Commentf("Sender should see message as read when any member has read it"))
+	})
+
+	t.Run("Community Message IsRead - Multiple messages with selective reading", func(t *testing.T) {
+		// Send two messages
+		messageData1 := map[string]interface{}{
+			"type":        "community",
+			"recipientId": communityID,
+			"content":     "First community message.",
+		}
+
+		resp, code := c.Request(http.MethodPost, senderJWT, messageData1, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		var sendResp1 struct {
+			Data api.MessageResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &sendResp1)
+		qt.Assert(t, err, qt.IsNil)
+		messageID1 := sendResp1.Data.ID
+
+		messageData2 := map[string]interface{}{
+			"type":        "community",
+			"recipientId": communityID,
+			"content":     "Second community message.",
+		}
+
+		resp, code = c.Request(http.MethodPost, senderJWT, messageData2, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		var sendResp2 struct {
+			Data api.MessageResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &sendResp2)
+		qt.Assert(t, err, qt.IsNil)
+		messageID2 := sendResp2.Data.ID
+
+		// Member1 marks only the first message as read
+		markReadData := map[string]interface{}{
+			"messageIds": []string{messageID1},
+		}
+		_, code = c.Request(http.MethodPost, member1JWT, markReadData, "messages/read")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Sender retrieves both messages
+		resp, code = c.Request(http.MethodGet, senderJWT, nil, "messages?type=community&conversationWith="+communityID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var messagesResp struct {
+			Data api.PaginatedMessagesResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &messagesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Check both messages
+		var message1Read, message2Read *bool
+		for _, msg := range messagesResp.Data.Messages {
+			if msg.ID == messageID1 {
+				message1Read = &msg.IsRead
+			} else if msg.ID == messageID2 {
+				message2Read = &msg.IsRead
+			}
+		}
+
+		qt.Assert(t, message1Read, qt.Not(qt.IsNil))
+		qt.Assert(t, *message1Read, qt.Equals, true, qt.Commentf("First message should be read"))
+
+		qt.Assert(t, message2Read, qt.Not(qt.IsNil))
+		qt.Assert(t, *message2Read, qt.Equals, false, qt.Commentf("Second message should still be unread"))
+	})
+}
+
 func TestMessageIsReadStatus(t *testing.T) {
 	c := utils.NewTestService(t)
 

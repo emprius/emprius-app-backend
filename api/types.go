@@ -597,11 +597,40 @@ func (m *MessageResponse) FromDB(dbMessage *db.Message, database *db.Database, u
 		var userToCheck primitive.ObjectID
 
 		if dbMessage.SenderID == currentUserID {
-			// Current user is the sender - check if RECIPIENT has read it
+			// Current user is the sender
 			if dbMessage.RecipientID != nil && !dbMessage.RecipientID.IsZero() {
+				// Private message - check if RECIPIENT has read it
 				userToCheck = *dbMessage.RecipientID
+			} else if dbMessage.Type == db.MessageTypeCommunity {
+				// Community message - check if ANY member has read it
+				cursor, err := database.MessageService.ReadStatusCollection.Find(
+					context.Background(),
+					map[string]interface{}{
+						"conversationKey": dbMessage.ConversationKey,
+					},
+				)
+				if err == nil {
+					defer func() {
+						if err := cursor.Close(context.Background()); err != nil {
+							log.Error().Err(err).Msg("error closing cursor in FromDB")
+						}
+					}()
+					var readStatuses []db.MessageReadStatus
+					if err := cursor.All(context.Background(), &readStatuses); err == nil {
+						// Check if any user has read this message or later
+						for _, status := range readStatuses {
+							if dbMessage.ID.Hex() <= status.LastReadID.Hex() {
+								m.IsRead = true
+								return m
+							}
+						}
+					}
+				}
+				// No one has read it yet
+				m.IsRead = false
+				return m
 			} else {
-				// For general/community messages, sender cannot know if others read it
+				// For general messages, sender cannot know if others read it
 				m.IsRead = false
 				return m
 			}

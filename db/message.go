@@ -310,7 +310,7 @@ func (s *MessageService) MarkAsRead(ctx context.Context, userID, messageID primi
 	}
 
 	// Check if user has permission to read this message
-	if !s.canUserReadMessage(userID, &message) {
+	if !s.canUserReadMessage(ctx, userID, &message) {
 		return fmt.Errorf("user does not have permission to read this message")
 	}
 
@@ -335,7 +335,7 @@ func (s *MessageService) MarkConversationAsRead(ctx context.Context, userID prim
 	}
 
 	// Check permission
-	if !s.canUserReadMessage(userID, &latestMessage) {
+	if !s.canUserReadMessage(ctx, userID, &latestMessage) {
 		return fmt.Errorf("user does not have permission to read messages in this conversation")
 	}
 
@@ -687,13 +687,25 @@ func (s *MessageService) generatePrivateConversationKey(userID1, userID2 primiti
 	return fmt.Sprintf("private:%s:%s", ids[0], ids[1])
 }
 
-func (s *MessageService) canUserReadMessage(userID primitive.ObjectID, message *Message) bool {
+func (s *MessageService) canUserReadMessage(ctx context.Context, userID primitive.ObjectID, message *Message) bool {
 	switch message.Type {
 	case MessageTypePrivate:
 		return message.SenderID == userID || (message.RecipientID != nil && *message.RecipientID == userID)
 	case MessageTypeCommunity:
-		// Would need to check community membership - simplified for now
-		return true
+		if message.CommunityID == nil {
+			return false
+		}
+		user, err := s.UserService.GetUserByID(ctx, userID)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to get user")
+			return false
+		}
+		for _, comm := range user.Communities {
+			if comm.ID == *message.CommunityID {
+				return true
+			}
+		}
+		return false
 	case MessageTypeGeneral:
 		return true
 	default:
