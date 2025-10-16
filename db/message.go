@@ -532,7 +532,7 @@ func (s *MessageService) GetConversations(ctx context.Context, userID primitive.
 
 	// Add user participation filter
 	switch convType {
-	case MessageTypePrivate, "all":
+	case MessageTypePrivate:
 		filter["participants"] = userID
 	case MessageTypeCommunity:
 		// Get user's communities

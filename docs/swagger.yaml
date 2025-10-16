@@ -628,11 +628,7 @@ components:
         recipientId:
           type: string
           format: objectid
-          description: MongoDB ObjectID of the recipient (required for private messages)
-        communityId:
-          type: string
-          format: objectid
-          description: MongoDB ObjectID of the community (required for community messages)
+          description: MongoDB ObjectID of the recipient for private messages, or community ID for community messages (required for private and community messages)
         content:
           type: string
           maxLength: 5000
@@ -996,7 +992,7 @@ paths:
                 summary: Community message
                 value:
                   type: "community"
-                  communityId: "507f1f77bcf86cd799439012"
+                  recipientId: "507f1f77bcf86cd799439012"
                   content: "Welcome to our community!"
               general_message:
                 summary: General forum message

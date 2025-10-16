@@ -506,9 +506,8 @@ const (
 
 // SendMessageRequest represents a request to send a message
 type SendMessageRequest struct {
-	Type        string   `json:"type"` // private|community|general
-	RecipientID string   `json:"recipientId,omitempty"`
-	CommunityID string   `json:"communityId,omitempty"`
+	Type        string   `json:"type"`                  // private|community|general
+	RecipientID string   `json:"recipientId,omitempty"` // User ID for private, Community ID for community
 	Content     string   `json:"content,omitempty"`
 	ImageHashes []string `json:"imageHashes,omitempty"` // Hashes from image upload
 	Images      []string `json:"images,omitempty"`      // Alternative field name for compatibility
@@ -535,8 +534,8 @@ func (r *SendMessageRequest) Validate() error {
 		return fmt.Errorf("recipient ID is required for private messages")
 	}
 
-	if r.Type == "community" && r.CommunityID == "" {
-		return fmt.Errorf("community ID is required for community messages")
+	if r.Type == "community" && r.RecipientID == "" {
+		return fmt.Errorf("recipient ID (community ID) is required for community messages")
 	}
 
 	return nil
@@ -744,6 +743,5 @@ type PaginatedConversationsResponse struct {
 // MarkMessagesReadRequest represents a request to mark messages as read
 type MarkMessagesReadRequest struct {
 	Type             string `json:"type,omitempty"`
-	ConversationWith string `json:"conversationWith,omitempty"`
-	CommunityID      string `json:"communityId,omitempty"`
+	ConversationWith string `json:"conversationWith,omitempty"` // User ID for private, Community ID for community
 }
