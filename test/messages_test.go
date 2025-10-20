@@ -496,8 +496,8 @@ func TestCommunityMessageIsReadStatus(t *testing.T) {
 
 	// Create test users
 	senderJWT, _ := c.RegisterAndLoginWithID("communityreadtest1@test.com", "Community Sender", "password1")
-	member1JWT, _ := c.RegisterAndLoginWithID("communityreadtest2@test.com", "Community Member 1", "password2")
-	member2JWT, _ := c.RegisterAndLoginWithID("communityreadtest3@test.com", "Community Member 2", "password3")
+	member1JWT, member1ID := c.RegisterAndLoginWithID("communityreadtest2@test.com", "Community Member 1", "password2")
+	member2JWT, member2ID := c.RegisterAndLoginWithID("communityreadtest3@test.com", "Community Member 2", "password3")
 
 	// Create a community
 	communityData := map[string]interface{}{
@@ -518,10 +518,35 @@ func TestCommunityMessageIsReadStatus(t *testing.T) {
 	communityID := communityResp.Data.ID
 
 	// Add member1 and member2 to the community
-	_, code = c.Request(http.MethodPost, senderJWT, nil, fmt.Sprintf("communities/%s/members/%s", communityID, "communityreadtest2@test.com"))
+	resp, code = c.Request(http.MethodPost, senderJWT, nil, fmt.Sprintf("communities/%s/members/%s", communityID, member1ID))
 	qt.Assert(t, code, qt.Equals, 200)
 
-	_, code = c.Request(http.MethodPost, senderJWT, nil, fmt.Sprintf("communities/%s/members/%s", communityID, "communityreadtest3@test.com"))
+	var invite1Resp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(resp, &invite1Resp)
+	qt.Assert(t, err, qt.IsNil)
+	invite1ID := invite1Resp.Data.ID
+
+	resp, code = c.Request(http.MethodPost, senderJWT, nil, fmt.Sprintf("communities/%s/members/%s", communityID, member2ID))
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var invite2Resp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	err = json.Unmarshal(resp, &invite2Resp)
+	qt.Assert(t, err, qt.IsNil)
+	invite2ID := invite2Resp.Data.ID
+
+	// Accept the invitations so members become actual community members
+	_, code = c.Request(http.MethodPut, member1JWT, map[string]interface{}{"status": "ACCEPTED"}, fmt.Sprintf("communities/invites/%s", invite1ID))
+	qt.Assert(t, code, qt.Equals, 200)
+
+	_, code = c.Request(http.MethodPut, member2JWT, map[string]interface{}{"status": "ACCEPTED"}, fmt.Sprintf("communities/invites/%s", invite2ID))
 	qt.Assert(t, code, qt.Equals, 200)
 
 	t.Run("Community Message IsRead - Shows unread when no members have read it", func(t *testing.T) {
