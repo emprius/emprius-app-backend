@@ -233,7 +233,7 @@ func (a *API) editTool(id int64, newTool *Tool, user *db.User) (int64, error) {
 		tool.ToolValuation = *newTool.ToolValuation
 		tool.EstimatedDailyCost = *newTool.ToolValuation / types.FactorCostToPrice
 	}
-	if newTool.Cost != 0 {
+	if newTool.Cost != tool.Cost && newTool.Cost >= 0 {
 		tool.Cost = newTool.Cost
 	}
 	if newTool.Height != 0 {
