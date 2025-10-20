@@ -278,7 +278,7 @@ type Tool struct {
 	TransportOptions   []int              `json:"transportOptions"`
 	Category           int                `json:"toolCategory"`
 	Location           Location           `json:"location"`
-	Cost               uint64             `json:"cost"`
+	Cost               *uint64            `json:"cost,omitempty"`
 	ToolValuation      *uint64            `json:"toolValuation"`
 	EstimatedDailyCost uint64             `json:"estimatedDailyCost"`
 	Height             uint32             `json:"height"`
@@ -304,7 +304,7 @@ func (t *Tool) FromDBTool(dbt *db.Tool, database *db.Database, useRealLocation .
 	t.IsAvailable = &dbt.IsAvailable
 	t.MayBeFree = &dbt.MayBeFree
 	t.AskWithFee = &dbt.AskWithFee
-	t.Cost = dbt.Cost
+	t.Cost = &dbt.Cost
 	for i := range dbt.Images {
 		t.Images = append(t.Images, dbt.Images[i].Hash)
 	}
