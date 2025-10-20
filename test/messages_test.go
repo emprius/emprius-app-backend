@@ -803,9 +803,10 @@ func TestCommunityMessageIsReadStatus(t *testing.T) {
 		// Check both messages
 		var message1Read, message2Read *bool
 		for _, msg := range messagesResp.Data.Messages {
-			if msg.ID == messageID1 {
+			switch msg.ID {
+			case messageID1:
 				message1Read = &msg.IsRead
-			} else if msg.ID == messageID2 {
+			case messageID2:
 				message2Read = &msg.IsRead
 			}
 		}
