@@ -582,6 +582,7 @@ func (m *MessageResponse) FromDB(dbMessage *db.Message, database *db.Database, u
 
 	if dbMessage.CommunityID != nil {
 		m.CommunityID = dbMessage.CommunityID.Hex()
+		m.RecipientID = m.CommunityID // Send chat id as recipientId for community messages
 	}
 
 	if dbMessage.ReplyToID != nil {
