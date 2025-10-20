@@ -121,7 +121,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	// set default values
 	if t.MayBeFree == nil {
 		t.MayBeFree = new(bool)
-		*t.MayBeFree = t.Cost == 0
+		*t.MayBeFree = (t.Cost == nil || *t.Cost == 0)
 	}
 	if t.AskWithFee == nil {
 		t.AskWithFee = new(bool)
@@ -145,6 +145,12 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 	toolId := toolID(userID)
 	realLocation := t.Location.ToDBLocation()
 
+	// Set Cost value - default to 0 if not provided
+	var cost uint64
+	if t.Cost != nil {
+		cost = *t.Cost
+	}
+
 	dbTool := db.Tool{
 		ID:                 toolId,
 		UserID:             user.ID,
@@ -153,7 +159,7 @@ func (a *API) addTool(t *Tool, userID string) (int64, error) {
 		IsAvailable:        *t.IsAvailable,
 		MayBeFree:          *t.MayBeFree,
 		AskWithFee:         *t.AskWithFee,
-		Cost:               t.Cost,
+		Cost:               cost,
 		EstimatedDailyCost: t.EstimatedDailyCost,
 		ToolCategory:       t.Category,
 		Rating:             50,
@@ -233,8 +239,8 @@ func (a *API) editTool(id int64, newTool *Tool, user *db.User) (int64, error) {
 		tool.ToolValuation = *newTool.ToolValuation
 		tool.EstimatedDailyCost = *newTool.ToolValuation / types.FactorCostToPrice
 	}
-	if newTool.Cost != 0 {
-		tool.Cost = newTool.Cost
+	if newTool.Cost != nil {
+		tool.Cost = *newTool.Cost
 	}
 	if newTool.Height != 0 {
 		tool.Height = newTool.Height
