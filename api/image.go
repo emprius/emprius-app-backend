@@ -15,10 +15,15 @@ import (
 	stdDraw "image/draw"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rwcarlsen/goexif/exif"
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/draw"
 	"golang.org/x/image/tiff"
 	_ "golang.org/x/image/webp" // Register WebP decoder
+
+	exif2 "github.com/dsoprea/go-exif/v3"
+	exifcommon "github.com/dsoprea/go-exif/v3/common"
+	jis "github.com/dsoprea/go-jpeg-image-structure/v2"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/types"
@@ -144,8 +149,98 @@ func (a *API) imageUploadHandler(r *Request) (interface{}, error) {
 
 const maxThumbnailSize = 768
 
-// createThumbnail generates a thumbnail version of the image with 2:1 aspect ratio and max width of 512px
+// extractExifOrientation extracts the EXIF orientation tag from image data.
+// Returns the orientation value (1-8) or 1 (normal) if no orientation is found or on error.
+func extractExifOrientation(imgBytes []byte) int {
+	// Try to decode EXIF data
+	x, err := exif.Decode(bytes.NewReader(imgBytes))
+	if err != nil {
+		// No EXIF data or error reading it - assume normal orientation
+		return 1
+	}
+
+	// Try to get orientation tag
+	tag, err := x.Get(exif.Orientation)
+	if err != nil {
+		// No orientation tag - assume normal orientation
+		return 1
+	}
+
+	// Get the orientation value
+	orientation, err := tag.Int(0)
+	if err != nil {
+		// Error reading orientation - assume normal orientation
+		return 1
+	}
+
+	return orientation
+}
+
+// copyExifOrientationToJPEG copies the EXIF orientation tag to a JPEG thumbnail.
+// This allows image viewers to display the thumbnail with the correct orientation.
+// Note: Go's image/jpeg decoder automatically applies EXIF orientation when decoding,
+// so thumbnails are already correctly oriented in their pixel data. This function
+// adds the EXIF orientation tag back so that viewers know the intended orientation.
+func copyExifOrientationToJPEG(thumbnailData []byte, orientation int) ([]byte, error) {
+	// Only process if orientation is not normal (1) and is valid (1-8)
+	if orientation < 1 || orientation > 8 || orientation == 1 {
+		return thumbnailData, nil
+	}
+
+	// Parse the JPEG structure
+	jmp := jis.NewJpegMediaParser()
+	intfc, err := jmp.ParseBytes(thumbnailData)
+	if err != nil {
+		// If we can't parse, return original thumbnail
+		log.Debug().Err(err).Msg("failed to parse JPEG for EXIF insertion")
+		return thumbnailData, nil
+	}
+
+	sl := intfc.(*jis.SegmentList)
+
+	// Build EXIF data with orientation tag
+	im, err := exifcommon.NewIfdMappingWithStandard()
+	if err != nil {
+		log.Debug().Err(err).Msg("failed to create IFD mapping")
+		return thumbnailData, nil
+	}
+
+	ti := exif2.NewTagIndex()
+
+	// Create root IFD (IFD0)
+	ifd0Builder := exif2.NewIfdBuilder(im, ti, exifcommon.IfdStandardIfdIdentity, exifcommon.EncodeDefaultByteOrder)
+
+	// Add orientation tag
+	err = ifd0Builder.AddStandardWithName("Orientation", []uint16{uint16(orientation)})
+	if err != nil {
+		log.Debug().Err(err).Msg("failed to add orientation tag")
+		return thumbnailData, nil
+	}
+
+	// Set the EXIF IfdBuilder directly in the segment list
+	err = sl.SetExif(ifd0Builder)
+	if err != nil {
+		log.Debug().Err(err).Msg("failed to set EXIF data")
+		return thumbnailData, nil
+	}
+
+	// Write the modified JPEG
+	var buf bytes.Buffer
+	err = sl.Write(&buf)
+	if err != nil {
+		log.Debug().Err(err).Msg("failed to write JPEG with EXIF")
+		return thumbnailData, nil
+	}
+
+	return buf.Bytes(), nil
+}
+
+// createThumbnail generates a thumbnail version of the image with 2:1 aspect ratio and max width of 512px.
+// For JPEG images, it preserves the EXIF orientation metadata so viewers can display it correctly.
 func createThumbnail(imgBytes []byte, format string) ([]byte, error) {
+	// Extract EXIF orientation for later (if JPEG)
+	orientation := extractExifOrientation(imgBytes)
+
 	// Decode original image
 	src, _, err := image.Decode(bytes.NewReader(imgBytes))
 	if err != nil {
@@ -186,6 +281,17 @@ func createThumbnail(imgBytes []byte, format string) ([]byte, error) {
 	switch format {
 	case "jpeg":
 		err = jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85})
+		if err != nil {
+			return nil, fmt.Errorf("failed to encode thumbnail: %w", err)
+		}
+		// Copy EXIF orientation to the JPEG thumbnail
+		thumbnailWithExif, err := copyExifOrientationToJPEG(buf.Bytes(), orientation)
+		if err != nil {
+			// If copying EXIF fails, return thumbnail without EXIF
+			log.Debug().Err(err).Msg("failed to copy EXIF orientation, returning thumbnail without EXIF")
+			return buf.Bytes(), nil
+		}
+		return thumbnailWithExif, nil
 	case "png":
 		err = png.Encode(&buf, dst)
 	case "gif":
