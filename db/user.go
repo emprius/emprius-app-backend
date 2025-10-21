@@ -331,6 +331,20 @@ func (s *UserService) GetUserCommunities(ctx context.Context, userID primitive.O
 	return user.Communities, nil
 }
 
+// GetUserCommunities retrieves all communities ids a user is a member of
+func (s *UserService) GetUserCommunitiesIds(ctx context.Context, userID primitive.ObjectID) ([]primitive.ObjectID, error) {
+	user, err := s.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	userCommunities := user.Communities
+	communityIDs := make([]primitive.ObjectID, len(userCommunities))
+	for i, comm := range userCommunities {
+		communityIDs[i] = comm.ID
+	}
+	return communityIDs, nil
+}
+
 // GetAllActiveUsers retrieves all active users
 func (s *UserService) GetAllActiveUsers(ctx context.Context) ([]*User, error) {
 	cursor, err := s.Collection.Find(ctx, bson.M{"active": true})

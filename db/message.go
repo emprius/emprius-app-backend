@@ -536,15 +536,20 @@ func (s *MessageService) GetConversations(ctx context.Context, userID primitive.
 		filter["participants"] = userID
 	case MessageTypeCommunity:
 		// Get user's communities
-		userCommunities, err := s.UserService.GetUserCommunities(ctx, userID)
+		communityIDs, err := s.UserService.GetUserCommunitiesIds(ctx, userID)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to get user communities: %w", err)
 		}
-		communityIDs := make([]primitive.ObjectID, len(userCommunities))
-		for i, comm := range userCommunities {
-			communityIDs[i] = comm.ID
-		}
 		filter["communityId"] = bson.M{"$in": communityIDs}
+	case MessageTypeAll:
+		communityIDs, err := s.UserService.GetUserCommunitiesIds(ctx, userID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to get user communities: %w", err)
+		}
+		filter["$or"] = []bson.M{
+			{"participants": userID},                     // private convs
+			{"communityId": bson.M{"$in": communityIDs}}, // community convs
+		}
 	}
 
 	// Use aggregation for pagination
