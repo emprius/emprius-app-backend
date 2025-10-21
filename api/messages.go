@@ -65,7 +65,7 @@ func (a *API) sendMessageHandler(r *Request) (interface{}, error) {
 	}
 
 	// Handle both imageHashes and images fields for compatibility
-	var images []string = req.Images
+	images := req.Images
 
 	// Additional validation for image limits
 	if len(images) > 10 {
