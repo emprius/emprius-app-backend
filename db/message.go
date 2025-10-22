@@ -549,6 +549,7 @@ func (s *MessageService) GetConversations(ctx context.Context, userID primitive.
 		filter["$or"] = []bson.M{
 			{"participants": userID},                     // private convs
 			{"communityId": bson.M{"$in": communityIDs}}, // community convs
+			{"type": MessageTypeGeneral},                 // general forum
 		}
 	}
 
@@ -603,6 +604,15 @@ func (s *MessageService) GetConversations(ctx context.Context, userID primitive.
 // Helper methods
 
 func (s *MessageService) validateSendPermissions(ctx context.Context, message *Message) error {
+	// Check if sender is active (for all message types)
+	sender, err := s.UserService.GetUserByID(ctx, message.SenderID)
+	if err != nil {
+		return fmt.Errorf("sender not found: %w", err)
+	}
+	if !sender.Active {
+		return fmt.Errorf("inactive users cannot send messages")
+	}
+
 	switch message.Type {
 	case MessageTypePrivate:
 		// Check if recipient exists and is active
