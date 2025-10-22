@@ -549,6 +549,7 @@ func (s *MessageService) GetConversations(ctx context.Context, userID primitive.
 		filter["$or"] = []bson.M{
 			{"participants": userID},                     // private convs
 			{"communityId": bson.M{"$in": communityIDs}}, // community convs
+			{"type": MessageTypeGeneral},                 // general forum
 		}
 	}
 
