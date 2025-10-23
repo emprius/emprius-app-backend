@@ -22,7 +22,7 @@ func TestMessages(t *testing.T) {
 	t.Run("Send Private Messages", func(t *testing.T) {
 		// Send a private message from user1 to user2
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "Hello User Two! This is a private message.",
 		}
@@ -35,14 +35,14 @@ func TestMessages(t *testing.T) {
 		}
 		err := json.Unmarshal(resp, &messageResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, messageResp.Data.Type, qt.Equals, "private")
+		qt.Assert(t, messageResp.Data.Type, qt.Equals, api.MessageTypePrivate)
 		qt.Assert(t, messageResp.Data.Content, qt.Equals, "Hello User Two! This is a private message.")
 		qt.Assert(t, messageResp.Data.SenderID, qt.Equals, user1ID)
 		qt.Assert(t, messageResp.Data.RecipientID, qt.Equals, user2ID)
 
 		// Send a reply from user2 to user1
 		replyData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user1ID,
 			"content":     "Hi User One! Thanks for your message.",
 		}
@@ -52,7 +52,7 @@ func TestMessages(t *testing.T) {
 
 		err = json.Unmarshal(resp, &messageResp)
 		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, messageResp.Data.Type, qt.Equals, "private")
+		qt.Assert(t, messageResp.Data.Type, qt.Equals, api.MessageTypePrivate)
 		qt.Assert(t, messageResp.Data.Content, qt.Equals, "Hi User One! Thanks for your message.")
 		qt.Assert(t, messageResp.Data.SenderID, qt.Equals, user2ID)
 		qt.Assert(t, messageResp.Data.RecipientID, qt.Equals, user1ID)
@@ -186,7 +186,7 @@ func TestMessages(t *testing.T) {
 	t.Run("Mark Conversation as Read", func(t *testing.T) {
 		// Send another message to create unread count
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "Another message to test conversation read.",
 		}
@@ -247,7 +247,7 @@ func TestMessages(t *testing.T) {
 		// Find the private conversation
 		var privateConversation *api.ConversationResponse
 		for _, conv := range conversationsResp.Data.Conversations {
-			if conv.Type == "private" {
+			if conv.Type == api.MessageTypePrivate {
 				privateConversation = conv
 				break
 			}
@@ -263,14 +263,14 @@ func TestMessages(t *testing.T) {
 		qt.Assert(t, err, qt.IsNil)
 		// Should have private conversations only
 		for _, conv := range conversationsResp.Data.Conversations {
-			qt.Assert(t, conv.Type, qt.Equals, "private")
+			qt.Assert(t, conv.Type, qt.Equals, api.MessageTypePrivate)
 		}
 	})
 
 	t.Run("Message Validation", func(t *testing.T) {
 		// Test sending message without content or images
 		invalidMessageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 		}
 
@@ -279,7 +279,7 @@ func TestMessages(t *testing.T) {
 
 		// Test sending private message without recipient
 		invalidMessageData = map[string]interface{}{
-			"type":    "private",
+			"type":    api.MessageTypePrivate,
 			"content": "This should fail",
 		}
 
@@ -293,7 +293,7 @@ func TestMessages(t *testing.T) {
 		}
 
 		invalidMessageData = map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     longContent,
 		}
@@ -315,7 +315,7 @@ func TestMessages(t *testing.T) {
 
 		// Try to send message to inactive user
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user3ID,
 			"content":     "This should fail - user is inactive",
 		}
@@ -335,7 +335,7 @@ func TestMessages(t *testing.T) {
 		// Send multiple messages to test pagination
 		for i := 0; i < 5; i++ {
 			messageData := map[string]interface{}{
-				"type":        "private",
+				"type":        api.MessageTypePrivate,
 				"recipientId": user2ID,
 				"content":     fmt.Sprintf("Pagination test message %d", i+1),
 			}
@@ -378,7 +378,7 @@ func TestMessagesWithImages(t *testing.T) {
 		// For this test, we'll simulate image hashes since we don't have actual image upload in this test
 		// In a real scenario, images would be uploaded first and their hashes obtained
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "Check out these images!",
 			"images":      []string{"abc123def456", "789ghi012jkl"}, // Mock image hashes
@@ -399,7 +399,7 @@ func TestMessagesWithImages(t *testing.T) {
 	t.Run("Send Message with Only Images", func(t *testing.T) {
 		// Test sending message with only images (no text content)
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"images":      []string{"onlyimage123"}, // Mock image hash
 		}
@@ -418,7 +418,7 @@ func TestMessagesWithImages(t *testing.T) {
 		}
 
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "Too many images",
 			"images":      manyImages,
@@ -439,7 +439,7 @@ func TestUserProfileUnreadCounts(t *testing.T) {
 	t.Run("User Profile Includes Unread Message Counts", func(t *testing.T) {
 		// Send a message to user2
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "Message for profile test",
 		}
@@ -829,7 +829,7 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 	t.Run("Sender sees 0 unread when sending first messages", func(t *testing.T) {
 		// User1 sends first message to User2
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "First message in new conversation",
 		}
@@ -839,7 +839,7 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 
 		// User1 sends second message to User2
 		messageData = map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "Second message in new conversation",
 		}
@@ -861,7 +861,7 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 		// Find the conversation with user2
 		var foundConversation *api.ConversationResponse
 		for _, conv := range conversationsResp.Data.Conversations {
-			if conv.Type == "private" {
+			if conv.Type == api.MessageTypePrivate {
 				// Check if user2 is in participants
 				for _, participant := range conv.Participants {
 					if participant.ID == user2ID {
@@ -891,7 +891,7 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 		// Find the conversation with user1
 		foundConversation = nil
 		for _, conv := range conversationsResp.Data.Conversations {
-			if conv.Type == "private" {
+			if conv.Type == api.MessageTypePrivate {
 				for _, participant := range conv.Participants {
 					if participant.ID == user1ID {
 						foundConversation = conv
@@ -913,13 +913,21 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 	t.Run("Sender sees updated count after recipient replies", func(t *testing.T) {
 		// User2 replies to User1
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user1ID,
 			"content":     "Reply from recipient",
 		}
 
 		_, code := c.Request(http.MethodPost, user2JWT, messageData, "messages")
 		qt.Assert(t, code, qt.Equals, 201)
+
+		// Mark entire conversation as read
+		conversationKey := fmt.Sprintf("private:%s:%s", minString(user1ID, user2ID), maxString(user1ID, user2ID))
+		markConversationReadData := map[string]interface{}{
+			"conversationKey": conversationKey,
+		}
+		_, code = c.Request(http.MethodPost, user2JWT, markConversationReadData, "messages/read/conversation")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		// User1 checks conversation list again
 		resp, code := c.Request(http.MethodGet, user1JWT, nil, "conversations?type=private")
@@ -934,7 +942,7 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 		// Find the conversation
 		var foundConversation *api.ConversationResponse
 		for _, conv := range conversationsResp.Data.Conversations {
-			if conv.Type == "private" {
+			if conv.Type == api.MessageTypePrivate {
 				for _, participant := range conv.Participants {
 					if participant.ID == user2ID {
 						foundConversation = conv
@@ -960,7 +968,7 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 
 		foundConversation = nil
 		for _, conv := range conversationsResp.Data.Conversations {
-			if conv.Type == "private" {
+			if conv.Type == api.MessageTypePrivate {
 				for _, participant := range conv.Participants {
 					if participant.ID == user1ID {
 						foundConversation = conv
@@ -979,7 +987,7 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 
 		// Now User1 sends another message
 		messageData = map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "Another message from User1",
 		}
@@ -996,7 +1004,7 @@ func TestConversationUnreadCountForSender(t *testing.T) {
 
 		foundConversation = nil
 		for _, conv := range conversationsResp.Data.Conversations {
-			if conv.Type == "private" {
+			if conv.Type == api.MessageTypePrivate {
 				for _, participant := range conv.Participants {
 					if participant.ID == user1ID {
 						foundConversation = conv
@@ -1025,7 +1033,7 @@ func TestMessageIsReadStatus(t *testing.T) {
 	t.Run("Message IsRead Status - Private Messages", func(t *testing.T) {
 		// Send a message from user1 to user2
 		messageData := map[string]interface{}{
-			"type":        "private",
+			"type":        api.MessageTypePrivate,
 			"recipientId": user2ID,
 			"content":     "Test message for isRead status",
 		}
@@ -1179,7 +1187,7 @@ func TestMessageIsReadStatus(t *testing.T) {
 		var messageIDs []string
 		for i := 0; i < 3; i++ {
 			messageData := map[string]interface{}{
-				"type":        "private",
+				"type":        api.MessageTypePrivate,
 				"recipientId": user2ID,
 				"content":     fmt.Sprintf("Test message %d for batch read status", i+1),
 			}
