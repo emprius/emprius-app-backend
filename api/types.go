@@ -743,8 +743,24 @@ func (c *ConversationResponse) FromDB(dbConv *db.Conversation, database *db.Data
 	).Decode(&readStatus); err == nil {
 		c.UnreadCount = readStatus.UnreadCount
 	} else {
-		// If no read status exists, all messages are unread
-		c.UnreadCount = dbConv.MessageCount
+		// If no read status exists
+		if dbConv.LastSenderID == userID {
+			// User sent the last message, they have no unread messages
+			c.UnreadCount = 0
+		} else {
+			// Count only messages not sent by this user
+			filter := map[string]interface{}{
+				"conversationKey": conversationKey,
+				"senderId":        map[string]interface{}{"$ne": userID},
+			}
+			count, err := database.MessageService.Collection.CountDocuments(context.Background(), filter)
+			if err == nil {
+				c.UnreadCount = count
+			} else {
+				// Fallback: assume all messages are unread
+				c.UnreadCount = dbConv.MessageCount
+			}
+		}
 	}
 
 	return c
