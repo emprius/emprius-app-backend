@@ -819,6 +819,202 @@ func TestCommunityMessageIsReadStatus(t *testing.T) {
 	})
 }
 
+func TestConversationUnreadCountForSender(t *testing.T) {
+	c := utils.NewTestService(t)
+
+	// Create test users
+	user1JWT, user1ID := c.RegisterAndLoginWithID("unreadcount1@test.com", "Sender User", "password1")
+	user2JWT, user2ID := c.RegisterAndLoginWithID("unreadcount2@test.com", "Recipient User", "password2")
+
+	t.Run("Sender sees 0 unread when sending first messages", func(t *testing.T) {
+		// User1 sends first message to User2
+		messageData := map[string]interface{}{
+			"type":        "private",
+			"recipientId": user2ID,
+			"content":     "First message in new conversation",
+		}
+
+		_, code := c.Request(http.MethodPost, user1JWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		// User1 sends second message to User2
+		messageData = map[string]interface{}{
+			"type":        "private",
+			"recipientId": user2ID,
+			"content":     "Second message in new conversation",
+		}
+
+		_, code = c.Request(http.MethodPost, user1JWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		// User1 (sender) checks conversation list
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "conversations?type=private")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var conversationsResp struct {
+			Data api.PaginatedConversationsResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &conversationsResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(conversationsResp.Data.Conversations) > 0, qt.IsTrue)
+
+		// Find the conversation with user2
+		var foundConversation *api.ConversationResponse
+		for _, conv := range conversationsResp.Data.Conversations {
+			if conv.Type == "private" {
+				// Check if user2 is in participants
+				for _, participant := range conv.Participants {
+					if participant.ID == user2ID {
+						foundConversation = conv
+						break
+					}
+				}
+			}
+			if foundConversation != nil {
+				break
+			}
+		}
+
+		qt.Assert(t, foundConversation, qt.Not(qt.IsNil), qt.Commentf("Should find conversation with user2"))
+		qt.Assert(t, foundConversation.UnreadCount, qt.Equals, int64(0),
+			qt.Commentf("Sender should have 0 unread messages (their own messages should not count as unread)"))
+		qt.Assert(t, foundConversation.MessageCount, qt.Equals, int64(2),
+			qt.Commentf("Should have 2 total messages"))
+
+		// User2 (recipient) checks conversation list
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "conversations?type=private")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &conversationsResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find the conversation with user1
+		foundConversation = nil
+		for _, conv := range conversationsResp.Data.Conversations {
+			if conv.Type == "private" {
+				for _, participant := range conv.Participants {
+					if participant.ID == user1ID {
+						foundConversation = conv
+						break
+					}
+				}
+			}
+			if foundConversation != nil {
+				break
+			}
+		}
+
+		qt.Assert(t, foundConversation, qt.Not(qt.IsNil), qt.Commentf("Should find conversation with user1"))
+		qt.Assert(t, foundConversation.UnreadCount, qt.Equals, int64(2),
+			qt.Commentf("Recipient should have 2 unread messages"))
+		qt.Assert(t, foundConversation.MessageCount, qt.Equals, int64(2))
+	})
+
+	t.Run("Sender sees updated count after recipient replies", func(t *testing.T) {
+		// User2 replies to User1
+		messageData := map[string]interface{}{
+			"type":        "private",
+			"recipientId": user1ID,
+			"content":     "Reply from recipient",
+		}
+
+		_, code := c.Request(http.MethodPost, user2JWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		// User1 checks conversation list again
+		resp, code := c.Request(http.MethodGet, user1JWT, nil, "conversations?type=private")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var conversationsResp struct {
+			Data api.PaginatedConversationsResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &conversationsResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find the conversation
+		var foundConversation *api.ConversationResponse
+		for _, conv := range conversationsResp.Data.Conversations {
+			if conv.Type == "private" {
+				for _, participant := range conv.Participants {
+					if participant.ID == user2ID {
+						foundConversation = conv
+						break
+					}
+				}
+			}
+			if foundConversation != nil {
+				break
+			}
+		}
+
+		qt.Assert(t, foundConversation, qt.Not(qt.IsNil))
+		qt.Assert(t, foundConversation.UnreadCount, qt.Equals, int64(1),
+			qt.Commentf("User1 should now have 1 unread message (the reply from user2)"))
+
+		// User2 checks conversation list
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "conversations?type=private")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &conversationsResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundConversation = nil
+		for _, conv := range conversationsResp.Data.Conversations {
+			if conv.Type == "private" {
+				for _, participant := range conv.Participants {
+					if participant.ID == user1ID {
+						foundConversation = conv
+						break
+					}
+				}
+			}
+			if foundConversation != nil {
+				break
+			}
+		}
+
+		qt.Assert(t, foundConversation, qt.Not(qt.IsNil))
+		qt.Assert(t, foundConversation.UnreadCount, qt.Equals, int64(0),
+			qt.Commentf("User2 should have 0 unread (they are the last sender)"))
+
+		// Now User1 sends another message
+		messageData = map[string]interface{}{
+			"type":        "private",
+			"recipientId": user2ID,
+			"content":     "Another message from User1",
+		}
+
+		_, code = c.Request(http.MethodPost, user1JWT, messageData, "messages")
+		qt.Assert(t, code, qt.Equals, 201)
+
+		// User2 checks conversation list - should now have 1 unread
+		resp, code = c.Request(http.MethodGet, user2JWT, nil, "conversations?type=private")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		err = json.Unmarshal(resp, &conversationsResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		foundConversation = nil
+		for _, conv := range conversationsResp.Data.Conversations {
+			if conv.Type == "private" {
+				for _, participant := range conv.Participants {
+					if participant.ID == user1ID {
+						foundConversation = conv
+						break
+					}
+				}
+			}
+			if foundConversation != nil {
+				break
+			}
+		}
+
+		qt.Assert(t, foundConversation, qt.Not(qt.IsNil))
+		qt.Assert(t, foundConversation.UnreadCount, qt.Equals, int64(1),
+			qt.Commentf("User2 should now have 1 unread message (the new one from User1)"))
+	})
+}
+
 func TestMessageIsReadStatus(t *testing.T) {
 	c := utils.NewTestService(t)
 
