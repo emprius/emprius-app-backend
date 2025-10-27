@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emprius/emprius-app-backend/db"
@@ -21,6 +22,7 @@ type DigestScheduler struct {
 	timeProvider   TimeProvider
 	stopChan       chan struct{}
 	tickerInterval time.Duration
+	mu             sync.RWMutex // protects timeProvider and tickerInterval
 }
 
 // NewDigestScheduler creates a new digest scheduler
@@ -39,11 +41,15 @@ func NewDigestScheduler(
 
 // SetTickerInterval sets a custom ticker interval (useful for testing)
 func (ds *DigestScheduler) SetTickerInterval(interval time.Duration) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
 	ds.tickerInterval = interval
 }
 
 // SetTimeProvider sets a custom time provider (useful for testing)
 func (ds *DigestScheduler) SetTimeProvider(tp TimeProvider) {
+	ds.mu.Lock()
+	defer ds.mu.Unlock()
 	ds.timeProvider = tp
 }
 
@@ -61,7 +67,11 @@ func (ds *DigestScheduler) Stop() {
 
 // run is the main loop that processes pending notifications
 func (ds *DigestScheduler) run() {
-	ticker := time.NewTicker(ds.tickerInterval)
+	ds.mu.RLock()
+	interval := ds.tickerInterval
+	ds.mu.RUnlock()
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -87,7 +97,9 @@ func (ds *DigestScheduler) processPendingNotifications() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	ds.mu.RLock()
 	currentTime := ds.timeProvider.Now()
+	ds.mu.RUnlock()
 
 	// Get all pending notifications
 	notifications, err := ds.database.MessageNotificationQueueService.GetPendingNotifications(ctx, currentTime)
