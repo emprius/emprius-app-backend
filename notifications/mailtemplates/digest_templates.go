@@ -1,0 +1,87 @@
+package mailtemplates
+
+import "github.com/emprius/emprius-app-backend/notifications"
+
+// PrivateMessageDigestMailNotification notification used to notify a user about unread private messages
+var PrivateMessageDigestMailNotification = MailTemplate{
+	File: "private_message_digest",
+	Placeholder: notifications.Notification{
+		Subject: "You have unread messages from {{.SenderName}}",
+		PlainBody: `{{.SenderName}} sent you {{.UnreadCount}} message(s).
+
+View your messages on {{.ButtonUrl}}.`,
+	},
+	WebAppURI: "/messages",
+	Subjects: map[string]string{
+		"en": "You have unread messages from {{.SenderName}}",
+		"es": "Tienes mensajes sin leer de {{.SenderName}}",
+		"ca": "Tens missatges sense llegir de {{.SenderName}}",
+	},
+	PlainBodies: map[string]string{
+		"en": `{{.SenderName}} sent you {{.UnreadCount}} message(s).
+
+View your messages on {{.ButtonUrl}}.`,
+		"es": `{{.SenderName}} te envió {{.UnreadCount}} mensaje(s).
+
+Ve tus mensajes en {{.ButtonUrl}}.`,
+		"ca": `{{.SenderName}} t'ha enviat {{.UnreadCount}} missatge(s).
+
+Consulta els teus missatges a {{.ButtonUrl}}.`,
+	},
+}
+
+// CommunityMessageDigestMailNotification notification used to notify a user about unread community messages
+var CommunityMessageDigestMailNotification = MailTemplate{
+	File: "community_message_digest",
+	Placeholder: notifications.Notification{
+		Subject: "You have {{.UnreadCount}} unread message(s) in {{.CommunityName}}",
+		PlainBody: `There are {{.UnreadCount}} unread message(s) in the {{.CommunityName}} community.
+
+View your messages on {{.ButtonUrl}}.`,
+	},
+	WebAppURI: "/messages",
+	Subjects: map[string]string{
+		"en": "You have {{.UnreadCount}} unread message(s) in {{.CommunityName}}",
+		"es": "Tienes {{.UnreadCount}} mensaje(s) sin leer en {{.CommunityName}}",
+		"ca": "Tens {{.UnreadCount}} missatge(s) sense llegir a {{.CommunityName}}",
+	},
+	PlainBodies: map[string]string{
+		"en": `There are {{.UnreadCount}} unread message(s) in the {{.CommunityName}} community.
+
+View your messages on {{.ButtonUrl}}.`,
+		"es": `Hay {{.UnreadCount}} mensaje(s) sin leer en la comunidad {{.CommunityName}}.
+
+Ve tus mensajes en {{.ButtonUrl}}.`,
+		"ca": `Hi ha {{.UnreadCount}} missatge(s) sense llegir a la comunitat {{.CommunityName}}.
+
+Consulta els teus missatges a {{.ButtonUrl}}.`,
+	},
+}
+
+// GeneralMessageDigestMailNotification notification used to notify a user about unread general forum messages
+var GeneralMessageDigestMailNotification = MailTemplate{
+	File: "general_message_digest",
+	Placeholder: notifications.Notification{
+		Subject: "You have {{.UnreadCount}} unread message(s) in the General Forum",
+		PlainBody: `There are {{.UnreadCount}} unread message(s) in the General Forum.
+
+View your messages on {{.ButtonUrl}}.`,
+	},
+	WebAppURI: "/messages",
+	Subjects: map[string]string{
+		"en": "You have {{.UnreadCount}} unread message(s) in the General Forum",
+		"es": "Tienes {{.UnreadCount}} mensaje(s) sin leer en el Foro General",
+		"ca": "Tens {{.UnreadCount}} missatge(s) sense llegir al Fòrum General",
+	},
+	PlainBodies: map[string]string{
+		"en": `There are {{.UnreadCount}} unread message(s) in the General Forum.
+
+View your messages on {{.ButtonUrl}}.`,
+		"es": `Hay {{.UnreadCount}} mensaje(s) sin leer en el Foro General.
+
+Ve tus mensajes en {{.ButtonUrl}}.`,
+		"ca": `Hi ha {{.UnreadCount}} missatge(s) sense llegir al Fòrum General.
+
+Consulta els teus missatges a {{.ButtonUrl}}.`,
+	},
+}

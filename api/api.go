@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/emprius/emprius-app-backend/notifications"
+	"github.com/emprius/emprius-app-backend/notifications/digest_scheduler"
 	"github.com/rs/zerolog"
 
 	"github.com/emprius/emprius-app-backend/db"
@@ -28,6 +29,7 @@ const (
 type APIConfig struct {
 	DB                 *db.Database
 	MailService        notifications.NotificationService
+	DigestScheduler    *digest_scheduler.DigestScheduler
 	JwtSecret          string
 	RegisterToken      string
 	MaxInviteCodes     int
@@ -167,6 +169,13 @@ func (a *API) staticHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// Serve the file using http.ServeFile
 	http.ServeFile(w, r, filePath)
+}
+
+// StartDigestScheduler creates and starts a digest scheduler
+func StartDigestScheduler(database *db.Database, mailService notifications.NotificationService) *digest_scheduler.DigestScheduler {
+	scheduler := digest_scheduler.NewDigestScheduler(database, mailService)
+	scheduler.Start()
+	return scheduler
 }
 
 // info handler returns the basic info about the API.

@@ -35,6 +35,7 @@ func main() {
 	flag.String("smtpPassword", "", "SMTP password")
 	flag.String("emailFromAddress", "", "Email service from address")
 	flag.String("emailFromName", "Emprius", "Email service from name")
+	flag.Int("digestDelayMinutes", 60, "delay in minutes before sending message digest notifications")
 
 	flag.Parse()
 
@@ -61,6 +62,7 @@ func main() {
 	smtpPassword := viper.GetString("smtpPassword")
 	emailFromAddress := viper.GetString("emailFromAddress")
 	emailFromName := viper.GetString("emailFromName")
+	digestDelayMinutes := viper.GetInt("digestDelayMinutes")
 
 	// if no secret is provided, generate a random one
 	if secret == "" {
@@ -87,6 +89,10 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msgf("could not create the MongoDB database: %v", err)
 	}
+
+	// Configure digest delay
+	database.SetDigestDelayMinutes(digestDelayMinutes)
+	log.Info().Int("digestDelayMinutes", digestDelayMinutes).Msg("configured message digest delay")
 
 	// init the API configuration
 	apiConf := &api.APIConfig{
@@ -121,6 +127,9 @@ func main() {
 			log.Fatal().Err(err).Msgf("could not load email templates: %v", err)
 		}
 		log.Info().Msgf("email templates loaded: %d templates", len(mailtemplates.Available()))
+
+		// Start digest scheduler
+		apiConf.DigestScheduler = api.StartDigestScheduler(database, apiConf.MailService)
 	}
 
 	// create service

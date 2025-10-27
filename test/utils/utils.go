@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emprius/emprius-app-backend/notifications/digest_scheduler"
 	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 	"github.com/emprius/emprius-app-backend/notifications/smtp"
 	"github.com/emprius/emprius-app-backend/test/mail"
@@ -34,11 +35,13 @@ const (
 
 // TestService is a test service for the API.
 type TestService struct {
-	a   *api.API
-	t   *testing.T
-	url string
-	c   *http.Client
-	m   *smtp.Email
+	a                *api.API
+	t                *testing.T
+	url              string
+	c                *http.Client
+	m                *smtp.Email
+	ds               *digest_scheduler.DigestScheduler
+	mockTimeProvider *MockTimeProvider
 }
 
 // NewTestService creates a new test service.
@@ -108,12 +111,28 @@ func NewTestService(t *testing.T) *TestService {
 	port := 20000 + rand.New(rand.NewSource(time.Now().UnixNano())).Intn(8192)
 	a.Start("127.0.0.1", port)
 	time.Sleep(time.Second * 1) // Wait for HTTP server to start
+
+	// Start digest scheduler with 0 minute delay for tests (immediate processing)
+	database.SetDigestDelayMinutes(60)
+	scheduler := api.StartDigestScheduler(database, testMailService)
+	mockTime := &MockTimeProvider{currentTime: time.Now()}
+	scheduler.SetTimeProvider(mockTime)
+	// Set fast ticker interval for tests (100ms instead of 1 minute)
+	scheduler.SetTickerInterval(100 * time.Millisecond)
+
+	// Cleanup
+	t.Cleanup(func() {
+		scheduler.Stop()
+	})
+
 	return &TestService{
-		a:   a,
-		t:   t,
-		url: fmt.Sprintf("http://localhost:%d", port),
-		c:   http.DefaultClient,
-		m:   testMailService,
+		a:                a,
+		t:                t,
+		url:              fmt.Sprintf("http://localhost:%d", port),
+		c:                http.DefaultClient,
+		m:                testMailService,
+		ds:               scheduler,
+		mockTimeProvider: mockTime,
 	}
 }
 
@@ -160,6 +179,16 @@ func (s *TestService) Request(method, jwt string, jsonBody any, urlPath ...strin
 func (s *TestService) RegisterAndLogin(email, name, password string, location ...*api.Location) string {
 	jwt, _ := s.RegisterAndLoginWithID(email, name, password, location...)
 	return jwt
+}
+
+// ReadRegistrationMail reads the registration mail for the given email to clear the inbox
+func (s *TestService) ReadRegistrationMail(mail string, t *testing.T) {
+	// Read registration mail to clear inbox
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	mailBody, err := s.m.FindEmail(ctx, mail)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, mailBody, qt.Contains, "successfully registered")
 }
 
 // RegisterAndLoginWithID registers a new user and returns the JWT token and user ID
@@ -299,4 +328,26 @@ func (s *TestService) AcceptBooking(jwt string, bookingID string) {
 
 	_, code := s.Request(http.MethodPut, jwt, statusData, "bookings", bookingID)
 	qt.Assert(s.GetT(), code, qt.Equals, 200)
+}
+
+// AdvanceTime advances the mock time by the given duration
+func (s *TestService) AdvanceTime(d time.Duration) {
+	if s.mockTimeProvider != nil {
+		s.mockTimeProvider.AdvanceTime(d)
+	}
+}
+
+// SetMockTime sets the mock time to a specific time
+func (s *TestService) SetMockTime(t time.Time) {
+	if s.mockTimeProvider != nil {
+		s.mockTimeProvider.SetTime(t)
+	}
+}
+
+// ProcessDigestNotifications manually triggers digest notification processing
+func (s *TestService) ProcessDigestNotifications() error {
+	if s.ds != nil {
+		return s.ds.ProcessPendingNotificationsNow()
+	}
+	return nil
 }

@@ -368,6 +368,8 @@ func TestNewIncomingRequestNotification(t *testing.T) {
 		ownerJWT := c.RegisterAndLogin("owner-no-notifications@test.com", "owner2", "ownerpass")
 		renterJWT := c.RegisterAndLogin("renter-no-notifications@test.com", "renter2", "renterpass")
 
+		c.ReadRegistrationMail("owner-no-notifications@test.com", t)
+
 		// Disable booking request notifications for the owner
 		updatePrefs := api.NotificationPreferences{
 			"incoming_requests": false,
@@ -414,7 +416,7 @@ func TestNewIncomingRequestNotification(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		defer cancel()
 		_, err = c.MailService().FindEmail(ctx, "owner-no-notifications@test.com")
-		qt.Assert(t, err, qt.IsNil, qt.Commentf("No email should be sent when notifications are disabled"))
+		qt.Assert(t, err, qt.Not(qt.IsNil), qt.Commentf("No email should be sent when notifications are disabled"))
 	})
 
 	t.Run("Email Content Verification", func(t *testing.T) {

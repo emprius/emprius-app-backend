@@ -91,23 +91,26 @@ type UnreadMessageSummary struct {
 
 // MessageService provides methods to interact with messages
 type MessageService struct {
-	Collection             *mongo.Collection
-	ReadStatusCollection   *mongo.Collection
-	ConversationCollection *mongo.Collection
-	UserService            *UserService
-	CommunityService       *CommunityService
-	ImageService           *ImageService
+	Collection                      *mongo.Collection
+	ReadStatusCollection            *mongo.Collection
+	ConversationCollection          *mongo.Collection
+	UserService                     *UserService
+	CommunityService                *CommunityService
+	ImageService                    *ImageService
+	MessageNotificationQueueService *MessageNotificationQueueService
+	DigestDelayMinutes              int
 }
 
 // NewMessageService creates a new MessageService
 func NewMessageService(db *Database) *MessageService {
 	return &MessageService{
-		Collection:             db.Database.Collection("messages"),
-		ReadStatusCollection:   db.Database.Collection("message_read_status"),
-		ConversationCollection: db.Database.Collection("conversations"),
-		UserService:            db.UserService,
-		CommunityService:       db.CommunityService,
-		ImageService:           db.ImageService,
+		Collection:                      db.Database.Collection("messages"),
+		ReadStatusCollection:            db.Database.Collection("message_read_status"),
+		ConversationCollection:          db.Database.Collection("conversations"),
+		UserService:                     db.UserService,
+		CommunityService:                db.CommunityService,
+		ImageService:                    db.ImageService,
+		MessageNotificationQueueService: db.MessageNotificationQueueService,
 	}
 }
 
@@ -172,7 +175,7 @@ func GenerateConversationKeyFromData(msgType MessageType, senderID, recipientID 
 		}
 		return fmt.Sprintf("community:%s", communityID.Hex())
 	case MessageTypeGeneral:
-		return "general"
+		return string(MessageTypeGeneral)
 	default:
 		return ""
 	}
@@ -232,6 +235,12 @@ func (s *MessageService) SendMessage(ctx context.Context, message *Message) (*Me
 	// Update unread counts for recipients
 	if err := s.updateUnreadCounts(ctx, message); err != nil {
 		log.Error().Err(err).Msg("failed to update unread counts")
+		// Don't fail the message send for this
+	}
+
+	// Enqueue digest notifications for recipients
+	if err := s.enqueueDigestNotifications(ctx, message); err != nil {
+		log.Error().Err(err).Msg("failed to enqueue digest notifications")
 		// Don't fail the message send for this
 	}
 
@@ -918,6 +927,79 @@ func (s *MessageService) updateReadStatus(ctx context.Context, userID primitive.
 		update,
 		options.Update().SetUpsert(true),
 	)
+	if err != nil {
+		return err
+	}
 
-	return err
+	// Remove pending digest notification since messages were read
+	if s.MessageNotificationQueueService != nil {
+		if err := s.MessageNotificationQueueService.RemoveNotification(ctx, userID, conversationKey); err != nil {
+			log.Error().Err(err).
+				Str("userId", userID.Hex()).
+				Str("conversationKey", conversationKey).
+				Msg("failed to remove digest notification")
+			// Don't fail the read operation for this
+		}
+	}
+
+	return nil
+}
+
+// enqueueDigestNotifications enqueues digest notifications for message recipients
+func (s *MessageService) enqueueDigestNotifications(ctx context.Context, message *Message) error {
+	// Get all users who should receive this message
+	recipients, err := s.getMessageRecipients(ctx, message)
+	if err != nil {
+		return err
+	}
+
+	// Enqueue notifications for each recipient (excluding sender)
+	for _, recipientID := range recipients {
+		if recipientID == message.SenderID {
+			continue // Don't enqueue notification for sender
+		}
+
+		// This will be set from environment variable, but we need a default
+		// The actual delay will be configured in the API
+		delayMinutes := 60 // Default 1 hour
+
+		err := s.enqueueNotificationForRecipient(ctx, recipientID, message, delayMinutes)
+		if err != nil {
+			log.Error().Err(err).
+				Str("userId", recipientID.Hex()).
+				Str("conversationKey", message.ConversationKey).
+				Msg("failed to enqueue digest notification")
+			// Continue with other recipients even if one fails
+		}
+	}
+
+	return nil
+}
+
+// enqueueNotificationForRecipient enqueues a notification for a single recipient
+func (s *MessageService) enqueueNotificationForRecipient(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	message *Message,
+	delayMinutes int,
+) error {
+	// Only enqueue if notification queue service is available
+	if s.MessageNotificationQueueService == nil {
+		return nil // Silently skip if service not available
+	}
+
+	// Use configured delay or default
+	delay := s.DigestDelayMinutes
+	if delay == 0 {
+		delay = delayMinutes
+	}
+
+	return s.MessageNotificationQueueService.EnqueueOrUpdateNotification(
+		ctx,
+		userID,
+		message.ConversationKey,
+		message.Type,
+		message.ID,
+		delay,
+	)
 }
