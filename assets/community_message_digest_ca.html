@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Missatges de Comunitat - {{.AppName}}</title>
+    <title>Missatges de {{.CommunityName}} - {{.AppName}}</title>
 </head>
 <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 0; padding: 0;">
 <table width="100%" cellpadding="0" cellspacing="0">
@@ -16,7 +16,7 @@
                 </tr>
                 <tr>
                     <td align="center" style="color: #333;">
-                        <h1 style="margin: 0;">Nous Missatges a la Comunitat</h1>
+                        <h1 style="margin: 0;">Nous Missatges a la comunitat {{.CommunityName}}</h1>
                         <p style="font-size: 16px; margin: 10px 0 20px;">
                             Tens <strong>{{.UnreadCount}}</strong> missatge(s) sense llegir a la comunitat <strong>{{.CommunityName}}</strong>.
                         </p>

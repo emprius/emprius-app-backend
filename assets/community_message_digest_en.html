@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Community Messages - {{.AppName}}</title>
+    <title>{{.CommunityName}} Messages - {{.AppName}}</title>
 </head>
 <body style="font-family: Arial, sans-serif; background-color: #f9f9f9; margin: 0; padding: 0;">
 <table width="100%" cellpadding="0" cellspacing="0">
@@ -16,7 +16,7 @@
                 </tr>
                 <tr>
                     <td align="center" style="color: #333;">
-                        <h1 style="margin: 0;">New Messages in Community</h1>
+                        <h1 style="margin: 0;">New Messages in the community {{.CommunityName}}</h1>
                         <p style="font-size: 16px; margin: 10px 0 20px;">
                             You have <strong>{{.UnreadCount}}</strong> unread message(s) in the <strong>{{.CommunityName}}</strong> community.
                         </p>

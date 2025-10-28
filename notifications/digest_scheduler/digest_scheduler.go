@@ -250,7 +250,7 @@ func (ds *DigestScheduler) sendPrivateMessageDigest(
 		LogoURL:     mailtemplates.LogoURL,
 		SenderName:  otherUser.Name,
 		UnreadCount: unreadCount,
-		ButtonUrl:   fmt.Sprintf("%s/messages?type=private&userId=%s", mailtemplates.AppUrl, otherUserIDStr),
+		ButtonUrl:   fmt.Sprintf("%s/messages/%s", mailtemplates.AppUrl, otherUserIDStr),
 	}
 
 	// Execute template
@@ -303,7 +303,7 @@ func (ds *DigestScheduler) sendCommunityMessageDigest(
 		LogoURL:       mailtemplates.LogoURL,
 		CommunityName: community.Name,
 		UnreadCount:   unreadCount,
-		ButtonUrl:     fmt.Sprintf("%s/messages?type=community&communityId=%s", mailtemplates.AppUrl, communityIDStr),
+		ButtonUrl:     fmt.Sprintf("%s/messages/community/%s", mailtemplates.AppUrl, communityIDStr),
 	}
 
 	// Execute template
@@ -336,7 +336,7 @@ func (ds *DigestScheduler) sendGeneralMessageDigest(
 		AppName:     mailtemplates.AppName,
 		LogoURL:     mailtemplates.LogoURL,
 		UnreadCount: unreadCount,
-		ButtonUrl:   fmt.Sprintf("%s/messages?type=general", mailtemplates.AppUrl),
+		ButtonUrl:   fmt.Sprintf("%s/messages/general", mailtemplates.AppUrl),
 	}
 
 	// Execute template
