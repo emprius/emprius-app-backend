@@ -172,8 +172,8 @@ func (a *API) staticHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // StartDigestScheduler creates and starts a digest scheduler
-func StartDigestScheduler(database *db.Database, mailService notifications.NotificationService) *digest_scheduler.DigestScheduler {
-	scheduler := digest_scheduler.NewDigestScheduler(database, mailService)
+func StartDigestScheduler(database *db.Database, mailService notifications.NotificationService, dailyDigestHour int) *digest_scheduler.DigestScheduler {
+	scheduler := digest_scheduler.NewDigestScheduler(database, mailService, dailyDigestHour)
 	scheduler.Start()
 	return scheduler
 }

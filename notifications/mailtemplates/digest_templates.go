@@ -85,3 +85,31 @@ Ve tus mensajes en {{.ButtonUrl}}.`,
 Consulta els teus missatges a {{.ButtonUrl}}.`,
 	},
 }
+
+// DailyMessageDigestMailNotification notification used to send a daily digest with all unread message counts
+var DailyMessageDigestMailNotification = MailTemplate{
+	File: "daily_message_digest",
+	Placeholder: notifications.Notification{
+		Subject: "Your Daily Message Digest - {{.TotalUnread}} unread message(s)",
+		PlainBody: `You have {{.TotalUnread}} unread message(s).
+
+View your messages on {{.ButtonUrl}}.`,
+	},
+	WebAppURI: "/messages",
+	Subjects: map[string]string{
+		"en": "Your Daily Message Digest - {{.TotalUnread}} unread message(s)",
+		"es": "Tu Resumen Diario de Mensajes - {{.TotalUnread}} mensaje(s) sin leer",
+		"ca": "El Teu Resum Diari de Missatges - {{.TotalUnread}} missatge(s) sense llegir",
+	},
+	PlainBodies: map[string]string{
+		"en": `You have {{.TotalUnread}} unread message(s).
+
+View your messages on {{.ButtonUrl}}.`,
+		"es": `Tienes {{.TotalUnread}} mensaje(s) sin leer.
+
+Ve tus mensajes en {{.ButtonUrl}}.`,
+		"ca": `Tens {{.TotalUnread}} missatge(s) sense llegir.
+
+Consulta els teus missatges a {{.ButtonUrl}}.`,
+	},
+}

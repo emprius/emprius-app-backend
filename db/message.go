@@ -380,13 +380,124 @@ func (s *MessageService) GetUnreadCounts(ctx context.Context, userID primitive.O
 		} else if strings.HasPrefix(status.ConversationKey, "community:") {
 			communityID := strings.TrimPrefix(status.ConversationKey, "community:")
 			summary.Communities[communityID] = status.UnreadCount
-		} else if status.ConversationKey == "general" {
+		} else if status.ConversationKey == string(MessageTypeGeneral) {
 			summary.GeneralForum = status.UnreadCount
 		}
 		summary.Total += status.UnreadCount
 	}
 
 	return summary, nil
+}
+
+// ConversationDetail represents a conversation with its name and unread count
+type ConversationDetail struct {
+	Name        string
+	UnreadCount int64
+	URL         string
+}
+
+// UnreadConversationDetails contains detailed unread information for all conversation types
+type UnreadConversationDetails struct {
+	TotalUnread            int64
+	PrivateConversations   []ConversationDetail
+	CommunityConversations []ConversationDetail
+	GeneralForumUnread     int64
+	GeneralForumURL        string
+}
+
+// GetUnreadConversationDetails retrieves detailed unread conversation information for a user
+func (s *MessageService) GetUnreadConversationDetails(ctx context.Context, userID primitive.ObjectID, appURL string) (*UnreadConversationDetails, error) {
+	// Get all read statuses for the user with unread messages
+	cursor, err := s.ReadStatusCollection.Find(ctx, bson.M{
+		"userId":      userID,
+		"unreadCount": bson.M{"$gt": 0},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get read statuses: %w", err)
+	}
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Error().Err(err).Msg("error closing cursor")
+		}
+	}()
+
+	var readStatuses []MessageReadStatus
+	if err := cursor.All(ctx, &readStatuses); err != nil {
+		return nil, fmt.Errorf("failed to decode read statuses: %w", err)
+	}
+
+	details := &UnreadConversationDetails{
+		PrivateConversations:   []ConversationDetail{},
+		CommunityConversations: []ConversationDetail{},
+	}
+
+	for _, status := range readStatuses {
+		if strings.HasPrefix(status.ConversationKey, "private:") {
+			// Extract other user ID from conversation key (format: "private:id1:id2")
+			parts := strings.Split(status.ConversationKey, ":")
+			if len(parts) != 3 {
+				continue
+			}
+
+			// Determine which ID is the other user
+			var otherUserIDStr string
+			if parts[1] == userID.Hex() {
+				otherUserIDStr = parts[2]
+			} else {
+				otherUserIDStr = parts[1]
+			}
+
+			otherUserID, err := primitive.ObjectIDFromHex(otherUserIDStr)
+			if err != nil {
+				log.Error().Err(err).Str("conversationKey", status.ConversationKey).Msg("invalid user ID in conversation key")
+				continue
+			}
+
+			// Get the other user's name
+			otherUser, err := s.UserService.GetUserByID(ctx, otherUserID)
+			if err != nil {
+				log.Error().Err(err).Str("userId", otherUserIDStr).Msg("failed to get user")
+				continue
+			}
+
+			details.PrivateConversations = append(details.PrivateConversations, ConversationDetail{
+				Name:        otherUser.Name,
+				UnreadCount: status.UnreadCount,
+				URL:         fmt.Sprintf("%s/messages/%s", appURL, otherUserIDStr),
+			})
+			details.TotalUnread += status.UnreadCount
+
+		} else if strings.HasPrefix(status.ConversationKey, "community:") {
+			// Extract community ID from conversation key (format: "community:id")
+			communityIDStr := strings.TrimPrefix(status.ConversationKey, "community:")
+			communityID, err := primitive.ObjectIDFromHex(communityIDStr)
+			if err != nil {
+				log.Error().Err(err).Str("conversationKey", status.ConversationKey).Msg("invalid community ID in conversation key")
+				continue
+			}
+
+			// Get community name
+			community, err := s.CommunityService.GetCommunity(ctx, communityID)
+			if err != nil {
+				log.Error().Err(err).Str("communityId", communityIDStr).Msg("failed to get community")
+				continue
+			}
+
+			details.CommunityConversations = append(details.CommunityConversations, ConversationDetail{
+				Name:        community.Name,
+				UnreadCount: status.UnreadCount,
+				URL:         fmt.Sprintf("%s/messages/community/%s", appURL, communityIDStr),
+			})
+			details.TotalUnread += status.UnreadCount
+
+		} else if status.ConversationKey == "general" {
+			details.GeneralForumUnread = status.UnreadCount
+			details.GeneralForumURL = fmt.Sprintf("%s/messages/general", appURL)
+			details.TotalUnread += status.UnreadCount
+		}
+	}
+
+	return details, nil
 }
 
 // SearchMessages searches for messages containing the specified query

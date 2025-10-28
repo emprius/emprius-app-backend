@@ -36,6 +36,7 @@ func main() {
 	flag.String("emailFromAddress", "", "Email service from address")
 	flag.String("emailFromName", "Emprius", "Email service from name")
 	flag.Int("digestDelayMinutes", 60, "delay in minutes before sending message digest notifications")
+	flag.Int("dailyDigestHour", 9, "hour (UTC) to send daily digest (0-23)")
 
 	flag.Parse()
 
@@ -63,6 +64,7 @@ func main() {
 	emailFromAddress := viper.GetString("emailFromAddress")
 	emailFromName := viper.GetString("emailFromName")
 	digestDelayMinutes := viper.GetInt("digestDelayMinutes")
+	dailyDigestHour := viper.GetInt("dailyDigestHour")
 
 	// if no secret is provided, generate a random one
 	if secret == "" {
@@ -129,7 +131,8 @@ func main() {
 		log.Info().Msgf("email templates loaded: %d templates", len(mailtemplates.Available()))
 
 		// Start digest scheduler
-		apiConf.DigestScheduler = api.StartDigestScheduler(database, apiConf.MailService)
+		apiConf.DigestScheduler = api.StartDigestScheduler(database, apiConf.MailService, dailyDigestHour)
+		log.Info().Int("dailyDigestHour", dailyDigestHour).Msg("configured daily digest hour (UTC)")
 	}
 
 	// create service

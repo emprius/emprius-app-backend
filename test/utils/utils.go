@@ -114,7 +114,7 @@ func NewTestService(t *testing.T) *TestService {
 
 	// Start digest scheduler with 0 minute delay for tests (immediate processing)
 	database.SetDigestDelayMinutes(60)
-	scheduler := api.StartDigestScheduler(database, testMailService)
+	scheduler := api.StartDigestScheduler(database, testMailService, 9) // Default to 9 AM UTC
 	mockTime := &MockTimeProvider{currentTime: time.Now()}
 	scheduler.SetTimeProvider(mockTime)
 	// Set fast ticker interval for tests (100ms instead of 1 minute)
@@ -328,6 +328,48 @@ func (s *TestService) AcceptBooking(jwt string, bookingID string) {
 
 	_, code := s.Request(http.MethodPut, jwt, statusData, "bookings", bookingID)
 	qt.Assert(s.GetT(), code, qt.Equals, 200)
+}
+
+func (s *TestService) CreateInviteAndJoinCommunity(ownerJWT string, invitedJWT string, invitedID string, communityData map[string]interface{}) string {
+	t := s.GetT()
+	// Create a community
+	resp, code := s.Request(http.MethodPost, ownerJWT, communityData, "communities")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var communityResp struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	err := json.Unmarshal(resp, &communityResp)
+	qt.Assert(t, err, qt.IsNil)
+	communityID := communityResp.Data.ID
+
+	// First invite and accept a user to the community
+	_, code = s.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", invitedID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	// Get pending invites for the member
+	resp, code = s.Request(http.MethodGet, invitedJWT, nil, "communities", "invites")
+	qt.Assert(t, code, qt.Equals, 200)
+
+	var invitesResp struct {
+		Data []api.CommunityInviteResponse `json:"data"`
+	}
+	err = json.Unmarshal(resp, &invitesResp)
+	qt.Assert(t, err, qt.IsNil)
+	qt.Assert(t, len(invitesResp.Data), qt.Equals, 1)
+	inviteID := invitesResp.Data[0].ID
+
+	// Accept the invitation
+	_, code = s.Request(http.MethodPut, invitedJWT,
+		map[string]interface{}{
+			"status": "ACCEPTED",
+		},
+		"communities", "invites", inviteID)
+	qt.Assert(t, code, qt.Equals, 200)
+
+	return communityID
 }
 
 // AdvanceTime advances the mock time by the given duration

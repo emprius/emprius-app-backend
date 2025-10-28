@@ -17,25 +17,29 @@ import (
 
 // DigestScheduler manages the background task for sending message digest notifications
 type DigestScheduler struct {
-	database       *db.Database
-	mailService    notifications.NotificationService
-	timeProvider   TimeProvider
-	stopChan       chan struct{}
-	tickerInterval time.Duration
-	mu             sync.RWMutex // protects timeProvider and tickerInterval
+	database             *db.Database
+	mailService          notifications.NotificationService
+	timeProvider         TimeProvider
+	stopChan             chan struct{}
+	tickerInterval       time.Duration
+	dailyDigestHour      int          // Hour (0-23) in UTC to send daily digest
+	lastDailyDigestCheck time.Time    // Track when we last checked for daily digest
+	mu                   sync.RWMutex // protects timeProvider and tickerInterval
 }
 
 // NewDigestScheduler creates a new digest scheduler
 func NewDigestScheduler(
 	database *db.Database,
 	mailService notifications.NotificationService,
+	dailyDigestHour int,
 ) *DigestScheduler {
 	return &DigestScheduler{
-		database:       database,
-		mailService:    mailService,
-		timeProvider:   RealTimeProvider{},
-		stopChan:       make(chan struct{}),
-		tickerInterval: 1 * time.Minute, // Default production interval
+		database:        database,
+		mailService:     mailService,
+		timeProvider:    RealTimeProvider{},
+		stopChan:        make(chan struct{}),
+		tickerInterval:  1 * time.Minute, // Default production interval
+		dailyDigestHour: dailyDigestHour,
 	}
 }
 
@@ -77,8 +81,14 @@ func (ds *DigestScheduler) run() {
 	for {
 		select {
 		case <-ticker.C:
+			// Process per-conversation digests
 			if err := ds.processPendingNotifications(); err != nil {
 				log.Error().Err(err).Msg("error processing pending notifications")
+			}
+
+			// Check and process daily digests
+			if err := ds.processDailyDigests(); err != nil {
+				log.Error().Err(err).Msg("error processing daily digests")
 			}
 		case <-ds.stopChan:
 			log.Info().Msg("digest scheduler stopped")
@@ -364,4 +374,148 @@ func (ds *DigestScheduler) getNotificationTypeForMessageType(messageType db.Mess
 	default:
 		return types.NotificationPrivateMessages
 	}
+}
+
+// processDailyDigests checks if it's time to send daily digests and processes them
+func (ds *DigestScheduler) processDailyDigests() error {
+	ds.mu.RLock()
+	currentTime := ds.timeProvider.Now()
+	ds.mu.RUnlock()
+
+	// Check if it's the configured hour in UTC
+	currentHour := currentTime.UTC().Hour()
+	if currentHour != ds.dailyDigestHour {
+		return nil // Not time yet
+	}
+
+	// Check if we already processed today (compare dates)
+	ds.mu.RLock()
+	lastCheck := ds.lastDailyDigestCheck
+	ds.mu.RUnlock()
+
+	currentDate := currentTime.UTC().Format("2006-01-02")
+	lastCheckDate := lastCheck.UTC().Format("2006-01-02")
+
+	if currentDate == lastCheckDate {
+		return nil // Already processed today
+	}
+
+	// Update last check time
+	ds.mu.Lock()
+	ds.lastDailyDigestCheck = currentTime
+	ds.mu.Unlock()
+
+	log.Info().Msg("processing daily message digests")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	// Get all active users with daily digest enabled
+	users, err := ds.database.UserService.GetAllActiveUsers(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get active users: %w", err)
+	}
+
+	sentCount := 0
+	for _, user := range users {
+		// Check if user has daily digest preference enabled
+		prefs, err := ds.database.UserService.GetNotificationPreferences(ctx, user.ID)
+		if err != nil {
+			log.Error().Err(err).Str("userId", user.ID.Hex()).Msg("failed to get notification preferences")
+			continue
+		}
+
+		if !prefs[string(types.NotificationDailyMessageDigest)] {
+			continue // User has disabled daily digest
+		}
+
+		// Check if already sent today
+		if !user.LastDailyDigestSent.IsZero() {
+			lastSentDate := user.LastDailyDigestSent.UTC().Format("2006-01-02")
+			if currentDate == lastSentDate {
+				continue // Already sent today
+			}
+		}
+
+		// Get unread conversation details
+		details, err := ds.database.MessageService.GetUnreadConversationDetails(ctx, user.ID, mailtemplates.AppUrl)
+		if err != nil {
+			log.Error().Err(err).Str("userId", user.ID.Hex()).Msg("failed to get unread conversation details")
+			continue
+		}
+
+		// Skip if no unread messages
+		if details.TotalUnread == 0 {
+			continue
+		}
+
+		// Send daily digest email
+		if err := ds.sendDailyDigestEmail(ctx, user, details); err != nil {
+			log.Error().Err(err).Str("userId", user.ID.Hex()).Msg("failed to send daily digest email")
+			continue
+		}
+
+		// Update LastDailyDigestSent
+		if _, err := ds.database.UserService.UpdateUser(ctx, user.ID, map[string]interface{}{
+			"lastDailyDigestSent": currentTime,
+		}); err != nil {
+			log.Error().Err(err).Str("userId", user.ID.Hex()).Msg("failed to update last daily digest sent")
+			// Don't fail the digest for this, just log
+		}
+
+		sentCount++
+	}
+
+	log.Info().Int("sentCount", sentCount).Msg("completed daily message digests")
+	return nil
+}
+
+// sendDailyDigestEmail sends a consolidated daily digest email
+func (ds *DigestScheduler) sendDailyDigestEmail(
+	ctx context.Context,
+	user *db.User,
+	details *db.UnreadConversationDetails,
+) error {
+	// Prepare email data
+	emailData := struct {
+		AppName                string
+		LogoURL                string
+		TotalUnread            int64
+		PrivateConversations   []db.ConversationDetail
+		CommunityConversations []db.ConversationDetail
+		GeneralForumUnread     int64
+		GeneralForumURL        string
+		ButtonUrl              string
+	}{
+		AppName:                mailtemplates.AppName,
+		LogoURL:                mailtemplates.LogoURL,
+		TotalUnread:            details.TotalUnread,
+		PrivateConversations:   details.PrivateConversations,
+		CommunityConversations: details.CommunityConversations,
+		GeneralForumUnread:     details.GeneralForumUnread,
+		GeneralForumURL:        details.GeneralForumURL,
+		ButtonUrl:              fmt.Sprintf("%s/messages", mailtemplates.AppUrl),
+	}
+
+	// Execute template
+	mailNotification, err := mailtemplates.DailyMessageDigestMailNotification.ExecTemplate(emailData, user.LanguageCode)
+	if err != nil {
+		return fmt.Errorf("failed to execute email template: %w", err)
+	}
+
+	// Set recipient
+	mailNotification.ToAddress = user.Email
+
+	// Send email
+	if err := ds.mailService.SendNotification(ctx, mailNotification); err != nil {
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+
+	log.Info().
+		Str("userId", user.ID.Hex()).
+		Str("email", user.Email).
+		Int64("totalUnread", details.TotalUnread).
+		Msg("sent daily message digest")
+
+	return nil
 }
