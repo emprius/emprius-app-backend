@@ -16,17 +16,18 @@ const (
 
 // Database struct encapsulates MongoDB client and database.
 type Database struct {
-	Client              *mongo.Client
-	Database            *mongo.Database
-	ToolService         *ToolService
-	ToolCategoryService *ToolCategoryService
-	ImageService        *ImageService
-	TransportService    *TransportService
-	UserService         *UserService
-	BookingService      *BookingService
-	InviteCodeService   *InviteCodeService
-	CommunityService    *CommunityService
-	MessageService      *MessageService
+	Client                          *mongo.Client
+	Database                        *mongo.Database
+	ToolService                     *ToolService
+	ToolCategoryService             *ToolCategoryService
+	ImageService                    *ImageService
+	TransportService                *TransportService
+	UserService                     *UserService
+	BookingService                  *BookingService
+	InviteCodeService               *InviteCodeService
+	CommunityService                *CommunityService
+	MessageService                  *MessageService
+	MessageNotificationQueueService *MessageNotificationQueueService
 }
 
 // New initializes a new MongoDB connection.
@@ -57,7 +58,11 @@ func New(uri string, secret ...string) (*Database, error) {
 	database.BookingService = NewBookingService(database.Database)
 	database.InviteCodeService = NewInviteCodeService(database)
 	database.CommunityService = NewCommunityService(database)
+	database.MessageNotificationQueueService = NewMessageNotificationQueueService(database)
 	database.MessageService = NewMessageService(database)
+
+	// Add default digest delay minutes to MessageService
+	database.MessageService.DigestDelayMinutes = 60
 
 	if err := database.CreateTables(); err != nil {
 		return nil, fmt.Errorf("failed to create tables: %w", err)
@@ -74,4 +79,8 @@ func (db *Database) Close(ctx context.Context) error {
 // CreateTables initializes all collections and indexes.
 func (db *Database) CreateTables() error {
 	return InitializeDatabase(db)
+}
+
+func (db *Database) SetDigestDelayMinutes(delay int) {
+	db.MessageService.DigestDelayMinutes = delay
 }

@@ -358,6 +358,34 @@ func createUniqueIndexes(db *Database, ctx context.Context) error {
 		return err
 	}
 
+	// Message notification queue collection indexes
+	messageNotificationQueueColl := db.Database.Collection("message_notification_queue")
+	_, err = messageNotificationQueueColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "userId", Value: 1},
+				{Key: "conversationKey", Value: 1},
+				{Key: "processed", Value: 1},
+			},
+			Options: options.Index(),
+		},
+		{
+			Keys: bson.D{
+				{Key: "processed", Value: 1},
+				{Key: "notificationScheduledFor", Value: 1},
+			},
+			Options: options.Index(),
+		},
+		{
+			Keys:    bson.D{{Key: "userId", Value: 1}},
+			Options: options.Index(),
+		},
+	})
+	if err != nil {
+		log.Printf("Error creating message notification queue indexes: %v\n", err)
+		return err
+	}
+
 	log.Println("All indexes created successfully")
 	return nil
 }

@@ -37,6 +37,7 @@ type User struct {
 	NotificationPreferences map[string]bool     `bson:"notificationPreferences,omitempty" json:"notificationPreferences,omitempty"`
 	AdditionalContacts      map[string]string   `bson:"additionalContacts,omitempty" json:"additionalContacts,omitempty"`
 	LanguageCode            string              `bson:"languageCode,omitempty" json:"lang,omitempty"`
+	LastDailyDigestSent     time.Time           `bson:"lastDailyDigestSent,omitempty" json:"lastDailyDigestSent,omitempty"`
 }
 
 // UserCommunityRole represents a user's role in a community
