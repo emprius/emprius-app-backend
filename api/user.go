@@ -606,7 +606,6 @@ func (a *API) userProfileUpdateHandler(r *Request) (interface{}, error) {
 		"salt":               user.Salt,
 		"community":          user.Community,
 		"bio":                user.Bio,
-		"lastSeen":           time.Now(), // Update lastSeen when profile is updated
 		"additionalContacts": user.AdditionalContacts,
 		"languageCode":       user.LanguageCode,
 	}
