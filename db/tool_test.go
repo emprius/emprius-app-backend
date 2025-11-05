@@ -479,12 +479,12 @@ func TestSearchTitleAndDescription(t *testing.T) {
 		{
 			name:        "Partial word match in title",
 			searchTerm:  "range",
-			expectedIDs: []int64{2, 3}, // Matches "Super RangeFinder" and "rangeX 3000"
+			expectedIDs: []int64{3, 2}, // Matches "rangeX 3000" and "Super RangeFinder" (newest first)
 		},
 		{
 			name:        "Search in description",
 			searchTerm:  "powerful",
-			expectedIDs: []int64{3, 5}, // Matches "Powerful laser range device" and "A powerful drill machine"
+			expectedIDs: []int64{5, 3}, // Matches "A powerful drill machine" and "Powerful laser range device" (newest first)
 		},
 		{
 			name:        "No match scenario",
