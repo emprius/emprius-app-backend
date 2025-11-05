@@ -592,7 +592,11 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 		bson.D{
 			{Key: "$unset", Value: "user"},
 		},
-		// Stage 5: Use $facet to get both data and count
+		// Stage 5: Sort by newest tools first
+		bson.D{
+			{Key: "$sort", Value: bson.D{{Key: "_id", Value: -1}}},
+		},
+		// Stage 6: Use $facet to get both data and count
 		bson.D{
 			{Key: "$facet", Value: bson.D{
 				{Key: "data", Value: bson.A{
