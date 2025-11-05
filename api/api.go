@@ -122,6 +122,9 @@ func (a *API) router() http.Handler {
 		// Handle valid JWT tokens.
 		r.Use(a.authenticator)
 
+		// Update lastSeen timestamp for authenticated requests
+		r.Use(a.lastSeenMiddleware)
+
 		// Register domain-specific routes
 		a.RegisterUserRoutes(r)
 		a.RegisterToolRoutes(r)
