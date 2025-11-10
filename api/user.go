@@ -199,11 +199,7 @@ func (a *API) registerHandler(r *Request) (interface{}, error) {
 
 	// send the welcome email
 	if err := a.sendMail(r.Context.Request.Context(), user.Email, mailtemplates.WelcomeMailNotification,
-		struct {
-			AppName string
-			AppUrl  string
-			LogoURL string
-		}{mailtemplates.AppName, mailtemplates.AppUrl, mailtemplates.LogoURL},
+		struct{}{},
 		user.LanguageCode,
 	); err != nil {
 		log.Warn().Err(err).Msg("could not send welcome email")

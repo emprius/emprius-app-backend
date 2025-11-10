@@ -251,14 +251,10 @@ func (ds *DigestScheduler) sendPrivateMessageDigest(
 
 	// Prepare email data
 	emailData := struct {
-		AppName     string
-		LogoURL     string
 		SenderName  string
 		UnreadCount int
 		ButtonUrl   string
 	}{
-		AppName:     mailtemplates.AppName,
-		LogoURL:     mailtemplates.LogoURL,
 		SenderName:  otherUser.Name,
 		UnreadCount: unreadCount,
 		ButtonUrl:   fmt.Sprintf("%s/messages/%s", mailtemplates.AppUrl, otherUserIDStr),
@@ -295,14 +291,10 @@ func (ds *DigestScheduler) sendCommunityMessageDigest(
 
 	// Prepare email data
 	emailData := struct {
-		AppName       string
-		LogoURL       string
 		CommunityName string
 		UnreadCount   int
 		ButtonUrl     string
 	}{
-		AppName:       mailtemplates.AppName,
-		LogoURL:       mailtemplates.LogoURL,
 		CommunityName: community.Name,
 		UnreadCount:   unreadCount,
 		ButtonUrl:     fmt.Sprintf("%s/messages/community/%s", mailtemplates.AppUrl, communityIDStr),
@@ -321,13 +313,9 @@ func (ds *DigestScheduler) sendGeneralMessageDigest(
 ) error {
 	// Prepare email data
 	emailData := struct {
-		AppName     string
-		LogoURL     string
 		UnreadCount int
 		ButtonUrl   string
 	}{
-		AppName:     mailtemplates.AppName,
-		LogoURL:     mailtemplates.LogoURL,
 		UnreadCount: unreadCount,
 		ButtonUrl:   fmt.Sprintf("%s/messages/general", mailtemplates.AppUrl),
 	}
@@ -452,8 +440,6 @@ func (ds *DigestScheduler) sendDailyDigestEmail(
 ) error {
 	// Prepare email data
 	emailData := struct {
-		AppName                string
-		LogoURL                string
 		TotalUnread            int64
 		PrivateConversations   []db.ConversationDetail
 		CommunityConversations []db.ConversationDetail
@@ -461,8 +447,6 @@ func (ds *DigestScheduler) sendDailyDigestEmail(
 		GeneralForumURL        string
 		ButtonUrl              string
 	}{
-		AppName:                mailtemplates.AppName,
-		LogoURL:                mailtemplates.LogoURL,
 		TotalUnread:            details.TotalUnread,
 		PrivateConversations:   details.PrivateConversations,
 		CommunityConversations: details.CommunityConversations,

@@ -125,9 +125,19 @@ func addCommonTemplateFields(data interface{}) map[string]any {
 		}
 	}
 
-	// add common fields available to all templates (only if not already set)
-	if _, exists := result["NotificationsUrl"]; !exists {
-		result["NotificationsUrl"] = NotificationsUrl
+	// common default fields
+	defaults := map[string]string{
+		"NotificationsUrl": NotificationsUrl,
+		"AppName":          AppName,
+		"AppUrl":           AppUrl,
+		"LogoURL":          LogoURL,
+	}
+
+	// set default values only if not already present
+	for key, value := range defaults {
+		if _, exists := result[key]; !exists {
+			result[key] = value
+		}
 	}
 
 	return result
