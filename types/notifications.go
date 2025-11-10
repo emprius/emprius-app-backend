@@ -48,7 +48,16 @@ func (nt NotificationType) String() string {
 func GetDefaultNotificationPreferences() map[string]bool {
 	preferences := make(map[string]bool)
 	for _, notificationType := range GetAllNotificationTypes() {
-		preferences[notificationType.String()] = true // All notifications enabled by default
+		switch notificationType {
+		case NotificationPrivateMessages,
+			NotificationCommunityMessages,
+			NotificationGeneralForumMessages,
+			NotificationDailyMessageDigest:
+			preferences[notificationType.String()] = false // Disable message notifications by default
+		default:
+			preferences[notificationType.String()] = true // Rest of notifications enabled by default
+		}
+
 	}
 	return preferences
 }
