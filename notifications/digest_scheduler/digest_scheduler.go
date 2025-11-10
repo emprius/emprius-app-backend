@@ -3,6 +3,7 @@ package digest_scheduler
 import (
 	"context"
 	"fmt"
+	"github.com/emprius/emprius-app-backend/notifications/smtp"
 	"strings"
 	"sync"
 	"time"
@@ -263,17 +264,8 @@ func (ds *DigestScheduler) sendPrivateMessageDigest(
 		ButtonUrl:   fmt.Sprintf("%s/messages/%s", mailtemplates.AppUrl, otherUserIDStr),
 	}
 
-	// Execute template
-	mailNotification, err := mailtemplates.PrivateMessageDigestMailNotification.ExecTemplate(emailData, user.LanguageCode)
-	if err != nil {
-		return fmt.Errorf("failed to execute email template: %w", err)
-	}
-
-	// Set recipient
-	mailNotification.ToAddress = user.Email
-
-	// Send email
-	return ds.mailService.SendNotification(ctx, mailNotification)
+	// Send email using shared helper
+	return smtp.SendMail(ctx, ds.mailService, user.Email, mailtemplates.PrivateMessageDigestMailNotification, emailData, user.LanguageCode)
 }
 
 // sendCommunityMessageDigest sends a digest email for community messages
@@ -316,17 +308,8 @@ func (ds *DigestScheduler) sendCommunityMessageDigest(
 		ButtonUrl:     fmt.Sprintf("%s/messages/community/%s", mailtemplates.AppUrl, communityIDStr),
 	}
 
-	// Execute template
-	mailNotification, err := mailtemplates.CommunityMessageDigestMailNotification.ExecTemplate(emailData, user.LanguageCode)
-	if err != nil {
-		return fmt.Errorf("failed to execute email template: %w", err)
-	}
-
-	// Set recipient
-	mailNotification.ToAddress = user.Email
-
-	// Send email
-	return ds.mailService.SendNotification(ctx, mailNotification)
+	// Send email using shared helper
+	return smtp.SendMail(ctx, ds.mailService, user.Email, mailtemplates.CommunityMessageDigestMailNotification, emailData, user.LanguageCode)
 }
 
 // sendGeneralMessageDigest sends a digest email for general forum messages
@@ -349,17 +332,8 @@ func (ds *DigestScheduler) sendGeneralMessageDigest(
 		ButtonUrl:   fmt.Sprintf("%s/messages/general", mailtemplates.AppUrl),
 	}
 
-	// Execute template
-	mailNotification, err := mailtemplates.GeneralMessageDigestMailNotification.ExecTemplate(emailData, user.LanguageCode)
-	if err != nil {
-		return fmt.Errorf("failed to execute email template: %w", err)
-	}
-
-	// Set recipient
-	mailNotification.ToAddress = user.Email
-
-	// Send email
-	return ds.mailService.SendNotification(ctx, mailNotification)
+	// Send email using shared helper
+	return smtp.SendMail(ctx, ds.mailService, user.Email, mailtemplates.GeneralMessageDigestMailNotification, emailData, user.LanguageCode)
 }
 
 // getNotificationTypeForMessageType maps message types to notification types
@@ -497,17 +471,8 @@ func (ds *DigestScheduler) sendDailyDigestEmail(
 		ButtonUrl:              fmt.Sprintf("%s/messages", mailtemplates.AppUrl),
 	}
 
-	// Execute template
-	mailNotification, err := mailtemplates.DailyMessageDigestMailNotification.ExecTemplate(emailData, user.LanguageCode)
-	if err != nil {
-		return fmt.Errorf("failed to execute email template: %w", err)
-	}
-
-	// Set recipient
-	mailNotification.ToAddress = user.Email
-
-	// Send email
-	if err := ds.mailService.SendNotification(ctx, mailNotification); err != nil {
+	// Send email using shared helper
+	if err := smtp.SendMail(ctx, ds.mailService, user.Email, mailtemplates.DailyMessageDigestMailNotification, emailData, user.LanguageCode); err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
