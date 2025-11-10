@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	htmltemplate "html/template"
+	"reflect"
 	"strings"
 	texttemplate "text/template"
 
@@ -95,6 +96,47 @@ func Load() error {
 	return nil
 }
 
+// addCommonTemplateFields adds common fields to the template data that should be
+// available to all templates (e.g., NotificationsUrl). It converts the data
+// to a map and adds the common fields. If data is already a map, it adds to it.
+// If data is a struct, it uses reflection to copy all exported fields.
+func addCommonTemplateFields(data any) map[string]any {
+	result := make(map[string]any)
+
+	// convert data to map if it's a map[string]any
+	if dataMap, ok := data.(map[string]any); ok {
+		for k, v := range dataMap {
+			result[k] = v
+		}
+	} else {
+		// use reflection to copy struct fields to map
+		val := reflect.ValueOf(data)
+		typ := reflect.TypeOf(data)
+
+		// handle pointers
+		if val.Kind() == reflect.Ptr {
+			val = val.Elem()
+			typ = typ.Elem()
+		}
+
+		// if it's a struct, copy all exported fields
+		if val.Kind() == reflect.Struct {
+			for i := 0; i < val.NumField(); i++ {
+				field := typ.Field(i)
+				// only copy exported fields (fields that start with uppercase)
+				if field.PkgPath == "" {
+					result[field.Name] = val.Field(i).Interface()
+				}
+			}
+		}
+	}
+
+	// add common fields available to all templates
+	result["NotificationsUrl"] = NotificationsUrl
+
+	return result
+}
+
 // ExecTemplate method checks if the template file exists in the available
 // mail templates and if it does, it executes the template with the data
 // provided. If it doesn't exist, it returns an error. If the plain body
@@ -128,8 +170,11 @@ func (mt MailTemplate) ExecTemplate(data any, lang string) (*notifications.Notif
 		return nil, fmt.Errorf("template not found")
 	}
 
+	// enrich template data with common fields
+	enrichedData := addCommonTemplateFields(data)
+
 	// create a notification with the plain body placeholder inflated
-	n, err := mt.ExecPlain(data, lang)
+	n, err := mt.ExecPlain(enrichedData, lang)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +190,7 @@ func (mt MailTemplate) ExecTemplate(data any, lang string) (*notifications.Notif
 	}
 	// inflate the template with the data
 	buf := new(bytes.Buffer)
-	if err := tmpl.Execute(buf, data); err != nil {
+	if err := tmpl.Execute(buf, enrichedData); err != nil {
 		return nil, err
 	}
 	// set the body of the notification
