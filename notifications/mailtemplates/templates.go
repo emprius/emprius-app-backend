@@ -98,41 +98,37 @@ func Load() error {
 
 // addCommonTemplateFields adds common fields to the template data that should be
 // available to all templates (e.g., NotificationsUrl). It converts the data
-// to a map and adds the common fields. If data is already a map, it adds to it.
-// If data is a struct, it uses reflection to copy all exported fields.
-func addCommonTemplateFields(data any) map[string]any {
+// struct to a map and adds the common fields. It uses reflection to copy all
+// exported fields from the struct. Common fields are only added if they don't
+// already exist in the struct.
+func addCommonTemplateFields(data interface{}) map[string]any {
 	result := make(map[string]any)
 
-	// convert data to map if it's a map[string]any
-	if dataMap, ok := data.(map[string]any); ok {
-		for k, v := range dataMap {
-			result[k] = v
-		}
-	} else {
-		// use reflection to copy struct fields to map
-		val := reflect.ValueOf(data)
-		typ := reflect.TypeOf(data)
+	// use reflection to copy struct fields to map
+	val := reflect.ValueOf(data)
+	typ := reflect.TypeOf(data)
 
-		// handle pointers
-		if val.Kind() == reflect.Ptr {
-			val = val.Elem()
-			typ = typ.Elem()
-		}
+	// handle pointers
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+		typ = typ.Elem()
+	}
 
-		// if it's a struct, copy all exported fields
-		if val.Kind() == reflect.Struct {
-			for i := 0; i < val.NumField(); i++ {
-				field := typ.Field(i)
-				// only copy exported fields (fields that start with uppercase)
-				if field.PkgPath == "" {
-					result[field.Name] = val.Field(i).Interface()
-				}
+	// if it's a struct, copy all exported fields
+	if val.Kind() == reflect.Struct {
+		for i := 0; i < val.NumField(); i++ {
+			field := typ.Field(i)
+			// only copy exported fields (fields that start with uppercase)
+			if field.PkgPath == "" {
+				result[field.Name] = val.Field(i).Interface()
 			}
 		}
 	}
 
-	// add common fields available to all templates
-	result["NotificationsUrl"] = NotificationsUrl
+	// add common fields available to all templates (only if not already set)
+	if _, exists := result["NotificationsUrl"]; !exists {
+		result["NotificationsUrl"] = NotificationsUrl
+	}
 
 	return result
 }
@@ -145,7 +141,7 @@ func addCommonTemplateFields(data any) map[string]any {
 // filled with the data provided.
 // The optional lang parameter specifies the language code (e.g., "en", "es", "ca").
 // If not provided or not supported, defaults to English ("en").
-func (mt MailTemplate) ExecTemplate(data any, lang string) (*notifications.Notification, error) {
+func (mt MailTemplate) ExecTemplate(data interface{}, lang string) (*notifications.Notification, error) {
 	// try to find the language-specific template first
 	var path string
 	var ok bool
@@ -209,7 +205,7 @@ func (mt MailTemplate) ExecTemplate(data any, lang string) (*notifications.Notif
 //
 // This method also allows to notifications services that do not support HTML
 // emails to use a mail template.
-func (mt MailTemplate) ExecPlain(data any, languageCode string) (*notifications.Notification, error) {
+func (mt MailTemplate) ExecPlain(data interface{}, languageCode string) (*notifications.Notification, error) {
 	n := &notifications.Notification{}
 	// Try to use language-specific plain body first
 	var plainBodyTemplate string

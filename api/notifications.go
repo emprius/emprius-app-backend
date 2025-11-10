@@ -16,7 +16,7 @@ import (
 // the notification could not be sent or the email address is invalid. If the
 // mail service is not available, it does nothing.
 // The lang parameter specifies the language code for the email template.
-func (a *API) sendMail(ctx context.Context, to string, mail mailtemplates.MailTemplate, data any, lang string) error {
+func (a *API) sendMail(ctx context.Context, to string, mail mailtemplates.MailTemplate, data interface{}, lang string) error {
 	if a.mail != nil {
 		ctx, cancel := context.WithTimeout(ctx, time.Second*10)
 		defer cancel()
