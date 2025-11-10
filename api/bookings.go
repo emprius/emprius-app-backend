@@ -348,9 +348,6 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 		if renter.NotificationPreferences[string(types.NotificationBookingAccepted)] {
 			if err := a.sendMail(r.Context.Request.Context(), renter.Email, mailtemplates.BookingAcceptedMailNotification,
 				struct {
-					AppName    string
-					AppUrl     string
-					LogoURL    string
 					ToolName   string
 					FromDate   string
 					ToDate     string
@@ -359,9 +356,6 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 					UserUrl    string
 					UserRating string
 				}{
-					mailtemplates.AppName,
-					mailtemplates.AppUrl,
-					mailtemplates.LogoURL,
 					tool.Title,
 					booking.StartDate.Format("02 Jan 2006"),
 					booking.EndDate.Format("02 Jan 2006"),
@@ -562,14 +556,10 @@ func (a *API) HandleUpdateBookingStatus(r *Request) (interface{}, error) {
 					affectedUser.Email,
 					mailtemplates.NomadicToolHolderIsChangedMailNotification,
 					struct {
-						AppName   string
-						LogoURL   string
 						ToolName  string
 						UserName  string
 						ButtonUrl string
 					}{
-						mailtemplates.AppName,
-						mailtemplates.LogoURL,
 						tool.Title,
 						renter.Name,
 						fmt.Sprintf(mailtemplates.BookingUrl, modifiedBooking.ID.Hex()),
@@ -817,9 +807,6 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 		// send the new request notification to the recipient
 		if err := a.sendMail(r.Context.Request.Context(), toUser.Email, mailtemplates.NewIncomingRequestMailNotification,
 			struct {
-				AppName      string
-				AppUrl       string
-				LogoURL      string
 				UserName     string
 				UserUrl      string
 				UserRating   string
@@ -830,9 +817,6 @@ func (a *API) HandleCreateBooking(r *Request) (interface{}, error) {
 				WayOfContact string
 				ButtonUrl    string
 			}{
-				mailtemplates.AppName,
-				mailtemplates.AppUrl,
-				mailtemplates.LogoURL,
 				fromUser.Name,
 				fmt.Sprintf(mailtemplates.UserUrl, fromUser.ID.Hex()),
 				notifications.Stars(fromUser.Rating),

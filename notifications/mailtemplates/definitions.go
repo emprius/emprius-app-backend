@@ -50,18 +50,24 @@ Please check the request details and respond accordingly on {{.ButtonUrl}}.
 		"ca": "Nova sol·licitud d'eina rebuda",
 	},
 	PlainBodies: map[string]string{
-		"en": `{{.UserName}} is interested in borrowing your tool {{.ToolName}} from 
+		"en": `{{.UserName}} is interested in borrowing your tool {{.ToolName}} from
 {{.FromDate}} to {{.ToDate}}.
 
-Please check the request details and respond accordingly on {{.ButtonUrl}}.`,
-		"es": `{{.UserName}} está interesado en pedir prestada tu herramienta {{.ToolName}} desde 
+Please check the request details and respond accordingly on {{.ButtonUrl}}.
+
+Manage notification preferences: {{.NotificationsUrl}}`,
+		"es": `{{.UserName}} está interesado en pedir prestada tu herramienta {{.ToolName}} desde
 {{.FromDate}} hasta {{.ToDate}}.
 
-Por favor revisa los detalles de la solicitud y responde en {{.ButtonUrl}}.`,
-		"ca": `{{.UserName}} està interessat a demanar prestada la teva eina {{.ToolName}} des de 
+Por favor revisa los detalles de la solicitud y responde en {{.ButtonUrl}}.
+
+Gestionar preferencias de notificaciones: {{.NotificationsUrl}}`,
+		"ca": `{{.UserName}} està interessat a demanar prestada la teva eina {{.ToolName}} des de
 {{.FromDate}} fins {{.ToDate}}.
 
-Si us plau revisa els detalls de la sol·licitud i respon a {{.ButtonUrl}}.`,
+Si us plau revisa els detalls de la sol·licitud i respon a {{.ButtonUrl}}.
+
+Gestionar preferències de notificacions: {{.NotificationsUrl}}`,
 	},
 }
 
@@ -84,18 +90,24 @@ Check your booking on {{.ButtonUrl}}.
 		"ca": "La teva sol·licitud d'eina ha estat acceptada",
 	},
 	PlainBodies: map[string]string{
-		"en": `Your request for tool {{.ToolName}} from 
+		"en": `Your request for tool {{.ToolName}} from
 {{.FromDate}} to {{.ToDate}} has been accepted by {{.UserName}}.
 
-Check your booking on {{.ButtonUrl}}.`,
-		"es": `Tu solicitud para la herramienta {{.ToolName}} desde 
+Check your booking on {{.ButtonUrl}}.
+
+Manage notification preferences: {{.NotificationsUrl}}`,
+		"es": `Tu solicitud para la herramienta {{.ToolName}} desde
 {{.FromDate}} hasta {{.ToDate}} ha sido aceptada por {{.UserName}}.
 
-Revisa tu reserva en {{.ButtonUrl}}.`,
-		"ca": `La teva sol·licitud per l'eina {{.ToolName}} des de 
+Revisa tu reserva en {{.ButtonUrl}}.
+
+Gestionar preferencias de notificaciones: {{.NotificationsUrl}}`,
+		"ca": `La teva sol·licitud per l'eina {{.ToolName}} des de
 {{.FromDate}} fins {{.ToDate}} ha estat acceptada per {{.UserName}}.
 
-Revisa la teva reserva a {{.ButtonUrl}}.`,
+Revisa la teva reserva a {{.ButtonUrl}}.
+
+Gestionar preferències de notificacions: {{.NotificationsUrl}}`,
 	},
 }
 
@@ -114,10 +126,16 @@ Check new pick up location on {{.ButtonUrl}}.`,
 	},
 	PlainBodies: map[string]string{
 		"en": `The holder for nomadic tool {{.ToolName}} has been changed to {{.UserName}}.
-Check new pick up location on {{.ButtonUrl}}.`,
+Check new pick up location on {{.ButtonUrl}}.
+
+Manage notification preferences: {{.NotificationsUrl}}`,
 		"es": `El portador de la herramienta nómada {{.ToolName}} ha cambiado a {{.UserName}}.
-Consulta el nuevo lugar de recogida en {{.ButtonUrl}}.`,
+Consulta el nuevo lugar de recogida en {{.ButtonUrl}}.
+
+Gestionar preferencias de notificaciones: {{.NotificationsUrl}}`,
 		"ca": `El portador de l'eina nòmada {{.ToolName}} ha canviat a {{.UserName}}.
-Consulta el nou lloc de recollida a {{.ButtonUrl}}.`,
+Consulta el nou lloc de recollida a {{.ButtonUrl}}.
+
+Gestionar preferències de notificacions: {{.NotificationsUrl}}`,
 	},
 }

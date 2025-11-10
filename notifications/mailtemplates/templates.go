@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	htmltemplate "html/template"
+	"reflect"
 	"strings"
 	texttemplate "text/template"
 
@@ -95,6 +96,53 @@ func Load() error {
 	return nil
 }
 
+// addCommonTemplateFields adds common fields to the template data that should be
+// available to all templates (e.g., NotificationsUrl). It converts the data
+// struct to a map and adds the common fields. It uses reflection to copy all
+// exported fields from the struct. Common fields are only added if they don't
+// already exist in the struct.
+func addCommonTemplateFields(data interface{}) map[string]any {
+	result := make(map[string]any)
+
+	// use reflection to copy struct fields to map
+	val := reflect.ValueOf(data)
+	typ := reflect.TypeOf(data)
+
+	// handle pointers
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+		typ = typ.Elem()
+	}
+
+	// if it's a struct, copy all exported fields
+	if val.Kind() == reflect.Struct {
+		for i := 0; i < val.NumField(); i++ {
+			field := typ.Field(i)
+			// only copy exported fields (fields that start with uppercase)
+			if field.PkgPath == "" {
+				result[field.Name] = val.Field(i).Interface()
+			}
+		}
+	}
+
+	// common default fields
+	defaults := map[string]string{
+		"NotificationsUrl": NotificationsUrl,
+		"AppName":          AppName,
+		"AppUrl":           AppUrl,
+		"LogoURL":          LogoURL,
+	}
+
+	// set default values only if not already present
+	for key, value := range defaults {
+		if _, exists := result[key]; !exists {
+			result[key] = value
+		}
+	}
+
+	return result
+}
+
 // ExecTemplate method checks if the template file exists in the available
 // mail templates and if it does, it executes the template with the data
 // provided. If it doesn't exist, it returns an error. If the plain body
@@ -103,7 +151,7 @@ func Load() error {
 // filled with the data provided.
 // The optional lang parameter specifies the language code (e.g., "en", "es", "ca").
 // If not provided or not supported, defaults to English ("en").
-func (mt MailTemplate) ExecTemplate(data any, lang string) (*notifications.Notification, error) {
+func (mt MailTemplate) ExecTemplate(data interface{}, lang string) (*notifications.Notification, error) {
 	// try to find the language-specific template first
 	var path string
 	var ok bool
@@ -128,8 +176,11 @@ func (mt MailTemplate) ExecTemplate(data any, lang string) (*notifications.Notif
 		return nil, fmt.Errorf("template not found")
 	}
 
+	// enrich template data with common fields
+	enrichedData := addCommonTemplateFields(data)
+
 	// create a notification with the plain body placeholder inflated
-	n, err := mt.ExecPlain(data, lang)
+	n, err := mt.ExecPlain(enrichedData, lang)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +196,7 @@ func (mt MailTemplate) ExecTemplate(data any, lang string) (*notifications.Notif
 	}
 	// inflate the template with the data
 	buf := new(bytes.Buffer)
-	if err := tmpl.Execute(buf, data); err != nil {
+	if err := tmpl.Execute(buf, enrichedData); err != nil {
 		return nil, err
 	}
 	// set the body of the notification
@@ -164,7 +215,7 @@ func (mt MailTemplate) ExecTemplate(data any, lang string) (*notifications.Notif
 //
 // This method also allows to notifications services that do not support HTML
 // emails to use a mail template.
-func (mt MailTemplate) ExecPlain(data any, languageCode string) (*notifications.Notification, error) {
+func (mt MailTemplate) ExecPlain(data interface{}, languageCode string) (*notifications.Notification, error) {
 	n := &notifications.Notification{}
 	// Try to use language-specific plain body first
 	var plainBodyTemplate string
