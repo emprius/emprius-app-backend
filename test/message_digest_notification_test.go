@@ -19,7 +19,15 @@ func TestPrivateMessageDigestNotifications(t *testing.T) {
 	t.Run("Automatic Ticker System", func(t *testing.T) {
 		// Create test users
 		senderJWT, _ := c.RegisterAndLoginWithID("digest-ticker-sender@test.com", "Ticker Sender", "password")
-		_, recipientID := c.RegisterAndLoginWithID("digest-ticker-recipient@test.com", "Ticker Recipient", "password")
+		recipientJWT, recipientID := c.RegisterAndLoginWithID("digest-ticker-recipient@test.com", "Ticker Recipient", "password")
+		c.ReadRegistrationMail("digest-ticker-recipient@test.com", t)
+
+		// Enable private message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"private_messages": true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		// reset mock time to now for consistent results
 		c.SetMockTime(time.Now())
@@ -57,7 +65,15 @@ func TestPrivateMessageDigestNotifications(t *testing.T) {
 	t.Run("Email Sent with Correct Unread Count", func(t *testing.T) {
 		// Create test users
 		senderJWT, _ := c.RegisterAndLoginWithID("digest-sender@test.com", "Manual Sender", "password")
-		_, recipientID := c.RegisterAndLoginWithID("digest-recipient@test.com", "Manual Recipient", "password")
+		recipientJWT, recipientID := c.RegisterAndLoginWithID("digest-recipient@test.com", "Manual Recipient", "password")
+		c.ReadRegistrationMail("digest-recipient@test.com", t)
+
+		// Enable private message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"private_messages": true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		// reset mock time to now for consistent results
 		c.SetMockTime(time.Now())
@@ -181,8 +197,15 @@ func TestPrivateMessageDigestNotifications(t *testing.T) {
 	t.Run("No Email Sent Before NotificationScheduledFor Time", func(t *testing.T) {
 		// Create test users
 		senderJWT, _ := c.RegisterAndLoginWithID("digest-sender-timing@test.com", "Timing Sender", "password")
-		_, recipientID := c.RegisterAndLoginWithID("digest-recipient-timing@test.com", "Timing Recipient", "password")
+		recipientJWT, recipientID := c.RegisterAndLoginWithID("digest-recipient-timing@test.com", "Timing Recipient", "password")
 		c.ReadRegistrationMail("digest-recipient-timing@test.com", t)
+
+		// Enable private message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"private_messages": true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		// reset mock time to now for consistent results
 		c.SetMockTime(time.Now())
@@ -303,8 +326,16 @@ func TestDailyMessageDigest(t *testing.T) {
 	t.Run("Daily Digest Sent at Configured Hour (UTC)", func(t *testing.T) {
 		// Create test users
 		sender1JWT, _ := c.RegisterAndLoginWithID("daily-sender1@test.com", "Daily Sender One", "password")
-		_, recipientID := c.RegisterAndLoginWithID("daily-recipient-hour@test.com", "Daily Recipient Hour", "password")
+		recipientJWT, recipientID := c.RegisterAndLoginWithID("daily-recipient-hour@test.com", "Daily Recipient Hour", "password")
 		c.ReadRegistrationMail("daily-recipient-hour@test.com", t)
+
+		// Enable daily digest and private message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"daily_message_digest": true,
+			"private_messages":     true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		// Set mock time to 8:59 AM UTC (before digest time)
 		now := time.Date(2024, 1, 15, 8, 59, 0, 0, time.UTC)
@@ -350,8 +381,16 @@ func TestDailyMessageDigest(t *testing.T) {
 	t.Run("Only Sent Once Per Day Per User", func(t *testing.T) {
 		// Create test users
 		senderJWT, _ := c.RegisterAndLoginWithID("daily-sender-once@test.com", "Once Sender", "password")
-		_, recipientID := c.RegisterAndLoginWithID("daily-recipient-once@test.com", "Once Recipient", "password")
+		recipientJWT, recipientID := c.RegisterAndLoginWithID("daily-recipient-once@test.com", "Once Recipient", "password")
 		c.ReadRegistrationMail("daily-recipient-once@test.com", t)
+
+		// Enable daily digest and private message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"daily_message_digest": true,
+			"private_messages":     true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		// Set mock time to 9:00 AM UTC
 		now := time.Date(2024, 1, 16, 9, 0, 0, 0, time.UTC)
@@ -363,7 +402,7 @@ func TestDailyMessageDigest(t *testing.T) {
 			"recipientId": recipientID,
 			"content":     "Once per day test",
 		}
-		_, code := c.Request(http.MethodPost, senderJWT, messageData, "messages")
+		_, code = c.Request(http.MethodPost, senderJWT, messageData, "messages")
 		qt.Assert(t, code, qt.Equals, 201)
 
 		// Wait for ticker to process
@@ -440,8 +479,16 @@ func TestDailyMessageDigest(t *testing.T) {
 
 	t.Run("Only Sent When Unread Count Greater Than Zero", func(t *testing.T) {
 		// Create test user with NO unread messages
-		_, _ = c.RegisterAndLoginWithID("daily-recipient-zero@test.com", "Zero Recipient", "password")
+		recipientJWT, _ := c.RegisterAndLoginWithID("daily-recipient-zero@test.com", "Zero Recipient", "password")
 		c.ReadRegistrationMail("daily-recipient-zero@test.com", t)
+
+		// Enable daily digest and private message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"daily_message_digest": true,
+			"private_messages":     true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		// Set mock time to 9:00 AM UTC
 		now := time.Date(2024, 1, 18, 9, 0, 0, 0, time.UTC)
@@ -465,6 +512,16 @@ func TestDailyMessageDigest(t *testing.T) {
 		// Create recipient
 		recipientJWT, recipientID := c.RegisterAndLoginWithID("daily-recipient-counts@test.com", "Counts Recipient", "password")
 		c.ReadRegistrationMail("daily-recipient-counts@test.com", t)
+
+		// Enable daily digest and all message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"daily_message_digest":   true,
+			"private_messages":       true,
+			"community_messages":     true,
+			"general_forum_messages": true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		communityData := map[string]interface{}{
 			"name":        "Test Community for Daily Digest",
@@ -490,7 +547,7 @@ func TestDailyMessageDigest(t *testing.T) {
 			"recipientId": recipientID,
 			"content":     "Private from Bob",
 		}
-		_, code := c.Request(http.MethodPost, sender2JWT, messageData, "messages")
+		_, code = c.Request(http.MethodPost, sender2JWT, messageData, "messages")
 		qt.Assert(t, code, qt.Equals, 201)
 
 		// Send 3 community messages
@@ -545,6 +602,15 @@ func TestDailyMessageDigest(t *testing.T) {
 		recipientJWT, recipientID := c.RegisterAndLoginWithID("daily-recipient-names@test.com", "Names Recipient", "password")
 		c.ReadRegistrationMail("daily-recipient-names@test.com", t)
 
+		// Enable daily digest and all message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"daily_message_digest": true,
+			"private_messages":     true,
+			"community_messages":   true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
+
 		// Create a community with specific name
 		communityData := map[string]interface{}{
 			"name":        "Bicing Barcelona",
@@ -558,7 +624,7 @@ func TestDailyMessageDigest(t *testing.T) {
 			"recipientId": recipientID,
 			"content":     "Message from Alice",
 		}
-		_, code := c.Request(http.MethodPost, aliceJWT, messageData, "messages")
+		_, code = c.Request(http.MethodPost, aliceJWT, messageData, "messages")
 		qt.Assert(t, code, qt.Equals, 201)
 
 		// Send message from Bob
@@ -606,11 +672,19 @@ func TestDailyMessageDigest(t *testing.T) {
 		recipientJWT, recipientID := c.RegisterAndLoginWithID("daily-recipient-spanish@test.com", "Spanish Recipient", "password")
 		c.ReadRegistrationMail("daily-recipient-spanish@test.com", t)
 
+		// Enable daily digest and private message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"daily_message_digest": true,
+			"private_messages":     true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
+
 		// Set user language to Spanish
 		updateData := map[string]interface{}{
 			"lang": "es",
 		}
-		_, code := c.Request(http.MethodPost, recipientJWT, updateData, "profile")
+		_, code = c.Request(http.MethodPost, recipientJWT, updateData, "profile")
 		qt.Assert(t, code, qt.Equals, 200)
 
 		// Send message
@@ -645,8 +719,16 @@ func TestDailyMessageDigest(t *testing.T) {
 		senderJWT, _ := c.RegisterAndLoginWithID("daily-sender-timestamp@test.com", "Timestamp Sender", "password")
 
 		// Create recipient
-		_, recipientID := c.RegisterAndLoginWithID("daily-recipient-timestamp@test.com", "Timestamp Recipient", "password")
+		recipientJWT, recipientID := c.RegisterAndLoginWithID("daily-recipient-timestamp@test.com", "Timestamp Recipient", "password")
 		c.ReadRegistrationMail("daily-recipient-timestamp@test.com", t)
+
+		// Enable daily digest and private message notifications for recipient
+		updatePrefs := api.NotificationPreferences{
+			"daily_message_digest": true,
+			"private_messages":     true,
+		}
+		_, code := c.Request(http.MethodPost, recipientJWT, updatePrefs, "profile/notifications")
+		qt.Assert(t, code, qt.Equals, 200)
 
 		// Send message
 		messageData := map[string]interface{}{
@@ -654,7 +736,7 @@ func TestDailyMessageDigest(t *testing.T) {
 			"recipientId": recipientID,
 			"content":     "Timestamp test message",
 		}
-		_, code := c.Request(http.MethodPost, senderJWT, messageData, "messages")
+		_, code = c.Request(http.MethodPost, senderJWT, messageData, "messages")
 		qt.Assert(t, code, qt.Equals, 201)
 
 		// Set mock time to 9:00 AM UTC on a specific date
