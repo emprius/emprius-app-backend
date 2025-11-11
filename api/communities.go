@@ -186,7 +186,7 @@ func (a *API) getCommunityHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 	if !isMember {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user is not a member of this community"))
+		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community not found"))
 	}
 
 	// Get community with member count and tool count
@@ -238,7 +238,7 @@ func (a *API) updateCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	if community.OwnerID != userID {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("only the community owner can update the community"))
+		return nil, ErrForbidden.WithErr(fmt.Errorf("only the community owner can update the community"))
 	}
 
 	// Update community
@@ -291,7 +291,7 @@ func (a *API) deleteCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	if community.OwnerID != userID {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("only the community owner can delete the community"))
+		return nil, ErrForbidden.WithErr(fmt.Errorf("only the community owner can delete the community"))
 	}
 
 	// Delete community
@@ -329,7 +329,7 @@ func (a *API) getCommunityUsersHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 	if !isMember {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user is not a member of this community"))
+		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community not found"))
 	}
 
 	// Get page from query parameters
@@ -470,7 +470,7 @@ func (a *API) leaveCommunityHandler(r *Request) (interface{}, error) {
 			}
 
 			if community.OwnerID != authUserID {
-				return nil, ErrUnauthorized.WithErr(fmt.Errorf("only the community owner can remove other users"))
+				return nil, ErrForbidden.WithErr(fmt.Errorf("only the community owner can remove other users"))
 			}
 		}
 	} else {
@@ -765,7 +765,7 @@ func (a *API) getCommunityToolsHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 	if !isMember {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("user is not a member of this community"))
+		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community not found"))
 	}
 
 	// Get pagination parameters

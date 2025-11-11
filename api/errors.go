@@ -48,6 +48,10 @@ var (
 		Code:    http.StatusBadRequest,
 		Message: "invalid credentials",
 	}
+	ErrForbidden = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "unauthorized access",
+	}
 )
 
 // Request validation errors
