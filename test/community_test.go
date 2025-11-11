@@ -801,6 +801,142 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, code, qt.Equals, 400)
 	})
 
+	t.Run("Community Membership Access Control", func(t *testing.T) {
+		// Create a community for testing
+		resp, code := c.Request(http.MethodPost, ownerJWT,
+			api.CreateCommunityRequest{
+				Name: "Access Control Test Community",
+			},
+			"communities",
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var createResp struct {
+			Data api.CommunityResponse `json:"data"`
+		}
+		err := json.Unmarshal(resp, &createResp)
+		qt.Assert(t, err, qt.IsNil)
+		communityID := createResp.Data.ID
+
+		// Invite and accept member to the community
+		_, code = c.Request(http.MethodPost, ownerJWT, nil, "communities", communityID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Get pending invites for the member
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", "invites")
+		qt.Assert(t, code, qt.Equals, 200)
+
+		var invitesResp struct {
+			Data []api.CommunityInviteResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &invitesResp)
+		qt.Assert(t, err, qt.IsNil)
+
+		// Find the invite for this community
+		var inviteID string
+		for _, invite := range invitesResp.Data {
+			if invite.CommunityID == communityID {
+				inviteID = invite.ID
+				break
+			}
+		}
+		qt.Assert(t, inviteID, qt.Not(qt.Equals), "")
+
+		// Accept the invitation
+		_, code = c.Request(http.MethodPut, memberJWT,
+			map[string]interface{}{
+				"status": "ACCEPTED",
+			},
+			"communities", "invites", inviteID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Test 1: Non-member cannot view community details
+		_, code = c.Request(http.MethodGet, nonMemberJWT, nil, "communities", communityID)
+		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Non-member should not be able to view community details"))
+
+		// Test 2: Member CAN view community details
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID)
+		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Member should be able to view community details"))
+
+		var getResp struct {
+			Data api.CommunityResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &getResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, getResp.Data.ID, qt.Equals, communityID)
+
+		// Test 3: Owner CAN view community details
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID)
+		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community details"))
+
+		// Test 4: Non-member cannot view community members list
+		_, code = c.Request(http.MethodGet, nonMemberJWT, nil, "communities", communityID, "members")
+		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Non-member should not be able to view community members"))
+
+		// Test 5: Member CAN view community members list
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "members")
+		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Member should be able to view community members"))
+
+		var usersResp struct {
+			Data api.PaginatedCommunityUserResponse `json:"data"`
+		}
+		err = json.Unmarshal(resp, &usersResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 2) // Owner and member
+
+		// Test 6: Owner CAN view community members list
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members")
+		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community members"))
+
+		// Create a tool and add it to the community
+		toolID := c.CreateTool(ownerJWT, "Access Control Test Tool")
+		_, code = c.Request(http.MethodPut, ownerJWT,
+			map[string]interface{}{
+				"communities": []string{communityID},
+			},
+			"tools", fmt.Sprint(toolID),
+		)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Test 7: Non-member cannot view community tools
+		_, code = c.Request(http.MethodGet, nonMemberJWT, nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Non-member should not be able to view community tools"))
+
+		// Test 8: Member CAN view community tools
+		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Member should be able to view community tools"))
+
+		var toolsResp struct {
+			Data struct {
+				Tools []*api.Tool `json:"tools"`
+			} `json:"data"`
+		}
+		err = json.Unmarshal(resp, &toolsResp)
+		qt.Assert(t, err, qt.IsNil)
+		qt.Assert(t, len(toolsResp.Data.Tools), qt.Equals, 1)
+		qt.Assert(t, toolsResp.Data.Tools[0].ID, qt.Equals, toolID)
+
+		// Test 9: Owner CAN view community tools
+		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community tools"))
+
+		// Test 10: Verify that after member leaves, they cannot access community anymore
+		_, code = c.Request(http.MethodDelete, memberJWT, nil, "communities", communityID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+
+		// Member should no longer be able to view community details
+		_, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID)
+		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Former member should not be able to view community details after leaving"))
+
+		// Member should no longer be able to view community members
+		_, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "members")
+		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Former member should not be able to view community members after leaving"))
+
+		// Member should no longer be able to view community tools
+		_, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "tools")
+		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Former member should not be able to view community tools after leaving"))
+	})
+
 	t.Run("Modified Endpoints", func(t *testing.T) {
 		// Create a community for testing
 		resp, code := c.Request(http.MethodPost, ownerJWT,

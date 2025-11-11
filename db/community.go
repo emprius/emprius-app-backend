@@ -127,6 +127,26 @@ func (s *CommunityService) GetCommunity(ctx context.Context, id primitive.Object
 	return &community, nil
 }
 
+// IsUserMemberOfCommunity checks if a user is a member of a community
+func (s *CommunityService) IsUserMemberOfCommunity(
+	ctx context.Context,
+	userID primitive.ObjectID,
+	communityID primitive.ObjectID,
+) (bool, error) {
+	// Query the users collection to check if the user has this community in their communities array
+	filter := bson.M{
+		"_id":            userID,
+		"communities.id": communityID,
+	}
+
+	count, err := s.UserService.Collection.CountDocuments(ctx, filter)
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
 // UpdateCommunity updates a community
 func (s *CommunityService) UpdateCommunity(ctx context.Context, id primitive.ObjectID, name string, image types.HexBytes) error {
 	update := bson.M{
