@@ -257,7 +257,7 @@ func TestGetCommunityToolsHandler(t *testing.T) {
 		// Call handler
 		_, err := api.getCommunityToolsHandler(apiReq)
 		c.Assert(err, quicktest.Not(quicktest.IsNil))
-		c.Assert(err.Error(), quicktest.Contains, "not found")
+		c.Assert(err.Error(), quicktest.Contains, "Not member of the community")
 	})
 
 	t.Run("case insensitive search", func(t *testing.T) {

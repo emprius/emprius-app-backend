@@ -174,8 +174,7 @@ func (a *API) getCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	// Get community with member count and tool count
-	ctx := r.Context.Request.Context()
-	community, membersCount, toolsCount, err := a.database.CommunityService.GetCommunityWithMemberCount(ctx, communityID)
+	community, membersCount, toolsCount, err := a.database.CommunityService.GetCommunityWithMemberCount(r.Context.Request.Context(), communityID)
 	if err != nil {
 		return nil, ErrCommunityNotFound.WithErr(err)
 	}
@@ -223,7 +222,7 @@ func (a *API) updateCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	if community.OwnerID != userID {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("only the community owner can update the community"))
+		return nil, ErrForbidden.WithErr(fmt.Errorf("only the community owner can update the community"))
 	}
 
 	// Update community
@@ -276,7 +275,7 @@ func (a *API) deleteCommunityHandler(r *Request) (interface{}, error) {
 	}
 
 	if community.OwnerID != userID {
-		return nil, ErrUnauthorized.WithErr(fmt.Errorf("only the community owner can delete the community"))
+		return nil, ErrForbidden.WithErr(fmt.Errorf("only the community owner can delete the community"))
 	}
 
 	// Delete community
@@ -439,7 +438,7 @@ func (a *API) leaveCommunityHandler(r *Request) (interface{}, error) {
 			}
 
 			if community.OwnerID != authUserID {
-				return nil, ErrUnauthorized.WithErr(fmt.Errorf("only the community owner can remove other users"))
+				return nil, ErrForbidden.WithErr(fmt.Errorf("only the community owner can remove other users"))
 			}
 		}
 	} else {
@@ -721,13 +720,20 @@ func (a *API) getCommunityToolsHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Check if community exists
-	exists, err := a.database.CommunityService.CommunityExists(r.Context.Request.Context(), communityID)
+	// Get user ID
+	userID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	// Check if user is a member of the community
+	ctx := r.Context.Request.Context()
+	isMember, err := a.database.CommunityService.IsUserMemberOfCommunity(ctx, userID, communityID)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
-	if !exists {
-		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community with id %s not found", communityIDStr))
+	if !isMember {
+		return nil, ErrNotMember
 	}
 
 	// Get pagination parameters
@@ -741,7 +747,7 @@ func (a *API) getCommunityToolsHandler(r *Request) (interface{}, error) {
 
 	// Get paginated tools for the community
 	dbTools, total, err := a.database.CommunityService.GetCommunityToolsPaginated(
-		r.Context.Request.Context(),
+		ctx,
 		communityID,
 		page,
 		pageSize,

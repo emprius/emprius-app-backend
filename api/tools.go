@@ -481,9 +481,16 @@ func (a *API) getUserTools(r *Request, id primitive.ObjectID) (interface{}, erro
 		}
 	}
 
-	// Get paginated tools with access control
-	tools, total, err := a.database.ToolService.GetToolsByUserIDPaginated(
-		context.Background(), id, page, pageSize, searchTerm, showOwnTools, showHeldTools,
+	// Get requesting user ID
+	requestingUserID, err := primitive.ObjectIDFromHex(r.UserID)
+	if err != nil {
+		return nil, ErrInvalidUserID.WithErr(err)
+	}
+
+	// Get paginated tools with community access control
+	// This will filter out tools from communities the requesting user is not a member of
+	tools, total, err := a.database.ToolService.GetToolsByUserIDWithAccessControl(
+		context.Background(), id, requestingUserID, page, pageSize, searchTerm, showOwnTools, showHeldTools,
 	)
 	if err != nil {
 		return nil, err

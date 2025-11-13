@@ -133,10 +133,73 @@ func (s *ToolService) GetToolByID(ctx context.Context, id int64) (*Tool, error) 
 	return &tool, nil
 }
 
-// GetToolByIDWithAccessControl retrieves a Tool by its ID with access control for inactive users.
-// Allows access to tools from inactive users if:
-// 1. The requesting user is the tool owner, OR
-// 2. The requesting user was involved in any booking request for this tool
+// buildCommunityAccessStages creates aggregation stages for community membership checking.
+// Returns stages that check if requesting user has access based on:
+// 1. Tool has no communities (public tool), OR
+// 2. User is a member of at least one of the tool's communities
+func buildCommunityAccessStages(requestingUserID primitive.ObjectID) []bson.D {
+	return []bson.D{
+		// Join with users collection to get requesting user's communities
+		{
+			{Key: "$lookup", Value: bson.D{
+				{Key: "from", Value: "users"},
+				{Key: "pipeline", Value: bson.A{
+					bson.D{{Key: "$match", Value: bson.D{
+						{Key: "$expr", Value: bson.D{
+							{Key: "$eq", Value: bson.A{"$_id", requestingUserID}},
+						}},
+					}}},
+					bson.D{{Key: "$project", Value: bson.D{
+						{Key: "communityIds", Value: "$communities.id"},
+					}}},
+				}},
+				{Key: "as", Value: "requestingUser"},
+			}},
+		},
+		// Add field to check if user is member of any tool community
+		{
+			{Key: "$addFields", Value: bson.D{
+				{Key: "userCommunities", Value: bson.D{
+					{Key: "$arrayElemAt", Value: bson.A{"$requestingUser.communityIds", 0}},
+				}},
+				{Key: "toolCommunitiesArray", Value: bson.D{
+					{Key: "$ifNull", Value: bson.A{"$communities", bson.A{}}},
+				}},
+			}},
+		},
+		// Calculate if there's any common community
+		{
+			{Key: "$addFields", Value: bson.D{
+				{Key: "hasCommonCommunity", Value: bson.D{
+					{Key: "$cond", Value: bson.A{
+						// If tool has no communities, it's public (allow access)
+						bson.D{{Key: "$eq", Value: bson.A{
+							bson.D{{Key: "$size", Value: "$toolCommunitiesArray"}},
+							0,
+						}}},
+						true,
+						// Otherwise check if there's any intersection
+						bson.D{{Key: "$gt", Value: bson.A{
+							bson.D{{Key: "$size", Value: bson.D{
+								{Key: "$setIntersection", Value: bson.A{
+									bson.D{{Key: "$ifNull", Value: bson.A{"$userCommunities", bson.A{}}}},
+									"$toolCommunitiesArray",
+								}},
+							}}},
+							0,
+						}}},
+					}},
+				}},
+			}},
+		},
+	}
+}
+
+// GetToolByIDWithAccessControl retrieves a Tool by its ID with access control.
+// Allows access to tools if:
+// 1. Tool owner is active AND (tool is public OR user is member of tool's community), OR
+// 2. Requesting user is the tool owner (always allowed), OR
+// 3. Requesting user was involved in any booking request for this tool (always allowed)
 func (s *ToolService) GetToolByIDWithAccessControl(
 	ctx context.Context,
 	id int64,
@@ -145,7 +208,7 @@ func (s *ToolService) GetToolByIDWithAccessControl(
 	// Convert tool ID to string for booking lookup
 	toolIDStr := strconv.FormatInt(id, 10)
 
-	// Use aggregation to join with users and bookings collections and check access control
+	// Build the aggregation pipeline
 	pipeline := mongo.Pipeline{
 		// Stage 1: Match the specific tool
 		bson.D{{Key: "$match", Value: bson.M{"_id": id}}},
@@ -180,24 +243,33 @@ func (s *ToolService) GetToolByIDWithAccessControl(
 				{Key: "as", Value: "userBookings"},
 			}},
 		},
-		// Stage 4: Filter based on access control rules
-		bson.D{
-			{Key: "$match", Value: bson.D{
-				{Key: "$or", Value: bson.A{
-					// Allow if tool owner is active
-					bson.D{{Key: "owner.active", Value: true}},
-					// Allow if requesting user is the tool owner
-					bson.D{{Key: "userId", Value: requestingUserID}},
-					// Allow if requesting user was involved in any booking for this tool
-					bson.D{{Key: "userBookings", Value: bson.D{{Key: "$ne", Value: bson.A{}}}}},
-				}},
-			}},
-		},
-		// Stage 5: Remove the temporary fields from output
-		bson.D{
-			{Key: "$unset", Value: bson.A{"owner", "userBookings"}},
-		},
 	}
+
+	// Stage 4 & 5: Add community access checking stages
+	communityStages := buildCommunityAccessStages(requestingUserID)
+	pipeline = append(pipeline, communityStages...)
+
+	// Stage 6: Filter based on access control rules
+	pipeline = append(pipeline, bson.D{
+		{Key: "$match", Value: bson.D{
+			{Key: "$or", Value: bson.A{
+				// Allow if tool owner is active AND user has community access
+				bson.D{
+					{Key: "owner.active", Value: true},
+					{Key: "hasCommonCommunity", Value: true},
+				},
+				// Allow if requesting user is the tool owner
+				bson.D{{Key: "userId", Value: requestingUserID}},
+				// Allow if requesting user was involved in any booking for this tool
+				bson.D{{Key: "userBookings", Value: bson.D{{Key: "$ne", Value: bson.A{}}}}},
+			}},
+		}},
+	})
+
+	// Stage 7: Remove the temporary fields from output
+	pipeline = append(pipeline, bson.D{
+		{Key: "$unset", Value: bson.A{"owner", "userBookings", "requestingUser", "userCommunities", "hasCommonCommunity"}},
+	})
 
 	cursor, err := s.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -275,24 +347,35 @@ func (s *ToolService) GetAllTools(ctx context.Context) ([]*Tool, error) {
 	return tools, nil
 }
 
-// GetToolsByUserIDPaginated retrieves tools owned and/or held by a user with pagination and optional search term filtering
-func (s *ToolService) GetToolsByUserIDPaginated(
+// GetToolsByUserIDWithAccessControl retrieves tools owned and/or held by a user with pagination,
+// search term filtering, and community access control.
+// This method filters out tools that belong to communities the requesting user is not a member of,
+// unless the requesting user is the owner of those tools.
+func (s *ToolService) GetToolsByUserIDWithAccessControl(
 	ctx context.Context,
-	userID primitive.ObjectID,
+	targetUserID primitive.ObjectID,
+	requestingUserID primitive.ObjectID,
 	page int,
 	pageSize int,
 	searchTerm string,
 	showOwnTools bool,
 	showHeldTools bool,
 ) ([]*Tool, int64, error) {
-	// Build the base filter for user tools
-	var userConditions []bson.M
+	if page < 0 {
+		page = 0
+	}
+	if pageSize < 0 {
+		pageSize = DefaultPageSize
+	}
+	skip := page * pageSize
 
+	// Build the base match filter for user tools
+	var userConditions []bson.M
 	if showOwnTools {
-		userConditions = append(userConditions, bson.M{"userId": userID})
+		userConditions = append(userConditions, bson.M{"userId": targetUserID})
 	}
 	if showHeldTools {
-		userConditions = append(userConditions, bson.M{"actualUserId": userID})
+		userConditions = append(userConditions, bson.M{"actualUserId": targetUserID})
 	}
 
 	// If neither condition is specified, return empty results
@@ -300,12 +383,12 @@ func (s *ToolService) GetToolsByUserIDPaginated(
 		return []*Tool{}, 0, nil
 	}
 
-	// Build the main filter
-	var filter bson.M
+	// Build the main match filter
+	var matchFilter bson.M
 	if len(userConditions) == 1 {
-		filter = userConditions[0]
+		matchFilter = userConditions[0]
 	} else {
-		filter = bson.M{"$or": userConditions}
+		matchFilter = bson.M{"$or": userConditions}
 	}
 
 	// Add search term filter if provided
@@ -315,52 +398,79 @@ func (s *ToolService) GetToolsByUserIDPaginated(
 			{"title": bson.M{"$regex": searchTerm, "$options": "i"}},
 			{"description": bson.M{"$regex": searchTerm, "$options": "i"}},
 		}
-
-		// Combine user filter with search filter
-		filter = bson.M{
+		matchFilter = bson.M{
 			"$and": []bson.M{
-				filter,
+				matchFilter,
 				{"$or": searchConditions},
 			},
 		}
 	}
 
-	// Count total documents for pagination
-	total, err := s.Collection.CountDocuments(ctx, filter)
+	// Build aggregation pipeline
+	pipeline := mongo.Pipeline{
+		// Stage 1: Match tools by user
+		bson.D{{Key: "$match", Value: matchFilter}},
+	}
+
+	// Stage 2 & 3: Add community access checking stages
+	communityStages := buildCommunityAccessStages(requestingUserID)
+	pipeline = append(pipeline, communityStages...)
+
+	// Stage 4: Filter based on community access
+	// Allow if: user has community access OR requesting user is the tool owner
+	pipeline = append(pipeline, bson.D{
+		{Key: "$match", Value: bson.D{
+			{Key: "$or", Value: bson.A{
+				// User has access to this community
+				bson.D{{Key: "hasCommonCommunity", Value: true}},
+				// Requesting user is the owner of the tool
+				bson.D{{Key: "userId", Value: requestingUserID}},
+			}},
+		}},
+	})
+
+	// Stage 5: Use $facet to get both data and count
+	pipeline = append(pipeline, bson.D{
+		{Key: "$facet", Value: bson.D{
+			{Key: "data", Value: bson.A{
+				bson.D{{Key: "$skip", Value: skip}},
+				bson.D{{Key: "$limit", Value: pageSize}},
+				bson.D{{Key: "$unset", Value: bson.A{"requestingUser", "userCommunities", "hasCommonCommunity", "toolCommunitiesArray"}}},
+			}},
+			{Key: "count", Value: bson.A{
+				bson.D{{Key: "$count", Value: "total"}},
+			}},
+		}},
+	})
+
+	cursor, err := s.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, 0, err
 	}
-
-	if page < 0 {
-		page = 0
-	}
-
-	if pageSize < 0 {
-		pageSize = DefaultPageSize
-	}
-
-	skip := page * pageSize
-
-	// Set up options for pagination
-	findOptions := options.Find()
-	findOptions.SetSkip(int64(skip))
-	findOptions.SetLimit(int64(pageSize))
-
-	// Execute the query
-	cursor, err := s.Collection.Find(ctx, filter, findOptions)
-	if err != nil {
-		return nil, 0, err
-	}
-
 	defer func() {
 		if err := cursor.Close(ctx); err != nil {
 			log.Error().Err(err).Msg("Error closing cursor")
 		}
 	}()
 
-	var tools []*Tool
-	if err := cursor.All(ctx, &tools); err != nil {
+	var result []struct {
+		Data  []*Tool `bson:"data"`
+		Count []struct {
+			Total int64 `bson:"total"`
+		} `bson:"count"`
+	}
+
+	if err := cursor.All(ctx, &result); err != nil {
 		return nil, 0, err
+	}
+
+	var tools []*Tool
+	var total int64
+	if len(result) > 0 {
+		tools = result[0].Data
+		if len(result[0].Count) > 0 {
+			total = result[0].Count[0].Total
+		}
 	}
 
 	return tools, total, nil
@@ -476,7 +586,7 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 
 	// Distance + Location Handling using $geoNear
 	if opts.Distance > 0 && opts.Location != nil {
-		// Use $facet to get both results and count in one aggregation
+		// Build pipeline with geoNear
 		pipeline := mongo.Pipeline{
 			bson.D{
 				{Key: "$geoNear", Value: bson.D{
@@ -507,18 +617,33 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 			bson.D{
 				{Key: "$unset", Value: "user"},
 			},
-			bson.D{
-				{Key: "$facet", Value: bson.D{
-					{Key: "data", Value: bson.A{
-						bson.D{{Key: "$skip", Value: skip}},
-						bson.D{{Key: "$limit", Value: DefaultPageSize}},
-					}},
-					{Key: "count", Value: bson.A{
-						bson.D{{Key: "$count", Value: "total"}},
-					}},
-				}},
-			},
 		}
+
+		// Add community access filtering if user ID is provided
+		if opts.UserID != nil {
+			communityStages := buildCommunityAccessStages(*opts.UserID)
+			pipeline = append(pipeline, communityStages...)
+			// Filter to only include tools user has access to
+			pipeline = append(pipeline, bson.D{
+				{Key: "$match", Value: bson.D{
+					{Key: "hasCommonCommunity", Value: true},
+				}},
+			})
+		}
+
+		// Add facet for pagination and counting
+		pipeline = append(pipeline, bson.D{
+			{Key: "$facet", Value: bson.D{
+				{Key: "data", Value: bson.A{
+					bson.D{{Key: "$skip", Value: skip}},
+					bson.D{{Key: "$limit", Value: DefaultPageSize}},
+					bson.D{{Key: "$unset", Value: bson.A{"requestingUser", "userCommunities", "hasCommonCommunity"}}},
+				}},
+				{Key: "count", Value: bson.A{
+					bson.D{{Key: "$count", Value: "total"}},
+				}},
+			}},
+		})
 
 		log.Debug().Interface("pipeline", pipeline).Msg("Executing geoNear pipeline with pagination")
 
@@ -551,18 +676,6 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 
 		log.Debug().Int("total_tools", len(tools)).Int64("total_count", total).Msg("Search completed with geoNear")
 
-		// Filter tools by community membership if user ID is provided
-		if opts.UserID != nil {
-			filteredTools, err := s.filterToolsByCommunityMembership(ctx, tools, *opts.UserID)
-			if err != nil {
-				return nil, 0, err
-			}
-			// Note: When filtering by community membership, the total count might be different
-			// For simplicity, we return the filtered tools with the original total count
-			// In a production system, you might want to implement a more sophisticated counting mechanism
-			return filteredTools, total, nil
-		}
-
 		return tools, total, nil
 	}
 
@@ -582,7 +695,7 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 				{Key: "as", Value: "user"},
 			}},
 		},
-		// Stage 3: Filter out tools from inactive users (unless the user is the owner)
+		// Stage 3: Filter out tools from inactive users
 		bson.D{
 			{Key: "$match", Value: bson.D{
 				{Key: "user.active", Value: true},
@@ -596,19 +709,33 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 		bson.D{
 			{Key: "$sort", Value: bson.D{{Key: "_id", Value: -1}}},
 		},
-		// Stage 6: Use $facet to get both data and count
-		bson.D{
-			{Key: "$facet", Value: bson.D{
-				{Key: "data", Value: bson.A{
-					bson.D{{Key: "$skip", Value: skip}},
-					bson.D{{Key: "$limit", Value: DefaultPageSize}},
-				}},
-				{Key: "count", Value: bson.A{
-					bson.D{{Key: "$count", Value: "total"}},
-				}},
-			}},
-		},
 	}
+
+	// Add community access filtering if user ID is provided
+	if opts.UserID != nil {
+		communityStages := buildCommunityAccessStages(*opts.UserID)
+		pipeline = append(pipeline, communityStages...)
+		// Filter to only include tools user has access to
+		pipeline = append(pipeline, bson.D{
+			{Key: "$match", Value: bson.D{
+				{Key: "hasCommonCommunity", Value: true},
+			}},
+		})
+	}
+
+	// Stage 6 (or later): Use $facet to get both data and count
+	pipeline = append(pipeline, bson.D{
+		{Key: "$facet", Value: bson.D{
+			{Key: "data", Value: bson.A{
+				bson.D{{Key: "$skip", Value: skip}},
+				bson.D{{Key: "$limit", Value: DefaultPageSize}},
+				bson.D{{Key: "$unset", Value: bson.A{"requestingUser", "userCommunities", "hasCommonCommunity"}}},
+			}},
+			{Key: "count", Value: bson.A{
+				bson.D{{Key: "$count", Value: "total"}},
+			}},
+		}},
+	})
 
 	cursor, err := s.Collection.Aggregate(ctx, pipeline)
 	if err != nil {
@@ -638,67 +765,7 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 
 	log.Debug().Int("total_tools", len(tools)).Int64("total_count", total).Msg("Search completed")
 
-	// Filter tools by community membership if user ID is provided
-	if opts.UserID != nil {
-		filteredTools, err := s.filterToolsByCommunityMembership(ctx, tools, *opts.UserID)
-		if err != nil {
-			return nil, 0, err
-		}
-		// Note: When filtering by community membership, the total count might be different
-		// For simplicity, we return the filtered tools with the original total count
-		// In a production system, you might want to implement a more sophisticated counting mechanism
-		return filteredTools, total, nil
-	}
-
 	return tools, total, nil
-}
-
-// filterToolsByCommunityMembership filters tools based on user's community membership.
-// It returns only tools that either:
-// 1. Don't belong to any community, or
-// 2. Belong to at least one community where the user is a member
-func (s *ToolService) filterToolsByCommunityMembership(
-	ctx context.Context, tools []*Tool,
-	userID primitive.ObjectID,
-) ([]*Tool, error) {
-	// Get the user to check their communities
-	userService := NewUserService(&Database{Database: s.Collection.Database()})
-	userCommunities, err := userService.GetUserCommunities(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a map of community IDs the user is a member of for quick lookup
-	userCommunityMap := make(map[string]bool)
-	for _, community := range userCommunities {
-		userCommunityMap[community.ID.Hex()] = true
-	}
-
-	// Filter the tools
-	var filteredTools []*Tool
-	for _, tool := range tools {
-		// If the tool has no communities, include it
-		if len(tool.Communities) == 0 {
-			filteredTools = append(filteredTools, tool)
-			continue
-		}
-
-		// Check if the user is a member of at least one of the tool's communities
-		userIsMember := false
-		for _, communityID := range tool.Communities {
-			if userCommunityMap[communityID.Hex()] {
-				userIsMember = true
-				break
-			}
-		}
-
-		// Include the tool only if the user is a member of at least one of its communities
-		if userIsMember {
-			filteredTools = append(filteredTools, tool)
-		}
-	}
-
-	return filteredTools, nil
 }
 
 // CountTools returns the total number of tool documents.
