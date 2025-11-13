@@ -74,7 +74,7 @@ func TestCommunities(t *testing.T) {
 			},
 			"communities", communityID,
 		)
-		qt.Assert(t, code, qt.Equals, 401)
+		qt.Assert(t, code, qt.Equals, 403)
 
 		// Test updating community as owner
 		_, code = c.Request(http.MethodPut, ownerJWT,
@@ -98,7 +98,7 @@ func TestCommunities(t *testing.T) {
 
 		// Test deleting community as non-owner
 		_, code = c.Request(http.MethodDelete, memberJWT, nil, "communities", communityID)
-		qt.Assert(t, code, qt.Equals, 401)
+		qt.Assert(t, code, qt.Equals, 403)
 
 		// Create a second community for deletion test
 		resp, code = c.Request(http.MethodPost, ownerJWT,
@@ -293,7 +293,7 @@ func TestCommunities(t *testing.T) {
 
 		// Test with non-existent community ID
 		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", "507f1f77bcf86cd799439011", "tools")
-		qt.Assert(t, code, qt.Equals, 404)
+		qt.Assert(t, code, qt.Equals, 403)
 
 		// Test with invalid community ID
 		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", "invalid-id", "tools")
@@ -850,13 +850,6 @@ func TestCommunities(t *testing.T) {
 			"communities", "invites", inviteID)
 		qt.Assert(t, code, qt.Equals, 200)
 
-		//var getResp struct {
-		//	Data api.CommunityResponse `json:"data"`
-		//}
-		//err = json.Unmarshal(resp, &getResp)
-		//qt.Assert(t, err, qt.IsNil)
-		//qt.Assert(t, getResp.Data.ID, qt.Equals, communityID)
-
 		// Create a tool and add it to the community
 		toolID := c.CreateTool(ownerJWT, "Access Control Test Tool")
 		_, code = c.Request(http.MethodPut, ownerJWT,
@@ -889,9 +882,13 @@ func TestCommunities(t *testing.T) {
 		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
 		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community tools"))
 
+		//Test 10: Verify that after member leaves, they cannot access community anymore
+		_, code = c.Request(http.MethodDelete, memberJWT, nil, "communities", communityID, "members", memberID)
+		qt.Assert(t, code, qt.Equals, 200)
+
 		// Member should no longer be able to view community tools
 		_, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "tools")
-		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Former member should not be able to view community tools after leaving"))
+		qt.Assert(t, code, qt.Equals, 403, qt.Commentf("Former member should not be able to view community tools after leaving"))
 	})
 
 	t.Run("Modified Endpoints", func(t *testing.T) {

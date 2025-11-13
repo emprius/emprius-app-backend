@@ -410,28 +410,13 @@ func (s *ToolService) GetToolsByUserIDWithAccessControl(
 	pipeline := mongo.Pipeline{
 		// Stage 1: Match tools by user
 		bson.D{{Key: "$match", Value: matchFilter}},
-		// Stage 2: Join with users collection to check if tool owner is active
-		bson.D{
-			{Key: "$lookup", Value: bson.D{
-				{Key: "from", Value: "users"},
-				{Key: "localField", Value: "userId"},
-				{Key: "foreignField", Value: "_id"},
-				{Key: "as", Value: "owner"},
-			}},
-		},
-		// Stage 3: Filter out tools from inactive users
-		bson.D{
-			{Key: "$match", Value: bson.D{
-				{Key: "owner.active", Value: true},
-			}},
-		},
 	}
 
-	// Stage 4 & 5: Add community access checking stages
+	// Stage 2 & 3: Add community access checking stages
 	communityStages := buildCommunityAccessStages(requestingUserID)
 	pipeline = append(pipeline, communityStages...)
 
-	// Stage 6: Filter based on community access
+	// Stage 4: Filter based on community access
 	// Allow if: user has community access OR requesting user is the tool owner
 	pipeline = append(pipeline, bson.D{
 		{Key: "$match", Value: bson.D{
@@ -444,13 +429,13 @@ func (s *ToolService) GetToolsByUserIDWithAccessControl(
 		}},
 	})
 
-	// Stage 7: Use $facet to get both data and count
+	// Stage 5: Use $facet to get both data and count
 	pipeline = append(pipeline, bson.D{
 		{Key: "$facet", Value: bson.D{
 			{Key: "data", Value: bson.A{
 				bson.D{{Key: "$skip", Value: skip}},
 				bson.D{{Key: "$limit", Value: pageSize}},
-				bson.D{{Key: "$unset", Value: bson.A{"owner", "requestingUser", "userCommunities", "hasCommonCommunity"}}},
+				bson.D{{Key: "$unset", Value: bson.A{"requestingUser", "userCommunities", "hasCommonCommunity", "toolCommunitiesArray"}}},
 			}},
 			{Key: "count", Value: bson.A{
 				bson.D{{Key: "$count", Value: "total"}},
