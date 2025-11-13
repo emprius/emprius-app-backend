@@ -88,15 +88,17 @@ var (
 		Code:    http.StatusBadRequest,
 		Message: "invalid rating value",
 	}
-
 	ErrInvalidBookingStatus = &HTTPError{
 		Code:    http.StatusBadRequest,
 		Message: "invalid booking status",
 	}
-
 	ErrAlreadyRated = &HTTPError{
 		Code:    http.StatusForbidden,
 		Message: "booking already rated",
+	}
+	ErrNotMember = &HTTPError{
+		Code:    http.StatusForbidden,
+		Message: "Not member of the community",
 	}
 )
 

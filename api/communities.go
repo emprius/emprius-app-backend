@@ -173,24 +173,8 @@ func (a *API) getCommunityHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get user ID
-	userID, err := primitive.ObjectIDFromHex(r.UserID)
-	if err != nil {
-		return nil, ErrInvalidUserID.WithErr(err)
-	}
-
-	// Check if user is a member of the community
-	ctx := r.Context.Request.Context()
-	isMember, err := a.database.CommunityService.IsUserMemberOfCommunity(ctx, userID, communityID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if !isMember {
-		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community not found"))
-	}
-
 	// Get community with member count and tool count
-	community, membersCount, toolsCount, err := a.database.CommunityService.GetCommunityWithMemberCount(ctx, communityID)
+	community, membersCount, toolsCount, err := a.database.CommunityService.GetCommunityWithMemberCount(r.Context.Request.Context(), communityID)
 	if err != nil {
 		return nil, ErrCommunityNotFound.WithErr(err)
 	}
@@ -316,22 +300,6 @@ func (a *API) getCommunityUsersHandler(r *Request) (interface{}, error) {
 		return nil, ErrInvalidRequestBodyData.WithErr(err)
 	}
 
-	// Get user ID
-	userID, err := primitive.ObjectIDFromHex(r.UserID)
-	if err != nil {
-		return nil, ErrInvalidUserID.WithErr(err)
-	}
-
-	// Check if user is a member of the community
-	ctx := r.Context.Request.Context()
-	isMember, err := a.database.CommunityService.IsUserMemberOfCommunity(ctx, userID, communityID)
-	if err != nil {
-		return nil, ErrInternalServerError.WithErr(err)
-	}
-	if !isMember {
-		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community not found"))
-	}
-
 	// Get page from query parameters
 	page, pageSize, err := r.Context.GetPaginationParams()
 	if err != nil {
@@ -341,7 +309,7 @@ func (a *API) getCommunityUsersHandler(r *Request) (interface{}, error) {
 	term := *r.Context.GetSearchTerm()
 
 	// Get community users
-	users, total, err := a.database.CommunityService.GetCommunityUsers(ctx, communityID, page, term)
+	users, total, err := a.database.CommunityService.GetCommunityUsers(r.Context.Request.Context(), communityID, page, term)
 	if err != nil {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
@@ -765,7 +733,7 @@ func (a *API) getCommunityToolsHandler(r *Request) (interface{}, error) {
 		return nil, ErrInternalServerError.WithErr(err)
 	}
 	if !isMember {
-		return nil, ErrCommunityNotFound.WithErr(fmt.Errorf("community not found"))
+		return nil, ErrNotMember
 	}
 
 	// Get pagination parameters

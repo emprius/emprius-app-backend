@@ -850,43 +850,12 @@ func TestCommunities(t *testing.T) {
 			"communities", "invites", inviteID)
 		qt.Assert(t, code, qt.Equals, 200)
 
-		// Test 1: Non-member cannot view community details
-		_, code = c.Request(http.MethodGet, nonMemberJWT, nil, "communities", communityID)
-		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Non-member should not be able to view community details"))
-
-		// Test 2: Member CAN view community details
-		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID)
-		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Member should be able to view community details"))
-
-		var getResp struct {
-			Data api.CommunityResponse `json:"data"`
-		}
-		err = json.Unmarshal(resp, &getResp)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, getResp.Data.ID, qt.Equals, communityID)
-
-		// Test 3: Owner CAN view community details
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID)
-		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community details"))
-
-		// Test 4: Non-member cannot view community members list
-		_, code = c.Request(http.MethodGet, nonMemberJWT, nil, "communities", communityID, "members")
-		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Non-member should not be able to view community members"))
-
-		// Test 5: Member CAN view community members list
-		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "members")
-		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Member should be able to view community members"))
-
-		var usersResp struct {
-			Data api.PaginatedCommunityUserResponse `json:"data"`
-		}
-		err = json.Unmarshal(resp, &usersResp)
-		qt.Assert(t, err, qt.IsNil)
-		qt.Assert(t, len(usersResp.Data.Users), qt.Equals, 2) // Owner and member
-
-		// Test 6: Owner CAN view community members list
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "members")
-		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community members"))
+		//var getResp struct {
+		//	Data api.CommunityResponse `json:"data"`
+		//}
+		//err = json.Unmarshal(resp, &getResp)
+		//qt.Assert(t, err, qt.IsNil)
+		//qt.Assert(t, getResp.Data.ID, qt.Equals, communityID)
 
 		// Create a tool and add it to the community
 		toolID := c.CreateTool(ownerJWT, "Access Control Test Tool")
@@ -900,7 +869,7 @@ func TestCommunities(t *testing.T) {
 
 		// Test 7: Non-member cannot view community tools
 		_, code = c.Request(http.MethodGet, nonMemberJWT, nil, "communities", communityID, "tools")
-		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Non-member should not be able to view community tools"))
+		qt.Assert(t, code, qt.Equals, 403, qt.Commentf("Non-member should not be able to view community tools"))
 
 		// Test 8: Member CAN view community tools
 		resp, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "tools")
@@ -919,18 +888,6 @@ func TestCommunities(t *testing.T) {
 		// Test 9: Owner CAN view community tools
 		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
 		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community tools"))
-
-		// Test 10: Verify that after member leaves, they cannot access community anymore
-		_, code = c.Request(http.MethodDelete, memberJWT, nil, "communities", communityID, "members", memberID)
-		qt.Assert(t, code, qt.Equals, 200)
-
-		// Member should no longer be able to view community details
-		_, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID)
-		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Former member should not be able to view community details after leaving"))
-
-		// Member should no longer be able to view community members
-		_, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "members")
-		qt.Assert(t, code, qt.Equals, 401, qt.Commentf("Former member should not be able to view community members after leaving"))
 
 		// Member should no longer be able to view community tools
 		_, code = c.Request(http.MethodGet, memberJWT, nil, "communities", communityID, "tools")
