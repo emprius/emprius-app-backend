@@ -886,7 +886,7 @@ func TestCommunities(t *testing.T) {
 		qt.Assert(t, toolsResp.Data.Tools[0].ID, qt.Equals, toolID)
 
 		// Test 9: Owner CAN view community tools
-		resp, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
+		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
 		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community tools"))
 
 		// Member should no longer be able to view community tools

@@ -384,7 +384,7 @@ func (s *ToolService) GetToolsByUserIDWithAccessControl(
 	}
 
 	// Build the main match filter
-	matchFilter := bson.M{}
+	var matchFilter bson.M
 	if len(userConditions) == 1 {
 		matchFilter = userConditions[0]
 	} else {
@@ -781,54 +781,6 @@ func (s *ToolService) SearchTools(ctx context.Context, opts SearchToolsOptions) 
 	log.Debug().Int("total_tools", len(tools)).Int64("total_count", total).Msg("Search completed")
 
 	return tools, total, nil
-}
-
-// filterToolsByCommunityMembership filters tools based on user's community membership.
-// It returns only tools that either:
-// 1. Don't belong to any community, or
-// 2. Belong to at least one community where the user is a member
-func (s *ToolService) filterToolsByCommunityMembership(
-	ctx context.Context, tools []*Tool,
-	userID primitive.ObjectID,
-) ([]*Tool, error) {
-	// Get the user to check their communities
-	userService := NewUserService(&Database{Database: s.Collection.Database()})
-	userCommunities, err := userService.GetUserCommunities(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create a map of community IDs the user is a member of for quick lookup
-	userCommunityMap := make(map[string]bool)
-	for _, community := range userCommunities {
-		userCommunityMap[community.ID.Hex()] = true
-	}
-
-	// Filter the tools
-	var filteredTools []*Tool
-	for _, tool := range tools {
-		// If the tool has no communities, include it
-		if len(tool.Communities) == 0 {
-			filteredTools = append(filteredTools, tool)
-			continue
-		}
-
-		// Check if the user is a member of at least one of the tool's communities
-		userIsMember := false
-		for _, communityID := range tool.Communities {
-			if userCommunityMap[communityID.Hex()] {
-				userIsMember = true
-				break
-			}
-		}
-
-		// Include the tool only if the user is a member of at least one of its communities
-		if userIsMember {
-			filteredTools = append(filteredTools, tool)
-		}
-	}
-
-	return filteredTools, nil
 }
 
 // CountTools returns the total number of tool documents.
