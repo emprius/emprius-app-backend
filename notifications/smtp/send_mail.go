@@ -3,9 +3,10 @@ package smtp
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/emprius/emprius-app-backend/notifications"
 	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
-	"time"
 )
 
 // SendMail is a helper function that executes an email template and sends the notification.

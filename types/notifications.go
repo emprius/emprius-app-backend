@@ -57,7 +57,6 @@ func GetDefaultNotificationPreferences() map[string]bool {
 		default:
 			preferences[notificationType.String()] = true // Rest of notifications enabled by default
 		}
-
 	}
 	return preferences
 }

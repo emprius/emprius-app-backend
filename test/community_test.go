@@ -882,7 +882,7 @@ func TestCommunities(t *testing.T) {
 		_, code = c.Request(http.MethodGet, ownerJWT, nil, "communities", communityID, "tools")
 		qt.Assert(t, code, qt.Equals, 200, qt.Commentf("Owner should be able to view community tools"))
 
-		//Test 10: Verify that after member leaves, they cannot access community anymore
+		// Test 10: Verify that after member leaves, they cannot access community anymore
 		_, code = c.Request(http.MethodDelete, memberJWT, nil, "communities", communityID, "members", memberID)
 		qt.Assert(t, code, qt.Equals, 200)
 

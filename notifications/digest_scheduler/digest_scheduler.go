@@ -3,10 +3,11 @@ package digest_scheduler
 import (
 	"context"
 	"fmt"
-	"github.com/emprius/emprius-app-backend/notifications/smtp"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/emprius/emprius-app-backend/notifications/smtp"
 
 	"github.com/emprius/emprius-app-backend/db"
 	"github.com/emprius/emprius-app-backend/notifications"

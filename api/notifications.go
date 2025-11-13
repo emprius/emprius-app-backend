@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+
 	"github.com/emprius/emprius-app-backend/notifications/mailtemplates"
 	"github.com/emprius/emprius-app-backend/notifications/smtp"
 )
